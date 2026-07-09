@@ -1,6 +1,6 @@
 {
   "name": "@kernova/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Kernova CLI - Developer tools for the Intelligent Systems Runtime",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

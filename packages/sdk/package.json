@@ -1,6 +1,6 @@
 {
   "name": "@kernova/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Nexus SDK - High-level API for building intelligent applications",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
