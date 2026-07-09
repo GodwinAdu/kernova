@@ -1,0 +1,31 @@
+{
+  "name": "@nexus/sdk",
+  "version": "0.1.0",
+  "description": "Nexus SDK - High-level API for building intelligent applications",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nexus-runtime/nexus",
+    "directory": "packages/sdk"
+  },
+  "keywords": ["nexus", "ai", "sdk", "agents", "intelligent-systems", "llm"],
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@nexus/core": "*",
+    "@nexus/types": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^22.0.0",
+    "rimraf": "^6.0.0"
+  }
+}

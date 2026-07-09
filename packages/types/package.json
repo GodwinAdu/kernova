@@ -1,0 +1,26 @@
+{
+  "name": "@nexus/types",
+  "version": "0.1.0",
+  "description": "Nexus Type Definitions - The Universal Object Model",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nexus-runtime/nexus",
+    "directory": "packages/types"
+  },
+  "keywords": ["nexus", "ai", "runtime", "types", "intelligent-systems"],
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "rimraf": "^6.0.0"
+  }
+}

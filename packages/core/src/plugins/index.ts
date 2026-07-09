@@ -1,0 +1,15 @@
+/**
+ * Nexus Plugin System
+ * 
+ * Extends the runtime with tools, capabilities, middleware, and providers.
+ */
+
+export { PluginRegistry } from './plugin-registry.js';
+export type {
+  NexusPlugin,
+  ToolDefinition,
+  MiddlewareHook,
+  MiddlewareContext,
+  PluginContext,
+  PluginType,
+} from './plugin-registry.js';
