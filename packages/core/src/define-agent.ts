@@ -5,7 +5,7 @@
  * This is the equivalent of Express's `app.get()` or React's `defineComponent()`.
  * 
  * Usage:
- *   import { defineAgent } from '@nexus/core';
+ *   import { defineAgent } from '@kernova/core';
  *   
  *   export default defineAgent({
  *     name: 'my-agent',
@@ -27,7 +27,7 @@ import type {
   ComputedContext,
   Capability,
   ToolReference,
-} from '@nexus/types';
+} from '@kernova/types';
 import type { AgentExecutor, AgentTools } from './agents/agent-registry.js';
 import { generateId, now } from './utils.js';
 

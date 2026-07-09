@@ -1,5 +1,5 @@
 {
-  "name": "@nexus/core",
+  "name": "@kernova/core",
   "version": "0.1.0",
   "description": "Nexus Core - The Intelligence Runtime Kernel",
   "main": "./dist/index.js",
@@ -20,7 +20,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@nexus/types": "*",
+    "@kernova/types": "*",
     "better-sqlite3": "^12.11.1"
   },
   "devDependencies": {

@@ -9,7 +9,7 @@
  *   Discovery Layer  → Config-driven provider registration
  * 
  * Adding a new provider:
- *   Option A: Add to nexus.config.json with adapter type → zero code
+ *   Option A: Add to kernova.config.json with adapter type → zero code
  *   Option B: Use createProvider('name') for cataloged providers → one line
  *   Option C: New OpenAICompatibleProvider({...}) for custom → minimal code
  * 

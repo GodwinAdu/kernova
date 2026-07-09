@@ -10,10 +10,10 @@
  * Plugins are discovered from:
  * - Project dependencies (node_modules/@nexus-plugin/*)
  * - Local plugins (src/plugins/)
- * - nexus.config.json plugin list
+ * - kernova.config.json plugin list
  */
 
-import type { NexusId } from '@nexus/types';
+import type { NexusId } from '@kernova/types';
 import { EventBus } from '../events/event-bus.js';
 import { generateId, now } from '../utils.js';
 

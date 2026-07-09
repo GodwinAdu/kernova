@@ -20,7 +20,7 @@ import type {
   NexusId,
   Intent,
   ComputedContext,
-} from '@nexus/types';
+} from '@kernova/types';
 import { EventBus } from '../events/event-bus.js';
 import { AgentRegistry } from '../agents/agent-registry.js';
 import { PluginRegistry } from '../plugins/plugin-registry.js';

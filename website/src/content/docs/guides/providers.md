@@ -82,7 +82,7 @@ If OpenAI fails (rate limit, outage), Nexus automatically tries Anthropic.
 ### Explicit provider creation
 
 ```typescript
-import { createProvider } from '@nexus/core';
+import { createProvider } from '@kernova/core';
 
 const deepseek = createProvider('deepseek');
 const groq = createProvider('groq', { defaultModel: 'llama-3.1-8b-instant' });
@@ -116,7 +116,7 @@ Any server that implements the OpenAI `/chat/completions` format works. Add to `
 For providers that DON'T use the OpenAI format:
 
 ```typescript
-import { OpenAICompatibleProvider } from '@nexus/core';
+import { OpenAICompatibleProvider } from '@kernova/core';
 
 const custom = new OpenAICompatibleProvider({
   id: 'my-custom',

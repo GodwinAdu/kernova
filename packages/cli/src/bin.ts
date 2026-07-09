@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Nexus CLI Entry Point
+ * kernova CLI Entry Point
  * 
- * The developer's first interaction with Nexus.
- * `nexus init` → `nexus dev` → `nexus deploy`
+ * The developer's first interaction with kernova.
+ * `kernova init` → `kernova dev` → `kernova deploy`
  */
 
 import { handleInit } from './commands/init.js';
@@ -39,7 +39,7 @@ async function main() {
   const handler = commands[command];
   if (!handler) {
     console.error(`Unknown command: ${command}`);
-    console.error(`Run 'nexus --help' for available commands.`);
+    console.error(`Run 'kernova --help' for available commands.`);
     process.exit(1);
   }
 

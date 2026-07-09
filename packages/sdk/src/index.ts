@@ -1,13 +1,13 @@
 /**
- * @nexus/sdk
+ * @kernova/sdk
  * 
- * High-level SDK for building intelligent applications with Nexus.
+ * High-level SDK for building intelligent applications with Kernova.
  * 
- * This package provides a simplified, opinionated API on top of @nexus/core.
+ * This package provides a simplified, opinionated API on top of @kernova/core.
  * It's what most developers will use day-to-day.
  * 
  * Quick start:
- *   import { Nexus } from '@nexus/sdk';
+ *   import { Nexus } from '@kernova/sdk';
  *   
  *   const app = await Nexus.create();
  *   app.agent('assistant', { instructions: 'You are helpful.' });
@@ -29,4 +29,4 @@ export type {
   MemoryEntry,
   AgentDefinition,
   NexusEvent,
-} from '@nexus/types';
+} from '@kernova/types';

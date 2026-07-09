@@ -18,7 +18,7 @@ By the end of this page, you'll have an AI assistant that:
 ## Step 1: Create the app
 
 ```typescript
-import { Nexus } from '@nexus/sdk';
+import { Nexus } from '@kernova/sdk';
 
 const app = await Nexus.create();
 ```
@@ -127,7 +127,7 @@ console.log(); // newline at end
 Here's the full working application:
 
 ```typescript
-import { Nexus } from '@nexus/sdk';
+import { Nexus } from '@kernova/sdk';
 
 async function main() {
   const app = await Nexus.create();

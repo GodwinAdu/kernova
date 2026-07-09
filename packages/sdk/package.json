@@ -1,5 +1,5 @@
 {
-  "name": "@nexus/sdk",
+  "name": "@kernova/sdk",
   "version": "0.1.0",
   "description": "Nexus SDK - High-level API for building intelligent applications",
   "main": "./dist/index.js",
@@ -20,8 +20,8 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@nexus/core": "*",
-    "@nexus/types": "*"
+    "@kernova/core": "*",
+    "@kernova/types": "*"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

@@ -1,5 +1,5 @@
 /**
- * Nexus SDK — Main Entry Point
+ * Kernova SDK — Main Entry Point
  * 
  * The Nexus class provides a high-level, fluent API for:
  * - Creating and configuring the runtime
@@ -22,20 +22,20 @@ import {
   type ToolDefinition,
   type AgentSpec,
   type DefinedAgent,
-} from '@nexus/core';
+} from '@kernova/core';
 import type {
   Intent,
   IntentResult,
   MemoryLayer,
   MemoryEntry,
   WorkflowDefinition,
-} from '@nexus/types';
+} from '@kernova/types';
 
 export interface NexusConfig {
   /** Environment (default: 'development') */
   env?: 'development' | 'staging' | 'production';
 
-  /** Data directory (default: './nexus-data') */
+  /** Data directory (default: './kernova-data') */
   dataDir?: string;
 
   /** Disable persistence (default: false) */

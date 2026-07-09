@@ -15,11 +15,11 @@
  * provider instances from configuration alone — no new code needed.
  * 
  * Adding a new provider:
- *   Just add it to nexus.config.json with the right adapter type.
+ *   Just add it to kernova.config.json with the right adapter type.
  *   The registry handles the rest.
  */
 
-import type { ProviderConfig } from '@nexus/types';
+import type { ProviderConfig } from '@kernova/types';
 import type { ModelProvider } from './provider.js';
 import { OpenAICompatibleProvider } from './openai-compatible-provider.js';
 import { AnthropicProvider } from './anthropic-provider.js';
@@ -110,7 +110,7 @@ export function createProvidersFromConfig(configs: ProviderConfig[]): ModelProvi
     } catch (error) {
       // Log but don't crash — a broken provider config shouldn't kill the runtime
       console.warn(
-        `[Nexus] Skipping provider "${config.id}": ${(error as Error).message}`
+        `[Kernova] Skipping provider "${config.id}": ${(error as Error).message}`
       );
     }
   }

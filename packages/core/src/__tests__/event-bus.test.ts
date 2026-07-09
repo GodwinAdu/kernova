@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { EventBus } from '../events/event-bus.js';
-import type { NexusEvent } from '@nexus/types';
+import type { NexusEvent } from '@kernova/types';
 import { generateId, now } from '../utils.js';
 
 function createEvent(overrides: Partial<NexusEvent> = {}): NexusEvent {

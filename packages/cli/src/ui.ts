@@ -8,7 +8,7 @@ export function printBanner(): void {
   console.log(`
   ╔══════════════════════════════════════╗
   ║                                      ║
-  ║   ◆  N E X U S                       ║
+  ║   ◆  K E R N O V A                   ║
   ║      Intelligent Systems Runtime     ║
   ║      v${VERSION}                          ║
   ║                                      ║
@@ -17,15 +17,15 @@ export function printBanner(): void {
 }
 
 export function printVersion(): void {
-  console.log(`nexus v${VERSION}`);
+  console.log(`kernova v${VERSION}`);
 }
 
 export function printHelp(): void {
   console.log(`
-  Usage: nexus <command> [options]
+  Usage: kernova <command> [options]
 
   Commands:
-    init [name]       Create a new Nexus project
+    init [name]       Create a new kernova project
     dev               Start the development runtime
     deploy [target]   Prepare for production (docker, node)
     agent <action>    Manage agents (create, list, inspect)
@@ -36,12 +36,12 @@ export function printHelp(): void {
     -v, --version     Show version number
 
   Examples:
-    nexus init my-app
-    nexus dev
-    nexus agent create assistant
-    nexus status
+    kernova init my-app
+    kernova dev
+    kernova agent create assistant
+    kernova status
 
-  Documentation: https://nexus.dev/docs
+  Documentation: https://kernova.dev/docs
   `);
 }
 

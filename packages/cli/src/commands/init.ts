@@ -1,7 +1,7 @@
 /**
- * nexus init
+ * kernova init
  * 
- * Creates a new Nexus project with the standard structure.
+ * Creates a new kernova project with the standard structure.
  * This is the developer's first touch point.
  */
 
@@ -9,7 +9,7 @@ import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { printBanner, success, info, error } from '../ui.js';
 
-const NEXUS_CONFIG_TEMPLATE = `{
+const kernova_CONFIG_TEMPLATE = `{
   "name": "{{PROJECT_NAME}}",
   "version": "0.1.0",
   "runtime": {
@@ -34,10 +34,10 @@ const NEXUS_CONFIG_TEMPLATE = `{
 }
 `;
 
-const AGENT_TEMPLATE = `import { defineAgent } from '@nexus/core';
+const AGENT_TEMPLATE = `import { defineAgent } from '@kernova/core';
 
 /**
- * My first Nexus agent
+ * My first kernova agent
  */
 export default defineAgent({
   name: 'assistant',
@@ -47,8 +47,8 @@ export default defineAgent({
   ],
   tools: [],
   instructions: \`
-    You are a helpful assistant powered by the Nexus runtime.
-    You have access to memory and tools through the Nexus kernel.
+    You are a helpful assistant powered by the kernova runtime.
+    You have access to memory and tools through the kernova kernel.
   \`,
   
   async execute(intent, context, tools) {
@@ -68,23 +68,23 @@ export default defineAgent({
 });
 `;
 
-const MAIN_TEMPLATE = `import { NexusKernel } from '@nexus/core';
+const MAIN_TEMPLATE = `import { kernovaKernel } from '@kernova/core';
 
 /**
- * Nexus Application Entry Point
+ * kernova Application Entry Point
  */
 async function main() {
-  const kernel = new NexusKernel({
+  const kernel = new kernovaKernel({
     environment: 'development',
     debug: true,
   });
 
   await kernel.start();
-  console.log('Nexus runtime started.');
+  console.log('kernova runtime started.');
 
   // Submit your first intent
   const result = await kernel.submit({
-    goal: 'Hello, Nexus!',
+    goal: 'Hello, kernova!',
     intentType: 'query',
     priority: 'medium',
   });
@@ -108,8 +108,8 @@ const PACKAGE_JSON_TEMPLATE = `{
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@nexus/core": "^0.1.0",
-    "@nexus/types": "^0.1.0"
+    "@kernova/core": "^0.1.0",
+    "@kernova/types": "^0.1.0"
   },
   "devDependencies": {
     "typescript": "^5.5.0",
@@ -138,7 +138,7 @@ const TSCONFIG_TEMPLATE = `{
 `;
 
 export async function handleInit(args: string[]): Promise<void> {
-  const projectName = args[0] || 'my-nexus-app';
+  const projectName = args[0] || 'my-kernova-app';
   const projectPath = resolve(process.cwd(), projectName);
 
   printBanner();
@@ -148,7 +148,7 @@ export async function handleInit(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  info(`Creating Nexus project: ${projectName}`);
+  info(`Creating kernova project: ${projectName}`);
 
   // Create directory structure
   const dirs = [
@@ -165,8 +165,8 @@ export async function handleInit(args: string[]): Promise<void> {
 
   // Write files
   writeFileSync(
-    join(projectPath, 'nexus.config.json'),
-    NEXUS_CONFIG_TEMPLATE.replace(/\{\{PROJECT_NAME\}\}/g, projectName)
+    join(projectPath, 'kernova.config.json'),
+    kernova_CONFIG_TEMPLATE.replace(/\{\{PROJECT_NAME\}\}/g, projectName)
   );
 
   writeFileSync(
@@ -185,6 +185,6 @@ export async function handleInit(args: string[]): Promise<void> {
   info('Next steps:');
   console.log(`    cd ${projectName}`);
   console.log('    npm install');
-  console.log('    nexus dev');
+  console.log('    kernova dev');
   console.log('');
 }

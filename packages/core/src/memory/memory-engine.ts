@@ -22,7 +22,7 @@ import type {
   MemoryQuery,
   MemoryLayer,
   NexusId,
-} from '@nexus/types';
+} from '@kernova/types';
 import { EventBus } from '../events/event-bus.js';
 import { MemoryStore, type MemoryStoreConfig } from './memory-store.js';
 import { EmbeddingEngine } from './embedding-engine.js';

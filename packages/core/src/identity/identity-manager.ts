@@ -7,7 +7,7 @@
  * Every actor in the system has an identity.
  */
 
-import type { NexusId } from '@nexus/types';
+import type { NexusId } from '@kernova/types';
 import { EventBus } from '../events/event-bus.js';
 import { ApiKeyManager, type ApiKey, type CreateKeyOptions } from './api-keys.js';
 import { PermissionEngine, type PermissionCheck, type PermissionResult, type Role } from './permission-engine.js';

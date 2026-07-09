@@ -11,7 +11,7 @@
  * - Memory decay (relevance decreases over time)
  * - Relations between memories
  * 
- * Uses the same database file as EventStore (nexus.db).
+ * Uses the same database file as EventStore (kernova.db).
  */
 
 import Database from 'better-sqlite3';
@@ -24,7 +24,7 @@ import type {
   MemoryType,
   MemoryRelation,
   NexusId,
-} from '@nexus/types';
+} from '@kernova/types';
 import { now } from '../utils.js';
 
 export interface MemoryStoreConfig {
@@ -37,7 +37,7 @@ export class MemoryStore {
   private closed = false;
 
   constructor(config: MemoryStoreConfig = {}) {
-    const dbPath = config.path || './nexus-data/nexus.db';
+    const dbPath = config.path || './kernova-data/kernova.db';
 
     // Ensure directory exists
     const dir = dirname(dbPath);

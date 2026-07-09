@@ -1,14 +1,14 @@
 /**
  * Nexus Identity Store (SQLite)
  * 
- * Persists identities, API keys, and sessions to the shared nexus.db.
+ * Persists identities, API keys, and sessions to the shared kernova.db.
  * This ensures auth state survives process restarts.
  */
 
 import Database from 'better-sqlite3';
 import { mkdirSync, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { NexusId } from '@nexus/types';
+import type { NexusId } from '@kernova/types';
 import type { ApiKey } from './api-keys.js';
 
 export interface IdentityStoreConfig {
@@ -19,7 +19,7 @@ export class IdentityStore {
   private db: Database.Database;
 
   constructor(config: IdentityStoreConfig = {}) {
-    const dbPath = config.path || './nexus-data/nexus.db';
+    const dbPath = config.path || './kernova-data/kernova.db';
     const dir = dirname(dbPath);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 

@@ -1,12 +1,12 @@
 {
-  "name": "@nexus/cli",
+  "name": "@kernova/cli",
   "version": "0.1.0",
-  "description": "Nexus CLI - Developer tools for the Intelligent Systems Runtime",
+  "description": "Kernova CLI - Developer tools for the Intelligent Systems Runtime",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "type": "module",
   "bin": {
-    "nexus": "./dist/bin.js"
+    "kernova": "./dist/bin.js"
   },
   "scripts": {
     "build": "tsc",
@@ -14,8 +14,8 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@nexus/core": "*",
-    "@nexus/types": "*"
+    "@kernova/core": "*",
+    "@kernova/types": "*"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

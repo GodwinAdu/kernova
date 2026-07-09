@@ -18,7 +18,7 @@ import type {
   TokenUsage,
   StreamChunk,
   NexusId,
-} from '@nexus/types';
+} from '@kernova/types';
 import type { ModelProvider } from './provider.js';
 import { EventBus } from '../events/event-bus.js';
 import { generateId, now } from '../utils.js';

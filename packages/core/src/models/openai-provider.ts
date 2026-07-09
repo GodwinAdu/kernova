@@ -15,7 +15,7 @@ import type {
   TokenUsage,
   ToolCall,
   StreamChunk,
-} from '@nexus/types';
+} from '@kernova/types';
 import type { ModelProvider } from './provider.js';
 
 export interface OpenAIConfig {

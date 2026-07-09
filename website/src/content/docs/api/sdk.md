@@ -1,9 +1,9 @@
 ---
-title: "@nexus/sdk"
+title: "@kernova/sdk"
 description: High-level SDK API reference.
 ---
 
-# @nexus/sdk
+# @kernova/sdk
 
 The simplest way to build with Nexus. Provides a fluent, minimal API.
 

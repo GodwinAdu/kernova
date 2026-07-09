@@ -14,7 +14,7 @@ import type {
   NexusId,
   ToolSpec,
   ModelMessage,
-} from '@nexus/types';
+} from '@kernova/types';
 import { EventBus } from '../events/event-bus.js';
 import { ModelRouter } from '../models/model-router.js';
 import type { PluginRegistry, ToolDefinition } from '../plugins/plugin-registry.js';

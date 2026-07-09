@@ -4,7 +4,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { NexusId, Timestamp } from '@nexus/types';
+import type { NexusId, Timestamp } from '@kernova/types';
 
 /**
  * Generate a unique Nexus ID with optional prefix

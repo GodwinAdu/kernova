@@ -6,7 +6,7 @@
  */
 
 import { randomBytes } from 'node:crypto';
-import type { NexusId } from '@nexus/types';
+import type { NexusId } from '@kernova/types';
 import { generateId, now } from '../utils.js';
 
 export interface Session {

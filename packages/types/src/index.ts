@@ -1,5 +1,5 @@
 /**
- * @nexus/types
+ * @kernova/types
  * 
  * The complete type system for the Nexus Intelligent Systems Runtime.
  * Every object, event, and interaction in Nexus is defined here.

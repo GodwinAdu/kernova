@@ -8,7 +8,7 @@ description: Common patterns and recipes for building with Nexus.
 ## Simple Q&A Bot
 
 ```typescript
-import { Nexus } from '@nexus/sdk';
+import { Nexus } from '@kernova/sdk';
 
 const app = await Nexus.create();
 app.agent('assistant', { instructions: 'You are helpful and concise.' });
@@ -135,8 +135,8 @@ await app.ask('Hello');
 ## Local Model (Ollama)
 
 ```typescript
-import { Nexus } from '@nexus/sdk';
-import { createProvider } from '@nexus/core';
+import { Nexus } from '@kernova/sdk';
+import { createProvider } from '@kernova/core';
 
 // No API key needed — runs locally
 const app = await Nexus.create();

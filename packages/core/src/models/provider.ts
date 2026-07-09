@@ -13,7 +13,7 @@ import type {
   CompletionResponse,
   ModelProviderId,
   StreamChunk,
-} from '@nexus/types';
+} from '@kernova/types';
 
 /**
  * Abstract model provider interface.

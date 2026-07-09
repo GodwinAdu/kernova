@@ -166,7 +166,7 @@ When using `nexus dev`, agents live in `src/agents/`:
 
 ```typescript
 // src/agents/reviewer.ts
-import { defineAgent } from '@nexus/core';
+import { defineAgent } from '@kernova/core';
 
 export default defineAgent({
   name: 'reviewer',

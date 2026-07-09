@@ -5,11 +5,11 @@
  * and developer convenience.
  * 
  * Usage:
- *   import { createProvider, listPresets } from '@nexus/core';
+ *   import { createProvider, listPresets } from '@kernova/core';
  *   const deepseek = createProvider('deepseek');
  */
 
-import type { ProviderConfig } from '@nexus/types';
+import type { ProviderConfig } from '@kernova/types';
 import type { ModelProvider } from './provider.js';
 import {
   createProviderFromConfig,

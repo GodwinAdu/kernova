@@ -1,7 +1,7 @@
 /**
- * nexus status
+ * kernova status
  * 
- * Shows the current state of the Nexus runtime.
+ * Shows the current state of the kernova runtime.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -10,11 +10,11 @@ import { info, warn } from '../ui.js';
 
 export async function handleStatus(args: string[]): Promise<void> {
   const projectRoot = resolve(process.cwd());
-  const configPath = join(projectRoot, 'nexus.config.json');
+  const configPath = join(projectRoot, 'kernova.config.json');
 
   if (!existsSync(configPath)) {
-    warn('Not a Nexus project (no nexus.config.json found).');
-    info('Run "nexus init" to create a new project.');
+    warn('Not a kernova project (no kernova.config.json found).');
+    info('Run "kernova init" to create a new project.');
     return;
   }
 
@@ -22,7 +22,7 @@ export async function handleStatus(args: string[]): Promise<void> {
   const config = JSON.parse(configRaw);
 
   console.log('');
-  console.log('  Nexus Project Status');
+  console.log('  kernova Project Status');
   console.log('  ════════════════════');
   console.log(`    Name:        ${config.name}`);
   console.log(`    Version:     ${config.version}`);

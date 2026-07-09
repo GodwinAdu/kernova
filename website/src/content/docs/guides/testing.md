@@ -21,7 +21,7 @@ Create a kernel in ephemeral mode (no persistence) for fast, isolated tests:
 
 ```typescript
 import { describe, it, expect, afterEach } from 'vitest';
-import { NexusKernel, defineAgent } from '@nexus/core';
+import { NexusKernel, defineAgent } from '@kernova/core';
 
 describe('My Agent', () => {
   let kernel: NexusKernel;

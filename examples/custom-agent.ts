@@ -8,7 +8,7 @@
  *   npx tsx examples/custom-agent.ts
  */
 
-import { NexusKernel, defineAgent } from '@nexus/core';
+import { NexusKernel, defineAgent } from '@kernova/core';
 
 async function main() {
   const kernel = new NexusKernel({

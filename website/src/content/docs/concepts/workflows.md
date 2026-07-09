@@ -21,7 +21,7 @@ For simple one-shot tasks, just use `app.ask()`. Workflows are for complex orche
 ## Example: Content Pipeline
 
 ```typescript
-import { generateId, now } from '@nexus/core';
+import { generateId, now } from '@kernova/core';
 
 kernel.workflows.define({
   id: generateId('wf_def'),

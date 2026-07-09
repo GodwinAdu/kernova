@@ -13,7 +13,7 @@
 import { resolve, basename, extname } from 'node:path';
 import { existsSync, readdirSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import type { AgentDefinition } from '@nexus/types';
+import type { AgentDefinition } from '@kernova/types';
 import type { AgentExecutor } from '../agents/agent-registry.js';
 import type { DefinedAgent } from '../define-agent.js';
 

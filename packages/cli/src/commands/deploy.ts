@@ -1,5 +1,5 @@
 /**
- * nexus deploy
+ * kernova deploy
  * 
  * Builds and prepares the project for production deployment.
  * Generates a Dockerfile and a production-ready entry point.
@@ -17,7 +17,7 @@ COPY package*.json ./
 RUN npm ci --production
 
 COPY dist/ ./dist/
-COPY nexus.config.json ./
+COPY kernova.config.json ./
 
 ENV NODE_ENV=production
 EXPOSE 4200
@@ -25,18 +25,18 @@ EXPOSE 4200
 CMD ["node", "dist/main.js"]
 `;
 
-const PRODUCTION_ENTRY = `import { NexusKernel } from '@nexus/core';
-import { StudioServer } from '@nexus/core';
-import { AgentLoader } from '@nexus/core';
+const PRODUCTION_ENTRY = `import { kernovaKernel } from '@kernova/core';
+import { StudioServer } from '@kernova/core';
+import { AgentLoader } from '@kernova/core';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const config = JSON.parse(readFileSync('./nexus.config.json', 'utf-8'));
+const config = JSON.parse(readFileSync('./kernova.config.json', 'utf-8'));
 
-const kernel = new NexusKernel({
+const kernel = new kernovaKernel({
   environment: 'production',
   debug: false,
-  dataDir: process.env.NEXUS_DATA_DIR || './nexus-data',
+  dataDir: process.env.kernova_DATA_DIR || './kernova-data',
 });
 
 async function main() {
@@ -49,7 +49,7 @@ async function main() {
   for (const result of loaded) {
     if (result.success && result.definition && result.executor) {
       kernel.agentRegistry.register(result.definition, result.executor);
-      console.log('[Nexus] Agent loaded:', result.name);
+      console.log('[kernova] Agent loaded:', result.name);
     }
   }
 
@@ -57,18 +57,18 @@ async function main() {
   const studio = new StudioServer(kernel, {
     port: parseInt(process.env.PORT || '4200'),
     host: '0.0.0.0',
-    requireAuth: process.env.NEXUS_AUTH !== 'false',
+    requireAuth: process.env.kernova_AUTH !== 'false',
   });
   const url = await studio.start();
 
-  console.log('[Nexus] Production runtime started');
-  console.log('[Nexus] Studio:', url);
-  console.log('[Nexus] Agents:', kernel.getStatus().registeredAgents);
-  console.log('[Nexus] Providers:', kernel.getStatus().availableProviders.join(', ') || 'none');
+  console.log('[kernova] Production runtime started');
+  console.log('[kernova] Studio:', url);
+  console.log('[kernova] Agents:', kernel.getStatus().registeredAgents);
+  console.log('[kernova] Providers:', kernel.getStatus().availableProviders.join(', ') || 'none');
 
   // Graceful shutdown
   const shutdown = async () => {
-    console.log('[Nexus] Shutting down...');
+    console.log('[kernova] Shutting down...');
     await studio.stop();
     await kernel.stop();
     process.exit(0);
@@ -78,19 +78,19 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('[Nexus] Fatal:', err.message);
+  console.error('[kernova] Fatal:', err.message);
   process.exit(1);
 });
 `;
 
 export async function handleDeploy(args: string[]): Promise<void> {
   const projectRoot = resolve(process.cwd());
-  const configPath = join(projectRoot, 'nexus.config.json');
+  const configPath = join(projectRoot, 'kernova.config.json');
 
   printBanner();
 
   if (!existsSync(configPath)) {
-    error('No nexus.config.json found. Run "nexus init" first.');
+    error('No kernova.config.json found. Run "kernova init" first.');
     process.exit(1);
   }
 
@@ -130,14 +130,14 @@ function deployDocker(projectRoot: string, config: Record<string, unknown>): voi
   success('Generated src/production.ts');
 
   // Generate .dockerignore
-  writeFileSync(join(projectRoot, '.dockerignore'), 'node_modules\nnexus-data\n.git\n');
+  writeFileSync(join(projectRoot, '.dockerignore'), 'node_modules\nkernova-data\n.git\n');
   success('Generated .dockerignore');
 
   console.log('');
   info('Build and run:');
   console.log(`    npm run build`);
-  console.log(`    docker build -t ${config.name || 'nexus-app'} .`);
-  console.log(`    docker run -p 4200:4200 --env-file .env ${config.name || 'nexus-app'}`);
+  console.log(`    docker build -t ${config.name || 'kernova-app'} .`);
+  console.log(`    docker run -p 4200:4200 --env-file .env ${config.name || 'kernova-app'}`);
   console.log('');
 }
 

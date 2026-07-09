@@ -18,8 +18,8 @@
  *   npx tsx examples/tool-calling.ts
  */
 
-import { NexusKernel, defineAgent } from '@nexus/core';
-import type { NexusPlugin } from '@nexus/core';
+import { NexusKernel, defineAgent } from '@kernova/core';
+import type { NexusPlugin } from '@kernova/core';
 
 async function main() {
   const kernel = new NexusKernel({

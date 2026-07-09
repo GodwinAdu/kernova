@@ -123,7 +123,7 @@ async execute(intent, context, tools) {
 Tools are registered individually with `app.tool()`, but internally they're grouped into **plugins**:
 
 ```typescript
-import type { NexusPlugin } from '@nexus/core';
+import type { NexusPlugin } from '@kernova/core';
 
 const weatherPlugin: NexusPlugin = {
   id: 'weather',

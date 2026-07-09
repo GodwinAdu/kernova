@@ -13,7 +13,7 @@
  * hot cache for recent events.
  */
 
-import type { NexusEvent, NexusId } from '@nexus/types';
+import type { NexusEvent, NexusId } from '@kernova/types';
 import { EventStore, type EventStoreConfig, type EventQuery, type EventStoreStats } from './event-store.js';
 import { generateId } from '../utils.js';
 

@@ -15,7 +15,7 @@ import type {
   CompletionResponse,
   ModelProviderId,
   TokenUsage,
-} from '@nexus/types';
+} from '@kernova/types';
 import type { ModelProvider } from './provider.js';
 
 export interface GeminiConfig {

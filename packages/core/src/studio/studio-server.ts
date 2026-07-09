@@ -13,7 +13,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { createServer as createHttpsServer } from 'node:https';
 import { readFileSync } from 'node:fs';
 import type { NexusKernel } from '../kernel.js';
-import type { NexusEvent } from '@nexus/types';
+import type { NexusEvent } from '@kernova/types';
 import { getStudioHTML } from './studio-ui.js';
 
 export interface StudioServerConfig {

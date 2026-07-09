@@ -10,21 +10,21 @@ This guide gets you from zero to a working Nexus setup in under 2 minutes.
 ## Step 1: Install the SDK
 
 ```bash
-npm install @nexus/sdk @nexus/types
+npm install @kernova/sdk @kernova/types
 ```
 
 This gives you everything needed to build intelligent applications.
 
 **What's in the box:**
-- `@nexus/sdk` — High-level API (`Nexus.create()`, `app.ask()`, `app.tool()`, etc.)
-- `@nexus/types` — TypeScript type definitions
+- `@kernova/sdk` — High-level API (`Nexus.create()`, `app.ask()`, `app.tool()`, etc.)
+- `@kernova/types` — TypeScript type definitions
 
 **Optional: Full runtime + CLI**
 ```bash
-npm install @nexus/core @nexus/cli
+npm install @kernova/core @kernova/cli
 ```
-- `@nexus/core` — The kernel (lower-level API for full control)
-- `@nexus/cli` — Project scaffolding, dev server, deployment tools
+- `@kernova/core` — The kernel (lower-level API for full control)
+- `@kernova/cli` — Project scaffolding, dev server, deployment tools
 
 ## Step 2: Set an API key
 
@@ -60,7 +60,7 @@ You can set multiple keys. Nexus auto-detects all available providers and uses t
 Create a file called `test.ts`:
 
 ```typescript
-import { Nexus } from '@nexus/sdk';
+import { Nexus } from '@kernova/sdk';
 
 async function main() {
   const app = await Nexus.create();
@@ -90,8 +90,8 @@ If you see a response, you're ready to build.
 **"No model provider available"**
 → You haven't set an API key. Set `OPENAI_API_KEY` or any other provider key.
 
-**"Module not found: @nexus/sdk"**
-→ Run `npm install @nexus/sdk @nexus/types` in your project directory.
+**"Module not found: @kernova/sdk"**
+→ Run `npm install @kernova/sdk @kernova/types` in your project directory.
 
 **"fetch is not defined"**
 → You need Node.js 18+. Check with `node --version`.

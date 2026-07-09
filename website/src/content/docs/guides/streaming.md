@@ -10,7 +10,7 @@ Nexus supports streaming LLM responses token-by-token so users see output immedi
 ## SDK Streaming
 
 ```typescript
-import { Nexus } from '@nexus/sdk';
+import { Nexus } from '@kernova/sdk';
 
 const app = await Nexus.create();
 app.agent('writer', { instructions: 'You write engaging stories.' });

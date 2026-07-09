@@ -1,10 +1,10 @@
 /**
- * @nexus/core
+ * @kernova/core
  * 
  * The Nexus Intelligent Systems Runtime.
  * 
  * Usage:
- *   import { NexusKernel } from '@nexus/core';
+ *   import { NexusKernel } from '@kernova/core';
  *   
  *   const kernel = new NexusKernel({ environment: 'development' });
  *   await kernel.start();

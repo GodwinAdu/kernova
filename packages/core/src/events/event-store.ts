@@ -11,14 +11,14 @@
  * - Batch inserts for high-throughput scenarios
  * 
  * File location:
- *   Development: ./nexus-data/nexus.db
+ *   Development: ./kernova-data/kernova.db
  *   Configurable via EventStoreConfig.path
  */
 
 import Database from 'better-sqlite3';
 import { mkdirSync, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { NexusEvent, NexusId, EventCategory, EventSeverity } from '@nexus/types';
+import type { NexusEvent, NexusId, EventCategory, EventSeverity } from '@kernova/types';
 
 export interface EventStoreConfig {
   /** Path to the SQLite database file */
@@ -79,7 +79,7 @@ export class EventStore {
   private closed = false;
 
   constructor(config: EventStoreConfig = {}) {
-    const dbPath = config.path || './nexus-data/nexus.db';
+    const dbPath = config.path || './kernova-data/kernova.db';
 
     // Ensure directory exists
     const dir = dirname(dbPath);

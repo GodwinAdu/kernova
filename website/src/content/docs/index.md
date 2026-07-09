@@ -25,7 +25,7 @@ Nexus solves all of these with one `npm install`.
 ## See It In Action
 
 ```typescript
-import { Nexus } from '@nexus/sdk';
+import { Nexus } from '@kernova/sdk';
 
 // Start in one line
 const app = await Nexus.create();
@@ -65,12 +65,12 @@ That's a working AI application with memory, tool use, and persistence. **5 minu
 | Build auth, rate limiting, budgets | Built-in: API keys, roles, token limits |
 | No observability into AI decisions | Every action emits events, viewable in Studio |
 | Locked to one model provider | 20+ providers, switch with zero code changes |
-| Months of infrastructure work | `npm install @nexus/sdk` — done in minutes |
+| Months of infrastructure work | `npm install @kernova/sdk` — done in minutes |
 
 ## Get Started
 
 ```bash
-npm install @nexus/sdk
+npm install @kernova/sdk
 ```
 
 Then follow the [Getting Started guide →](/getting-started/introduction/)

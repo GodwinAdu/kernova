@@ -17,7 +17,7 @@ import type {
   IntentResult,
   ComputedContext,
   NexusId,
-} from '@nexus/types';
+} from '@kernova/types';
 import type { AgentRegistry } from './agent-registry.js';
 import { EventBus } from '../events/event-bus.js';
 import { generateId, now } from '../utils.js';

@@ -19,7 +19,7 @@ const { answer } = await app.ask('Write docs for a login() function');
 ## Agent with Custom Logic
 
 ```typescript
-import { defineAgent } from '@nexus/core';
+import { defineAgent } from '@kernova/core';
 
 const reviewer = defineAgent({
   name: 'code-reviewer',
@@ -59,7 +59,7 @@ app.agent('editor', {
 Save as `src/agents/assistant.ts` — hot-reloads automatically with `nexus dev`.
 
 ```typescript
-import { defineAgent } from '@nexus/core';
+import { defineAgent } from '@kernova/core';
 export default defineAgent({
   name: 'assistant',
   description: 'General-purpose assistant',

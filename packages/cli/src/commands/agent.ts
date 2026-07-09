@@ -1,17 +1,17 @@
 /**
- * nexus agent
+ * kernova agent
  * 
  * Agent management commands:
- *   nexus agent create <name>
- *   nexus agent list
- *   nexus agent inspect <name>
+ *   kernova agent create <name>
+ *   kernova agent list
+ *   kernova agent inspect <name>
  */
 
 import { writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { success, info, error } from '../ui.js';
 
-const AGENT_TEMPLATE = (name: string) => `import { defineAgent } from '@nexus/core';
+const AGENT_TEMPLATE = (name: string) => `import { defineAgent } from '@kernova/core';
 
 /**
  * ${name} Agent
@@ -29,7 +29,7 @@ export default defineAgent({
   ],
   tools: [],
   instructions: \`
-    You are the ${name} agent in the Nexus runtime.
+    You are the ${name} agent in the kernova runtime.
     Define your behavior here.
   \`,
 
@@ -62,14 +62,14 @@ export async function handleAgent(args: string[]): Promise<void> {
     case 'inspect':
       return inspectAgent(args[1]);
     default:
-      console.log('Usage: nexus agent <create|list|inspect> [name]');
+      console.log('Usage: kernova agent <create|list|inspect> [name]');
       break;
   }
 }
 
 async function createAgent(name?: string): Promise<void> {
   if (!name) {
-    error('Agent name required. Usage: nexus agent create <name>');
+    error('Agent name required. Usage: kernova agent create <name>');
     process.exit(1);
   }
 
@@ -91,7 +91,7 @@ async function listAgents(): Promise<void> {
   const agentsDir = resolve(process.cwd(), 'src/agents');
 
   if (!existsSync(agentsDir)) {
-    info('No agents directory found. Run "nexus agent create <name>" to create one.');
+    info('No agents directory found. Run "kernova agent create <name>" to create one.');
     return;
   }
 
@@ -114,7 +114,7 @@ async function listAgents(): Promise<void> {
 
 async function inspectAgent(name?: string): Promise<void> {
   if (!name) {
-    error('Agent name required. Usage: nexus agent inspect <name>');
+    error('Agent name required. Usage: kernova agent inspect <name>');
     process.exit(1);
   }
 
@@ -127,5 +127,5 @@ async function inspectAgent(name?: string): Promise<void> {
 
   info(`Agent: ${name}`);
   info(`Path: src/agents/${name}.ts`);
-  info(`Status: Defined (load with "nexus dev")`);
+  info(`Status: Defined (load with "kernova dev")`);
 }

@@ -19,7 +19,7 @@ import type {
   NexusEvent,
   NexusId,
   ModelRoutingConfig,
-} from '@nexus/types';
+} from '@kernova/types';
 import { EventBus } from './events/event-bus.js';
 import { MemoryEngine } from './memory/memory-engine.js';
 import { AgentRegistry } from './agents/agent-registry.js';
@@ -49,7 +49,7 @@ export interface KernelConfig {
   /** Additional model providers */
   providers?: ModelProvider[];
 
-  /** Data directory for persistence (default: ./nexus-data) */
+  /** Data directory for persistence (default: ./kernova-data) */
   dataDir?: string;
 
   /** Disable event persistence (events only in memory) */
@@ -85,11 +85,11 @@ export class NexusKernel {
     this.instanceId = config.instanceId || generateId('kernel');
 
     // Event bus with optional persistence
-    const dataDir = config.dataDir || './nexus-data';
+    const dataDir = config.dataDir || './kernova-data';
     this.eventBus = new EventBus({
       persistent: config.ephemeral !== true,
       store: {
-        path: `${dataDir}/nexus.db`,
+        path: `${dataDir}/kernova.db`,
       },
     });
 
@@ -124,7 +124,7 @@ export class NexusKernel {
     this.memory = new MemoryEngine(this.eventBus, {
       persistent: config.ephemeral !== true,
       store: {
-        path: `${dataDir}/nexus.db`,
+        path: `${dataDir}/kernova.db`,
       },
       embeddings: config.ephemeral !== true,
       modelRouter: this.modelRouter,
@@ -145,7 +145,7 @@ export class NexusKernel {
 
     // Identity & auth
     this.identityManager = new IdentityManager(this.eventBus, {
-      storePath: config.ephemeral ? undefined : `${dataDir}/nexus.db`,
+      storePath: config.ephemeral ? undefined : `${dataDir}/kernova.db`,
       ephemeral: config.ephemeral,
     });
 
@@ -181,7 +181,7 @@ export class NexusKernel {
     });
 
     if (this.config.debug) {
-      console.log(`[Nexus] Kernel started (${this.instanceId})`);
+      console.log(`[Kernova] Kernel started (${this.instanceId})`);
     }
   }
 
@@ -206,7 +206,7 @@ export class NexusKernel {
     this.running = false;
 
     if (this.config.debug) {
-      console.log(`[Nexus] Kernel stopped`);
+      console.log(`[Kernova] Kernel stopped`);
     }
   }
 

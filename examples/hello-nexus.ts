@@ -14,7 +14,7 @@
  *   npx tsx examples/hello-nexus.ts
  */
 
-import { NexusKernel, defineAgent } from '@nexus/core';
+import { NexusKernel, defineAgent } from '@kernova/core';
 
 async function main() {
   // 1. Create the kernel

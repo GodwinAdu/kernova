@@ -13,7 +13,7 @@ import type {
   ComputedContext,
   MemoryEntry,
   NexusId,
-} from '@nexus/types';
+} from '@kernova/types';
 import { MemoryEngine } from '../memory/memory-engine.js';
 import { now } from '../utils.js';
 

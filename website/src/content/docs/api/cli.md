@@ -1,9 +1,9 @@
 ---
-title: "@nexus/cli"
+title: "@kernova/cli"
 description: Command-line tools reference.
 ---
 
-# @nexus/cli
+# @kernova/cli
 
 Developer tools for Nexus projects.
 

@@ -13,7 +13,7 @@
  * - Rate: requests per time window (sliding window)
  */
 
-import type { NexusId } from '@nexus/types';
+import type { NexusId } from '@kernova/types';
 import { EventBus } from '../events/event-bus.js';
 import { generateId, now } from '../utils.js';
 

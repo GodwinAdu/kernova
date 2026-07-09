@@ -29,7 +29,7 @@ import {
   createProvider,
   listPresets,
   OpenAICompatibleProvider,
-} from '@nexus/core';
+} from '@kernova/core';
 
 async function main() {
   console.log('');

@@ -1,25 +1,25 @@
 /**
- * nexus dev
+ * kernova dev
  * 
- * Starts the Nexus development runtime with hot-reload.
+ * Starts the kernova development runtime with hot-reload.
  * Watches agent files and reloads them on change without restarting.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import { DevServer } from '@nexus/core';
+import { DevServer } from '@kernova/core';
 import { printBanner, success, info, warn, error } from '../ui.js';
 
 export async function handleDev(args: string[]): Promise<void> {
   const projectRoot = resolve(process.cwd());
-  const configPath = join(projectRoot, 'nexus.config.json');
+  const configPath = join(projectRoot, 'kernova.config.json');
 
   printBanner();
 
   // Check for config file
   if (!existsSync(configPath)) {
-    error('No nexus.config.json found in current directory.');
-    info('Run "nexus init" to create a new project.');
+    error('No kernova.config.json found in current directory.');
+    info('Run "kernova init" to create a new project.');
     process.exit(1);
   }
 
@@ -27,7 +27,7 @@ export async function handleDev(args: string[]): Promise<void> {
   const configRaw = readFileSync(configPath, 'utf-8');
   const config = JSON.parse(configRaw);
 
-  info(`Starting Nexus runtime for "${config.name}"...`);
+  info(`Starting kernova runtime for "${config.name}"...`);
   console.log('');
 
   // Create dev server
@@ -54,7 +54,7 @@ export async function handleDev(args: string[]): Promise<void> {
   const status = kernel.getStatus();
 
   console.log('');
-  success('Nexus runtime is running');
+  success('kernova runtime is running');
   console.log('');
   console.log(`    Instance:   ${status.instanceId}`);
   console.log(`    Env:        ${status.environment}`);

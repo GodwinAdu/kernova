@@ -1,15 +1,15 @@
 /**
- * Agent helper — shorthand for defining agents outside the Nexus class.
+ * Agent helper — shorthand for defining agents outside the Kernova class.
  * 
  * Usage:
- *   import { agent } from '@nexus/sdk';
+ *   import { agent } from '@kernova/sdk';
  *   
  *   export default agent('assistant', {
  *     instructions: 'You are helpful.',
  *   });
  */
 
-import { defineAgent, type AgentSpec, type DefinedAgent } from '@nexus/core';
+import { defineAgent, type AgentSpec, type DefinedAgent } from '@kernova/core';
 
 export function agent(name: string, spec: Partial<AgentSpec> & { instructions: string }): DefinedAgent {
   return defineAgent({

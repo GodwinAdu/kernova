@@ -1,9 +1,9 @@
 ---
-title: "@nexus/core"
+title: "@kernova/core"
 description: Core runtime kernel API reference.
 ---
 
-# @nexus/core
+# @kernova/core
 
 The full runtime kernel. Use when you need complete control.
 

@@ -1,5 +1,5 @@
 {
-  "name": "@nexus/types",
+  "name": "@kernova/types",
   "version": "0.1.0",
   "description": "Nexus Type Definitions - The Universal Object Model",
   "main": "./dist/index.js",

@@ -2,7 +2,7 @@
  * Tool helper — shorthand for defining tools.
  * 
  * Usage:
- *   import { tool } from '@nexus/sdk';
+ *   import { tool } from '@kernova/sdk';
  *   
  *   export default tool('search', {
  *     description: 'Search the web',
@@ -11,7 +11,7 @@
  *   });
  */
 
-import type { ToolDefinition } from '@nexus/core';
+import type { ToolDefinition } from '@kernova/core';
 
 export function tool(name: string, spec: {
   description: string;

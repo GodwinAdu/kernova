@@ -52,7 +52,7 @@ export class DevServer {
     this.kernel = new NexusKernel({
       environment: 'development',
       debug: true,
-      dataDir: resolve(config.rootDir, 'nexus-data'),
+      dataDir: resolve(config.rootDir, 'kernova-data'),
       ...config.kernel,
     });
 

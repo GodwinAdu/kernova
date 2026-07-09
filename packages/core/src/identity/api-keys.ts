@@ -9,7 +9,7 @@
  */
 
 import { createHash, randomBytes } from 'node:crypto';
-import type { NexusId } from '@nexus/types';
+import type { NexusId } from '@kernova/types';
 import { generateId, now } from '../utils.js';
 
 /** Prefix for all Nexus API keys */

@@ -1,5 +1,5 @@
 /**
- * @nexus/cli
+ * @kernova/cli
  * 
  * Programmatic access to CLI functionality.
  */
