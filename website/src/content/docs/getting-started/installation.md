@@ -1,11 +1,11 @@
 ---
 title: Installation
-description: Install Nexus and set up your environment in 2 minutes.
+description: Install Kernova and set up your environment in 2 minutes.
 ---
 
 # Installation
 
-This guide gets you from zero to a working Nexus setup in under 2 minutes.
+This guide gets you from zero to a working Kernova setup in under 2 minutes.
 
 ## Step 1: Install the SDK
 
@@ -16,7 +16,7 @@ npm install @kernova/sdk @kernova/types
 This gives you everything needed to build intelligent applications.
 
 **What's in the box:**
-- `@kernova/sdk` — High-level API (`Nexus.create()`, `app.ask()`, `app.tool()`, etc.)
+- `@kernova/sdk` — High-level API (`Kernova.create()`, `app.ask()`, `app.tool()`, etc.)
 - `@kernova/types` — TypeScript type definitions
 
 **Optional: Full runtime + CLI**
@@ -28,7 +28,7 @@ npm install @kernova/core @kernova/cli
 
 ## Step 2: Set an API key
 
-Nexus needs at least one AI model provider. Pick whichever you prefer:
+Kernova needs at least one AI model provider. Pick whichever you prefer:
 
 **OpenAI** (most popular)
 ```bash
@@ -50,26 +50,26 @@ export DEEPSEEK_API_KEY=sk-...
 # Install Ollama from https://ollama.ai
 ollama serve
 ollama pull llama3.1
-# No API key needed — Nexus detects Ollama automatically
+# No API key needed — Kernova detects Ollama automatically
 ```
 
-You can set multiple keys. Nexus auto-detects all available providers and uses the first one as default. If one fails, it falls back to the next.
+You can set multiple keys. Kernova auto-detects all available providers and uses the first one as default. If one fails, it falls back to the next.
 
 ## Step 3: Verify it works
 
 Create a file called `test.ts`:
 
 ```typescript
-import { Nexus } from '@kernova/sdk';
+import { Kernova } from '@kernova/sdk';
 
 async function main() {
-  const app = await Nexus.create();
+  const app = await Kernova.create();
   
   app.agent('assistant', {
     instructions: 'You are a helpful assistant. Respond in one sentence.',
   });
 
-  const { answer } = await app.ask('What is Nexus?');
+  const { answer } = await app.ask('What is Kernova?');
   console.log(answer);
   
   await app.close();

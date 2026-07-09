@@ -7,12 +7,12 @@ description: Core runtime kernel API reference.
 
 The full runtime kernel. Use when you need complete control.
 
-## NexusKernel
+## KernovaKernel
 
 ```typescript
-const kernel = new NexusKernel({
+const kernel = new KernovaKernel({
   environment: 'development',
-  dataDir: './nexus-data',
+  dataDir: './Kernova-data',
   ephemeral: false,
   debug: true,
   providers: [],

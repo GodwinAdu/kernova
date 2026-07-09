@@ -1,13 +1,13 @@
 ---
 title: Configuration
-description: Complete reference for nexus.config.json and environment setup.
+description: Complete reference for Kernova.config.json and environment setup.
 ---
 
 # Configuration
 
-## nexus.config.json
+## Kernova.config.json
 
-Every Nexus project has a configuration file at its root:
+Every Kernova project has a configuration file at its root:
 
 ```json
 {
@@ -133,34 +133,34 @@ Adapter types: `openai`, `anthropic`, `gemini`, `ollama`, `custom`
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PORT` | Studio/API port | `4200` |
-| `NEXUS_DATA_DIR` | Persistence directory | `./nexus-data` |
-| `NEXUS_AUTH` | Require auth in production | `true` |
+| `Kernova_DATA_DIR` | Persistence directory | `./Kernova-data` |
+| `Kernova_AUTH` | Require auth in production | `true` |
 | `NODE_ENV` | Environment mode | `development` |
 
 ## Data Directory
 
-Nexus stores SQLite databases in `./nexus-data/`:
+Kernova stores SQLite databases in `./Kernova-data/`:
 
 ```
-nexus-data/
-  nexus.db       ← Events, memories, API keys, identities
-  nexus.db-wal   ← Write-ahead log (performance)
-  nexus.db-shm   ← Shared memory (performance)
+Kernova-data/
+  Kernova.db       ← Events, memories, API keys, identities
+  Kernova.db-wal   ← Write-ahead log (performance)
+  Kernova.db-shm   ← Shared memory (performance)
 ```
 
 Override the location:
 ```typescript
-new NexusKernel({ dataDir: '/custom/path' });
+new KernovaKernel({ dataDir: '/custom/path' });
 ```
 
 Disable persistence entirely:
 ```typescript
-new NexusKernel({ ephemeral: true });
+new KernovaKernel({ ephemeral: true });
 ```
 
 ## TypeScript Configuration
 
-Nexus uses ESM modules. Your `tsconfig.json` should include:
+Kernova uses ESM modules. Your `tsconfig.json` should include:
 
 ```json
 {

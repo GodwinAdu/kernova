@@ -1,13 +1,13 @@
 ---
-title: Nexus
+title: Kernova
 description: The Intelligent Systems Runtime
 sidebar:
   hidden: true
 ---
 
-# Nexus — The Intelligent Systems Runtime
+# Kernova — The Intelligent Systems Runtime
 
-**Stop rebuilding AI infrastructure from scratch.** Nexus gives you everything you need to build intelligent applications — memory, agents, tools, events, auth, and orchestration — in one cohesive runtime.
+**Stop rebuilding AI infrastructure from scratch.** Kernova gives you everything you need to build intelligent applications — memory, agents, tools, events, auth, and orchestration — in one cohesive runtime.
 
 ## The Problem
 
@@ -20,15 +20,15 @@ Every team building AI-powered applications ends up rebuilding the same things:
 - How do I coordinate multiple AI agents?
 - How do I secure it for production?
 
-Nexus solves all of these with one `npm install`.
+Kernova solves all of these with one `npm install`.
 
 ## See It In Action
 
 ```typescript
-import { Nexus } from '@kernova/sdk';
+import { Kernova } from '@kernova/sdk';
 
 // Start in one line
-const app = await Nexus.create();
+const app = await Kernova.create();
 
 // Give it personality
 app.agent('assistant', {
@@ -55,9 +55,9 @@ await app.close();
 
 That's a working AI application with memory, tool use, and persistence. **5 minutes, not 5 weeks.**
 
-## Why Nexus?
+## Why Kernova?
 
-| Without Nexus | With Nexus |
+| Without Kernova | With Kernova |
 |---------------|-----------|
 | Pick an LLM SDK, build a wrapper | `app.agent('name', { instructions })` |
 | Build a memory system from scratch | `app.remember()` / `app.recall()` — built-in, persistent |
@@ -82,7 +82,7 @@ Node.js     = Runtime for JavaScript
 Docker      = Runtime for Containers  
 Kubernetes  = Runtime for Services
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Nexus       = Runtime for Intelligent Systems
+Kernova       = Runtime for Intelligent Systems
 ```
 
 Just as you don't write your own HTTP server to build a web app, you shouldn't write your own AI infrastructure to build an intelligent app.

@@ -123,9 +123,9 @@ async execute(intent, context, tools) {
 Tools are registered individually with `app.tool()`, but internally they're grouped into **plugins**:
 
 ```typescript
-import type { NexusPlugin } from '@kernova/core';
+import type { KernovaPlugin } from '@kernova/core';
 
-const weatherPlugin: NexusPlugin = {
+const weatherPlugin: KernovaPlugin = {
   id: 'weather',
   name: 'Weather Tools',
   version: '1.0.0',
@@ -158,7 +158,7 @@ Tool IDs become `pluginId:toolId` — so these would be `weather:current` and `w
 Plugins can also intercept the intent pipeline:
 
 ```typescript
-const auditPlugin: NexusPlugin = {
+const auditPlugin: KernovaPlugin = {
   id: 'audit',
   name: 'Audit Logger',
   version: '1.0.0',

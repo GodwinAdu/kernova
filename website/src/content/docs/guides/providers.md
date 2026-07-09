@@ -5,7 +5,7 @@ description: Configure and use 20+ AI model providers with zero lock-in.
 
 # Model Providers
 
-Nexus is **model-agnostic**. Your application code doesn't change when you switch providers. Set an environment variable — that's it.
+Kernova is **model-agnostic**. Your application code doesn't change when you switch providers. Set an environment variable — that's it.
 
 ## Why This Matters
 
@@ -54,11 +54,11 @@ When the kernel starts, it:
 4. Picks the first available as the default
 
 ```typescript
-// You just set the env var — Nexus does the rest
+// You just set the env var — Kernova does the rest
 // export OPENAI_API_KEY=sk-...
 // export ANTHROPIC_API_KEY=sk-ant-...
 
-const app = await Nexus.create();
+const app = await Kernova.create();
 // → Both OpenAI and Anthropic available
 // → OpenAI used as default (first detected)
 ```
@@ -68,7 +68,7 @@ const app = await Nexus.create();
 ### Default + fallback
 
 ```typescript
-const kernel = new NexusKernel({
+const kernel = new KernovaKernel({
   environment: 'development',
   models: {
     default: { provider: 'openai', model: 'gpt-4o' },
@@ -77,7 +77,7 @@ const kernel = new NexusKernel({
 });
 ```
 
-If OpenAI fails (rate limit, outage), Nexus automatically tries Anthropic.
+If OpenAI fails (rate limit, outage), Kernova automatically tries Anthropic.
 
 ### Explicit provider creation
 
@@ -91,7 +91,7 @@ const local = createProvider('ollama', { defaultModel: 'mistral' });
 
 ## Adding a Custom Provider
 
-Any server that implements the OpenAI `/chat/completions` format works. Add to `nexus.config.json`:
+Any server that implements the OpenAI `/chat/completions` format works. Add to `Kernova.config.json`:
 
 ```json
 {

@@ -5,7 +5,7 @@ description: Understand the event-native architecture — how everything is trac
 
 # Events
 
-Nexus is **event-native**. This doesn't mean "we have an event system." It means **every single action in the runtime emits a structured event** that is persisted, queryable, and streamable.
+Kernova is **event-native**. This doesn't mean "we have an event system." It means **every single action in the runtime emits a structured event** that is persisted, queryable, and streamable.
 
 ## Why This Matters
 
@@ -15,7 +15,7 @@ Without events, when something goes wrong with an AI system, you're debugging bl
 - "Which tool was called?"
 - "How long did it take?"
 
-With Nexus events, you have a complete timeline of everything that happened.
+With Kernova events, you have a complete timeline of everything that happened.
 
 ## What Gets Tracked
 
@@ -116,7 +116,7 @@ Open Studio while developing and you can watch your agents work in real time.
 
 ## Persistence
 
-Events are stored in SQLite (`nexus-data/nexus.db`). They survive process restarts.
+Events are stored in SQLite (`Kernova-data/Kernova.db`). They survive process restarts.
 
 **Retention:** Events accumulate over time. Use retention policies to manage disk usage:
 

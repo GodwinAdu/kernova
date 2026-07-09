@@ -18,12 +18,12 @@ By the end of this page, you'll have an AI assistant that:
 ## Step 1: Create the app
 
 ```typescript
-import { Nexus } from '@kernova/sdk';
+import { Kernova } from '@kernova/sdk';
 
-const app = await Nexus.create();
+const app = await Kernova.create();
 ```
 
-This starts the Nexus runtime with:
+This starts the Kernova runtime with:
 - A connection to your configured LLM provider
 - Persistent SQLite storage for memory and events
 - Event tracking for every action
@@ -72,7 +72,7 @@ app.tool('search_docs', {
 **How tool calling works:**
 1. You submit a question
 2. The LLM reads the tool description and decides: "I should search for this"
-3. Nexus executes your `execute` function
+3. Kernova executes your `execute` function
 4. The result is sent back to the LLM
 5. The LLM writes a final answer incorporating the search results
 
@@ -127,10 +127,10 @@ console.log(); // newline at end
 Here's the full working application:
 
 ```typescript
-import { Nexus } from '@kernova/sdk';
+import { Kernova } from '@kernova/sdk';
 
 async function main() {
-  const app = await Nexus.create();
+  const app = await Kernova.create();
 
   // Define the agent
   app.agent('coding-assistant', {

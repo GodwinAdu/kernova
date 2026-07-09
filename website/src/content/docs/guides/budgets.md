@@ -5,7 +5,7 @@ description: Control costs and prevent abuse with token budgets and rate limits.
 
 # Budget & Rate Limiting
 
-Nexus enforces spending and rate limits to prevent runaway costs.
+Kernova enforces spending and rate limits to prevent runaway costs.
 
 ## Setting Budgets
 
@@ -58,4 +58,4 @@ kernel.budget.resetDaily();
 
 ## Cost Estimation
 
-Nexus estimates cost at ~$3 per million tokens (average across providers). This is a rough estimate for budgeting — actual costs depend on your provider and model.
+Kernova estimates cost at ~$3 per million tokens (average across providers). This is a rough estimate for budgeting — actual costs depend on your provider and model.

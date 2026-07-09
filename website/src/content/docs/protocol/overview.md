@@ -1,11 +1,11 @@
 ---
 title: Protocol Overview
-description: The Nexus Protocol — an open standard for intelligent systems.
+description: The Kernova Protocol — an open standard for intelligent systems.
 ---
 
-# Nexus Protocol
+# Kernova Protocol
 
-The Nexus Protocol (NP) is an open specification for building, operating, and governing intelligent systems. It defines how intents, agents, memory, events, tools, and identity communicate and interoperate.
+The Kernova Protocol (NP) is an open specification for building, operating, and governing intelligent systems. It defines how intents, agents, memory, events, tools, and identity communicate and interoperate.
 
 ## Documents
 
@@ -28,4 +28,4 @@ The Nexus Protocol (NP) is an open specification for building, operating, and go
 
 All messages use JSON. IDs are UUIDs. Timestamps are ISO 8601.
 
-Any runtime implementing these protocols is Nexus-compatible.
+Any runtime implementing these protocols is Kernova-compatible.

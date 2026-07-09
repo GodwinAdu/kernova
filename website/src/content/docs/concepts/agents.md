@@ -1,15 +1,15 @@
 ---
 title: Agents
-description: Understand Nexus agents — intelligent entities that fulfill intents.
+description: Understand Kernova agents — intelligent entities that fulfill intents.
 ---
 
 # Agents
 
-An agent in Nexus is **not just a wrapper around an LLM**. It's a structured entity with a name, capabilities, tools, memory access, and the ability to collaborate with other agents.
+An agent in Kernova is **not just a wrapper around an LLM**. It's a structured entity with a name, capabilities, tools, memory access, and the ability to collaborate with other agents.
 
-## What Makes a Nexus Agent Different?
+## What Makes a Kernova Agent Different?
 
-| Raw LLM call | Nexus Agent |
+| Raw LLM call | Kernova Agent |
 |-------------|-------------|
 | Stateless | Has memory (persists across calls) |
 | Can't do anything | Has tools (can call functions) |
@@ -162,7 +162,7 @@ offline     → Agent is not available
 
 ## File-Based Agents (CLI Projects)
 
-When using `nexus dev`, agents live in `src/agents/`:
+When using `Kernova dev`, agents live in `src/agents/`:
 
 ```typescript
 // src/agents/reviewer.ts

@@ -5,14 +5,14 @@ description: High-level SDK API reference.
 
 # @kernova/sdk
 
-The simplest way to build with Nexus. Provides a fluent, minimal API.
+The simplest way to build with Kernova. Provides a fluent, minimal API.
 
-## `Nexus.create(config?)`
+## `Kernova.create(config?)`
 
 ```typescript
-const app = await Nexus.create({
+const app = await Kernova.create({
   env: 'development',
-  dataDir: './nexus-data',
+  dataDir: './Kernova-data',
   ephemeral: false,
   debug: false,
 });

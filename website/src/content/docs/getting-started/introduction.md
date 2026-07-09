@@ -1,11 +1,11 @@
 ---
-title: What is Nexus?
-description: Understand what Nexus is, who it's for, and how it works.
+title: What is Kernova?
+description: Understand what Kernova is, who it's for, and how it works.
 ---
 
-# What is Nexus?
+# What is Kernova?
 
-Nexus is a **runtime for intelligent software**. It provides the infrastructure layer between your application and AI models — handling memory, tool execution, agent orchestration, events, security, and cost control so you can focus on building your actual product.
+Kernova is a **runtime for intelligent software**. It provides the infrastructure layer between your application and AI models — handling memory, tool execution, agent orchestration, events, security, and cost control so you can focus on building your actual product.
 
 ## Who is it for?
 
@@ -15,7 +15,7 @@ Nexus is a **runtime for intelligent software**. It provides the infrastructure 
 
 ## What does it actually do?
 
-Think of Nexus as providing **7 things** you'd otherwise build yourself:
+Think of Kernova as providing **7 things** you'd otherwise build yourself:
 
 ### 1. Agents (not just prompts)
 
@@ -104,7 +104,7 @@ const summary = await tools.delegate('writer', `Summarize: ${research.response}`
 ```
 Your App → submits an Intent (structured goal)
     ↓
-Nexus Kernel → checks permissions, checks budget
+Kernova Kernel → checks permissions, checks budget
     ↓
 Agent Registry → selects the best agent for the job
     ↓
@@ -119,7 +119,7 @@ Every interaction follows this flow. It's predictable, auditable, and debuggable
 
 ## What model providers does it support?
 
-Nexus is **model-agnostic**. Set an environment variable and it works:
+Kernova is **model-agnostic**. Set an environment variable and it works:
 
 - OpenAI (GPT-4o, GPT-4o-mini)
 - Anthropic (Claude 3.5 Sonnet, Opus, Haiku)
@@ -135,21 +135,21 @@ Switch providers by changing one environment variable. Your code doesn't change.
 
 ```bash
 # Create a project
-nexus init my-app && cd my-app && npm install
+Kernova init my-app && cd my-app && npm install
 
 # Start development (hot-reload + web dashboard)
-nexus dev
+Kernova dev
 
 # Edit src/agents/assistant.ts → auto-reloads
 # Open http://localhost:4200 → see events, memory, agents live
 
 # Deploy
-nexus deploy docker
+Kernova deploy docker
 docker build -t my-app . && docker run -p 4200:4200 my-app
 ```
 
 ## Next Steps
 
-Ready? [Install Nexus →](/getting-started/installation/)
+Ready? [Install Kernova →](/getting-started/installation/)
 
 Want to understand the architecture? [Read the concepts →](/concepts/intents/)

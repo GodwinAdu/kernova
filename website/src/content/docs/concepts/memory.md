@@ -1,11 +1,11 @@
 ---
 title: Memory
-description: Understand the five-layer memory system — how Nexus remembers.
+description: Understand the five-layer memory system — how Kernova remembers.
 ---
 
 # Memory
 
-Most AI applications have no memory. Each request starts from zero. Nexus gives your agents a **five-layer persistent memory system** that works like human memory — with short-term context, long-term knowledge, and shared organizational information.
+Most AI applications have no memory. Each request starts from zero. Kernova gives your agents a **five-layer persistent memory system** that works like human memory — with short-term context, long-term knowledge, and shared organizational information.
 
 ## Why Five Layers?
 
@@ -64,7 +64,7 @@ const results = await app.recall('dark mode preference');
 
 ### Semantic search (meaning)
 
-When you have an embedding provider configured, Nexus also searches by meaning:
+When you have an embedding provider configured, Kernova also searches by meaning:
 
 ```typescript
 const results = await app.recall('UI theme choice');
@@ -87,7 +87,7 @@ const results = await kernel.memoryEngine.query({
 
 ## How Memory Becomes Context
 
-When an agent handles an intent, Nexus automatically assembles relevant memories into the context:
+When an agent handles an intent, Kernova automatically assembles relevant memories into the context:
 
 ```
 User asks: "How should I handle auth tokens?"
@@ -126,7 +126,7 @@ All memories persist to SQLite. They survive:
 - Server reboots
 - Application redeployments
 
-The database lives in `./nexus-data/nexus.db`. Back it up like any other database.
+The database lives in `./Kernova-data/Kernova.db`. Back it up like any other database.
 
 ## In Agent Code
 

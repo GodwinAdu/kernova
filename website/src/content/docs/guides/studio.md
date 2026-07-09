@@ -1,16 +1,16 @@
 ---
-title: Nexus Studio
+title: Kernova Studio
 description: The web dashboard for inspecting and debugging your intelligent systems.
 ---
 
-# Nexus Studio
+# Kernova Studio
 
-Studio is a **real-time web dashboard** that shows you exactly what your agents are doing — events flowing, memories being stored, intents being processed. It starts automatically with `nexus dev`.
+Studio is a **real-time web dashboard** that shows you exactly what your agents are doing — events flowing, memories being stored, intents being processed. It starts automatically with `Kernova dev`.
 
 ## Accessing Studio
 
 ```bash
-nexus dev
+Kernova dev
 # → Studio: http://localhost:4200
 ```
 

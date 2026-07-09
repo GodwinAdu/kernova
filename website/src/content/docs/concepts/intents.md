@@ -5,7 +5,7 @@ description: Understand Intents — structured goals that replace raw prompts.
 
 # Intents
 
-An **Intent** is the core concept that makes Nexus different from raw LLM APIs. Instead of sending a text prompt and hoping for the best, you submit a structured goal that the system tracks, governs, and fulfills with evidence.
+An **Intent** is the core concept that makes Kernova different from raw LLM APIs. Instead of sending a text prompt and hoping for the best, you submit a structured goal that the system tracks, governs, and fulfills with evidence.
 
 ## The Problem with Prompts
 

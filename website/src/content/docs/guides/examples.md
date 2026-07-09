@@ -1,6 +1,6 @@
 ---
 title: Examples
-description: Common patterns and recipes for building with Nexus.
+description: Common patterns and recipes for building with Kernova.
 ---
 
 # Examples
@@ -8,9 +8,9 @@ description: Common patterns and recipes for building with Nexus.
 ## Simple Q&A Bot
 
 ```typescript
-import { Nexus } from '@kernova/sdk';
+import { Kernova } from '@kernova/sdk';
 
-const app = await Nexus.create();
+const app = await Kernova.create();
 app.agent('assistant', { instructions: 'You are helpful and concise.' });
 
 const { answer } = await app.ask('What is the capital of France?');
@@ -21,7 +21,7 @@ await app.close();
 ## Agent with Web Search
 
 ```typescript
-const app = await Nexus.create();
+const app = await Kernova.create();
 
 app.agent('researcher', {
   instructions: 'You research topics. Always use the search tool for current info.',
@@ -42,7 +42,7 @@ const { answer } = await app.ask('What happened in tech news today?');
 ## Multi-Agent Pipeline
 
 ```typescript
-const app = await Nexus.create();
+const app = await Kernova.create();
 
 app.agent('researcher', { instructions: 'Research the given topic thoroughly.' });
 app.agent('writer', { instructions: 'Write clear, engaging articles.' });
@@ -61,7 +61,7 @@ const { answer } = await app.ask('The future of renewable energy');
 ## Persistent Memory Assistant
 
 ```typescript
-const app = await Nexus.create(); // Memory persists in nexus-data/
+const app = await Kernova.create(); // Memory persists in Kernova-data/
 
 // First run — store preferences
 await app.remember('User prefers Python over JavaScript', 'longterm');
@@ -97,7 +97,7 @@ function login(user, pass) {
 ## Budget-Controlled Agent
 
 ```typescript
-const app = await Nexus.create();
+const app = await Kernova.create();
 
 // Limit spending
 const kernel = app.getKernel();
@@ -135,11 +135,11 @@ await app.ask('Hello');
 ## Local Model (Ollama)
 
 ```typescript
-import { Nexus } from '@kernova/sdk';
+import { Kernova } from '@kernova/sdk';
 import { createProvider } from '@kernova/core';
 
 // No API key needed — runs locally
-const app = await Nexus.create();
+const app = await Kernova.create();
 app.agent('local', { instructions: 'You run entirely on local hardware.' });
 
 const { answer } = await app.ask('Explain how transformers work');

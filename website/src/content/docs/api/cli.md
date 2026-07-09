@@ -5,26 +5,26 @@ description: Command-line tools reference.
 
 # @kernova/cli
 
-Developer tools for Nexus projects.
+Developer tools for Kernova projects.
 
 ## Commands
 
-### `nexus init [name]`
+### `Kernova init [name]`
 
 Create a new project with standard structure.
 
 ```bash
-nexus init my-app
+Kernova init my-app
 ```
 
-Generates: `nexus.config.json`, `package.json`, `tsconfig.json`, `src/main.ts`, `src/agents/assistant.ts`
+Generates: `Kernova.config.json`, `package.json`, `tsconfig.json`, `src/main.ts`, `src/agents/assistant.ts`
 
-### `nexus dev`
+### `Kernova dev`
 
 Start the development runtime with hot-reload and Studio.
 
 ```bash
-nexus dev
+Kernova dev
 ```
 
 - Loads agents from `src/agents/`
@@ -32,32 +32,32 @@ nexus dev
 - Starts Studio at http://localhost:4200
 - Persistent events and memory (SQLite)
 
-### `nexus deploy [target]`
+### `Kernova deploy [target]`
 
 Prepare for production deployment.
 
 ```bash
-nexus deploy docker   # Generates Dockerfile + production entry
-nexus deploy node     # Generates production entry only
+Kernova deploy docker   # Generates Dockerfile + production entry
+Kernova deploy node     # Generates production entry only
 ```
 
-### `nexus agent create <name>`
+### `Kernova agent create <name>`
 
 Generate a new agent file.
 
 ```bash
-nexus agent create code-reviewer
+Kernova agent create code-reviewer
 # → Created src/agents/code-reviewer.ts
 ```
 
-### `nexus agent list`
+### `Kernova agent list`
 
 List agents in the project.
 
-### `nexus status`
+### `Kernova status`
 
 Show project and runtime status.
 
-### `nexus --version`
+### `Kernova --version`
 
 Show version.

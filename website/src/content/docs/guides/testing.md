@@ -1,11 +1,11 @@
 ---
 title: Testing Your Agents
-description: How to write tests for Nexus agents, tools, and workflows.
+description: How to write tests for Kernova agents, tools, and workflows.
 ---
 
 # Testing Your Agents
 
-Nexus is designed to be testable. Here's how to test each component.
+Kernova is designed to be testable. Here's how to test each component.
 
 ## Setup
 
@@ -21,15 +21,15 @@ Create a kernel in ephemeral mode (no persistence) for fast, isolated tests:
 
 ```typescript
 import { describe, it, expect, afterEach } from 'vitest';
-import { NexusKernel, defineAgent } from '@kernova/core';
+import { KernovaKernel, defineAgent } from '@kernova/core';
 
 describe('My Agent', () => {
-  let kernel: NexusKernel;
+  let kernel: KernovaKernel;
 
   afterEach(async () => { await kernel.stop(); });
 
   it('should process intents correctly', async () => {
-    kernel = new NexusKernel({ environment: 'development', ephemeral: true });
+    kernel = new KernovaKernel({ environment: 'development', ephemeral: true });
 
     const agent = defineAgent({
       name: 'greeter',
@@ -86,7 +86,7 @@ describe('Calculate Tool', () => {
 
 ```typescript
 it('should remember and recall', async () => {
-  kernel = new NexusKernel({ environment: 'development', ephemeral: true });
+  kernel = new KernovaKernel({ environment: 'development', ephemeral: true });
   await kernel.start();
 
   await kernel.memoryEngine.store({
@@ -104,7 +104,7 @@ it('should remember and recall', async () => {
 
 ```typescript
 it('should delegate between agents', async () => {
-  kernel = new NexusKernel({ environment: 'development', ephemeral: true });
+  kernel = new KernovaKernel({ environment: 'development', ephemeral: true });
 
   const helper = defineAgent({
     name: 'helper',
@@ -132,7 +132,7 @@ it('should delegate between agents', async () => {
 
 ```typescript
 it('should reject when over budget', async () => {
-  kernel = new NexusKernel({ environment: 'development', ephemeral: true });
+  kernel = new KernovaKernel({ environment: 'development', ephemeral: true });
   kernel.budget.setGlobalBudget({ maxTokens: 100 });
   kernel.budget.record('system', 101); // Exhaust budget
 

@@ -4,7 +4,7 @@ import starlight from '@astrojs/starlight';
 export default defineConfig({
   integrations: [
     starlight({
-      title: 'Nexus',
+      title: 'Kernova',
       description: 'The Intelligent Systems Runtime',
       social: {
         github: 'https://github.com/nexus-runtime/nexus',

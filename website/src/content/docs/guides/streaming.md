@@ -5,14 +5,14 @@ description: Real-time token-by-token streaming from LLMs.
 
 # Streaming Responses
 
-Nexus supports streaming LLM responses token-by-token so users see output immediately instead of waiting for the full response.
+Kernova supports streaming LLM responses token-by-token so users see output immediately instead of waiting for the full response.
 
 ## SDK Streaming
 
 ```typescript
-import { Nexus } from '@kernova/sdk';
+import { Kernova } from '@kernova/sdk';
 
-const app = await Nexus.create();
+const app = await Kernova.create();
 app.agent('writer', { instructions: 'You write engaging stories.' });
 
 // Stream tokens as they arrive
@@ -58,7 +58,7 @@ This streams internally (fast first-token) but returns the complete string.
 
 ## How It Works
 
-1. Nexus sends the request to the model provider with `stream: true`
+1. Kernova sends the request to the model provider with `stream: true`
 2. Provider returns Server-Sent Events (SSE) with partial responses
 3. Each chunk is parsed and yielded as a string token
 4. Token usage is reported in the final chunk

@@ -7,7 +7,7 @@ description: Defines the Intent object — the fundamental unit of work.
 
 **Version:** 0.1.0 | **Status:** Draft
 
-The Intent is the fundamental unit of work in Nexus. It replaces prompts with a structured, trackable, governable object.
+The Intent is the fundamental unit of work in Kernova. It replaces prompts with a structured, trackable, governable object.
 
 ## Intent Object
 

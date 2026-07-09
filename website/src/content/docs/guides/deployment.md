@@ -1,6 +1,6 @@
 ---
 title: Deploying to Production
-description: Deploy your Nexus application with Docker or Node.js.
+description: Deploy your Kernova application with Docker or Node.js.
 ---
 
 # Deploying to Production
@@ -9,23 +9,23 @@ description: Deploy your Nexus application with Docker or Node.js.
 
 ```bash
 # Generate Docker deployment files
-nexus deploy docker
+Kernova deploy docker
 
 # Or generate a Node.js production entry
-nexus deploy node
+Kernova deploy node
 ```
 
 ## Docker Deployment
 
-After running `nexus deploy docker`:
+After running `Kernova deploy docker`:
 
 ```bash
 npm run build
 docker build -t my-app .
 docker run -p 4200:4200 \
   -e OPENAI_API_KEY=sk-... \
-  -e NEXUS_AUTH=true \
-  -v ./data:/app/nexus-data \
+  -e Kernova_AUTH=true \
+  -v ./data:/app/Kernova-data \
   my-app
 ```
 
@@ -36,16 +36,16 @@ The generated Dockerfile uses Node.js 20 Alpine, installs only production depend
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PORT` | Studio/API port | 4200 |
-| `NEXUS_DATA_DIR` | Persistence directory | ./nexus-data |
-| `NEXUS_AUTH` | Require auth for API | true |
+| `Kernova_DATA_DIR` | Persistence directory | ./Kernova-data |
+| `Kernova_AUTH` | Require auth for API | true |
 | `NODE_ENV` | Environment | production |
 | Provider keys | See [Providers](/guides/providers) | — |
 
 ## Production Checklist
 
 - [ ] Set `NODE_ENV=production`
-- [ ] Set `NEXUS_AUTH=true` (enforces API key auth)
-- [ ] Use a persistent volume for `nexus-data/`
+- [ ] Set `Kernova_AUTH=true` (enforces API key auth)
+- [ ] Use a persistent volume for `Kernova-data/`
 - [ ] Set model provider API keys
 - [ ] Configure budget limits
 - [ ] Set up TLS (reverse proxy or `tlsCert`/`tlsKey`)

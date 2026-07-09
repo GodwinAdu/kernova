@@ -56,7 +56,7 @@ app.agent('editor', {
 
 ## File-Based Agents (CLI)
 
-Save as `src/agents/assistant.ts` — hot-reloads automatically with `nexus dev`.
+Save as `src/agents/assistant.ts` — hot-reloads automatically with `Kernova dev`.
 
 ```typescript
 import { defineAgent } from '@kernova/core';
