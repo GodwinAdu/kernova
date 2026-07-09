@@ -1,7 +1,7 @@
 /**
  * Kernova SDK — Main Entry Point
  * 
- * The Nexus class provides a high-level, fluent API for:
+ * The Kernova class provides a high-level, fluent API for:
  * - Creating and configuring the runtime
  * - Defining agents (one-liner)
  * - Registering tools
@@ -79,7 +79,7 @@ export class Nexus {
   }
 
   /**
-   * Create a new Nexus instance.
+   * Create a new Kernova instance.
    * Starts the kernel automatically.
    * 
    * Usage:
@@ -246,7 +246,7 @@ export class Nexus {
   }
 
   /**
-   * Shut down the Nexus instance.
+   * Shut down the Kernova instance.
    */
   async close(): Promise<void> {
     if (this.started) {

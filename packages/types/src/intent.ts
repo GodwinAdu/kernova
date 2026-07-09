@@ -1,7 +1,7 @@
 /**
- * Nexus Intent System
+ * Kernova Intent System
  * 
- * This is the core innovation of Nexus.
+ * This is the core innovation of Kernova.
  * Intent is a first-class object — not a prompt, not a message.
  * 
  * Everything the system does traces back to an Intent.
@@ -43,7 +43,7 @@ export type IntentStatus =
 /**
  * The Intent Object
  * 
- * This is what replaces "prompts" and "conversations" in Nexus.
+ * This is what replaces "prompts" and "conversations" in Kernova.
  * An Intent captures WHAT the user wants, WHY, and all constraints.
  */
 export interface Intent extends NexusObject {

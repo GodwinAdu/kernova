@@ -1,5 +1,5 @@
 /**
- * Nexus Workflow Engine
+ * Kernova Workflow Engine
  * 
  * Multi-step execution with human approval, parallel execution,
  * conditional branching, and compensation.

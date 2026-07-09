@@ -1,8 +1,8 @@
 /**
- * Nexus Agent Loader
+ * Kernova Agent Loader
  * 
  * Dynamically loads and reloads agent definitions from the filesystem.
- * Used by `nexus dev` for hot-reload during development.
+ * Used by `kernova dev` for hot-reload during development.
  * 
  * Design:
  * - Dynamic import() with cache-busting to force fresh module load

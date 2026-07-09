@@ -1,7 +1,7 @@
 /**
- * Nexus Studio
+ * Kernova Studio
  * 
- * Web-based inspection UI for the Nexus runtime.
+ * Web-based inspection UI for the Kernova runtime.
  * Provides real-time visibility into intents, agents, events, and memory.
  */
 

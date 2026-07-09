@@ -1,5 +1,5 @@
 /**
- * Nexus Dev Server
+ * Kernova Dev Server
  * 
  * Orchestrates the development experience:
  * - Starts the kernel
@@ -8,7 +8,7 @@
  * - Hot-reloads agents on change
  * - Reports status to console
  * 
- * This is what `nexus dev` actually runs.
+ * This is what `kernova dev` actually runs.
  */
 
 import { resolve } from 'node:path';
@@ -100,7 +100,7 @@ export class DevServer {
     }
 
     if (totalLoaded === 0) {
-      this.status('No agents found in src/agents/. Create one with: nexus agent create <name>', 'info');
+      this.status('No agents found in src/agents/. Create one with: kernova agent create <name>', 'info');
     }
 
     // Start file watcher

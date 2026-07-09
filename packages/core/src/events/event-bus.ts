@@ -1,5 +1,5 @@
 /**
- * Nexus Event Bus
+ * Kernova Event Bus
  * 
  * The nervous system of the runtime.
  * Every state change, every action, every decision flows through here.

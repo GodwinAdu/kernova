@@ -1,5 +1,5 @@
 /**
- * Nexus Agent Registry
+ * Kernova Agent Registry
  * 
  * Manages agent definitions and instances.
  * Handles agent selection, lifecycle, and execution routing.

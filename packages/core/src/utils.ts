@@ -1,5 +1,5 @@
 /**
- * Nexus Utilities
+ * Kernova Utilities
  * Core utility functions used throughout the runtime
  */
 
@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import type { NexusId, Timestamp } from '@kernova/types';
 
 /**
- * Generate a unique Nexus ID with optional prefix
+ * Generate a unique Kernova ID with optional prefix
  */
 export function generateId(prefix?: string): NexusId {
   const uuid = randomUUID();

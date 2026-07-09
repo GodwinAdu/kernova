@@ -1,5 +1,5 @@
 /**
- * Nexus Budget Manager
+ * Kernova Budget Manager
  * 
  * Pillar 7: Governance — "Who is accountable?"
  * 

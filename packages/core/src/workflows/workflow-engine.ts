@@ -1,5 +1,5 @@
 /**
- * Nexus Workflow Engine
+ * Kernova Workflow Engine
  * 
  * Pillar: Coordination — "How do multiple systems work together?"
  * 

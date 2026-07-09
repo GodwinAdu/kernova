@@ -1,5 +1,5 @@
 /**
- * Nexus Plugin System
+ * Kernova Plugin System
  * 
  * Extends the runtime with tools, capabilities, middleware, and providers.
  */

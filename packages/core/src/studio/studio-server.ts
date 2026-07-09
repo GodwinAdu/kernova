@@ -1,12 +1,12 @@
 /**
- * Nexus Studio Server
+ * Kernova Studio Server
  * 
  * Embedded HTTP server that provides:
  * - REST API for querying kernel state
  * - Server-Sent Events for real-time event streaming
  * - Static HTML dashboard (self-contained, no build step)
  * 
- * Starts automatically with `nexus dev` on port 4200.
+ * Starts automatically with `kernova dev` on port 4200.
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';

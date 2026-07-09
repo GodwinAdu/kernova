@@ -1,5 +1,5 @@
 /**
- * Nexus Plugin Registry
+ * Kernova Plugin Registry
  * 
  * The plugin system allows developers to extend the runtime with:
  * - Tools (functions agents can call)
@@ -8,7 +8,7 @@
  * - Providers (custom model providers, storage backends)
  * 
  * Plugins are discovered from:
- * - Project dependencies (node_modules/@nexus-plugin/*)
+ * - Project dependencies (node_modules/@kernova-plugin/*)
  * - Local plugins (src/plugins/)
  * - kernova.config.json plugin list
  */

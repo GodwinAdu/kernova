@@ -1,5 +1,5 @@
 /**
- * Nexus Governance System
+ * Kernova Governance System
  * 
  * Pillar 7: Governance — "Who is accountable?"
  * 

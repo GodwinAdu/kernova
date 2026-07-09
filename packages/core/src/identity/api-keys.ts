@@ -1,5 +1,5 @@
 /**
- * Nexus API Key Manager
+ * Kernova API Key Manager
  * 
  * Generates, validates, and manages API keys for programmatic access.
  * 
@@ -12,7 +12,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { NexusId } from '@kernova/types';
 import { generateId, now } from '../utils.js';
 
-/** Prefix for all Nexus API keys */
+/** Prefix for all Kernova API keys */
 const KEY_PREFIX = 'nxs_';
 
 export interface ApiKey {

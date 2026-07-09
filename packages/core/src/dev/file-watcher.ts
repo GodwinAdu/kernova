@@ -1,5 +1,5 @@
 /**
- * Nexus File Watcher
+ * Kernova File Watcher
  * 
  * Watches agent and workflow files for changes during development.
  * Triggers reload callbacks when files are modified, created, or deleted.

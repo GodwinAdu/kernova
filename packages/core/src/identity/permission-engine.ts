@@ -1,5 +1,5 @@
 /**
- * Nexus Permission Engine
+ * Kernova Permission Engine
  * 
  * Pillar 2: Trust — "Should we believe you?"
  * 

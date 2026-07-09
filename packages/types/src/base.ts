@@ -1,10 +1,10 @@
 /**
- * Nexus Base Types
+ * Kernova Base Types
  * 
- * Every object in Nexus follows the Universal Object Model.
+ * Every object in Kernova follows the Universal Object Model.
  * These are the foundational types that everything else builds on.
  * 
- * The Nexus Laws:
+ * The Kernova Laws:
  * 1. Everything has an identity
  * 2. Everything has permissions
  * 3. Everything emits events
@@ -17,7 +17,7 @@
  * 10. Everything is secure
  */
 
-/** Unique identifier for any Nexus object */
+/** Unique identifier for any Kernova object */
 export type NexusId = string;
 
 /** ISO 8601 timestamp */
@@ -44,7 +44,7 @@ export type Confidence = number;
 
 /**
  * The Universal Object Model
- * Every object in Nexus extends this base.
+ * Every object in Kernova extends this base.
  * This is what makes the system consistent and auditable.
  */
 export interface NexusObject {

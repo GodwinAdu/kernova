@@ -1,5 +1,5 @@
 /**
- * Nexus Studio UI
+ * Kernova Studio UI
  * 
  * Self-contained HTML dashboard. No build step, no external dependencies.
  * Everything is inline — HTML, CSS, JavaScript.
@@ -18,7 +18,7 @@ export function getStudioHTML(): string {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nexus Studio</title>
+<title>Kernova Studio</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
@@ -109,7 +109,7 @@ nav button.active { background: var(--bg3); color: var(--text); }
 <body>
 <div class="app">
   <div class="header">
-    <h1>◆ Nexus Studio</h1>
+    <h1>◆ Kernova Studio</h1>
     <div class="status" id="status">connecting...</div>
     <nav>
       <button class="active" onclick="showTab('events')">Events</button>

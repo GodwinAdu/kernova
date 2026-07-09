@@ -1,5 +1,5 @@
 /**
- * Nexus Event Store (SQLite)
+ * Kernova Event Store (SQLite)
  * 
  * Persistent storage for events using SQLite.
  * 

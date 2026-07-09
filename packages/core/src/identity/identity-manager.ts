@@ -1,5 +1,5 @@
 /**
- * Nexus Identity Manager
+ * Kernova Identity Manager
  * 
  * Pillar 1: Identity — "Who are you?"
  * 

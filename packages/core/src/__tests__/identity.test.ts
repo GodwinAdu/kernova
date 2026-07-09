@@ -172,10 +172,10 @@ describe('IdentityManager', () => {
   describe('Organizations', () => {
     it('should create organizations', () => {
       const owner = manager.registerIdentity({ type: 'user', name: 'Founder' });
-      const org = manager.createOrganization({ name: 'Nexus Labs', slug: 'nexus-labs', ownerId: owner.id });
+      const org = manager.createOrganization({ name: 'Kernova Labs', slug: 'kernova-labs', ownerId: owner.id });
 
       expect(org.id).toBeDefined();
-      expect(org.name).toBe('Nexus Labs');
+      expect(org.name).toBe('Kernova Labs');
       expect(org.ownerId).toBe(owner.id);
     });
 

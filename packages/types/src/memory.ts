@@ -1,5 +1,5 @@
 /**
- * Nexus Memory System
+ * Kernova Memory System
  * 
  * Five-layer memory architecture:
  * 1. Working Memory - Current task context

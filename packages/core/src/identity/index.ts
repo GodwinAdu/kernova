@@ -1,5 +1,5 @@
 /**
- * Nexus Identity System
+ * Kernova Identity System
  * 
  * Pillar 1: Identity — "Who are you?"
  * Pillar 2: Trust — "Should we believe you?"

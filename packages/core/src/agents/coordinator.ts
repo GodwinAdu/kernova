@@ -1,5 +1,5 @@
 /**
- * Nexus Agent Coordinator
+ * Kernova Agent Coordinator
  * 
  * Pillar 6: Coordination — "How do multiple systems work together?"
  * 

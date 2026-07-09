@@ -1,5 +1,5 @@
 /**
- * Nexus Workflow System
+ * Kernova Workflow System
  * 
  * Workflows are the multi-step execution plans for complex intents.
  * They support:

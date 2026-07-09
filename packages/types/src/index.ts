@@ -1,8 +1,8 @@
 /**
  * @kernova/types
  * 
- * The complete type system for the Nexus Intelligent Systems Runtime.
- * Every object, event, and interaction in Nexus is defined here.
+ * The complete type system for the Kernova Intelligent Systems Runtime.
+ * Every object, event, and interaction in Kernova is defined here.
  */
 
 export * from './base.js';

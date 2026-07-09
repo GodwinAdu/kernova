@@ -1,7 +1,7 @@
 /**
- * Nexus Agent System
+ * Kernova Agent System
  * 
- * Agents are the execution units of Nexus.
+ * Agents are the execution units of Kernova.
  * They receive Intents and produce Results.
  * 
  * An Agent is NOT just a wrapper around an LLM.

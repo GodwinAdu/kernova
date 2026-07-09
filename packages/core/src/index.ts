@@ -1,7 +1,7 @@
 /**
  * @kernova/core
  * 
- * The Nexus Intelligent Systems Runtime.
+ * The Kernova Intelligent Systems Runtime.
  * 
  * Usage:
  *   import { NexusKernel } from '@kernova/core';

@@ -1,7 +1,7 @@
 /**
- * Nexus Kernel
+ * Kernova Kernel
  * 
- * The heart of the runtime. Like V8 is to Node.js, the Kernel is to Nexus.
+ * The heart of the runtime. Like V8 is to Node.js, the Kernel is to Kernova.
  * It receives Intents and orchestrates their fulfillment through agents,
  * tools, and workflows.
  * 
@@ -57,7 +57,7 @@ export interface KernelConfig {
 }
 
 /**
- * The Nexus Kernel
+ * The Kernova Kernel
  * 
  * Usage:
  *   const kernel = new NexusKernel({ environment: 'development' });

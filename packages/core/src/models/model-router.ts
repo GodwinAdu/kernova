@@ -1,5 +1,5 @@
 /**
- * Nexus Model Router
+ * Kernova Model Router
  * 
  * The intelligence layer that decides which model provider handles a request.
  * Supports:

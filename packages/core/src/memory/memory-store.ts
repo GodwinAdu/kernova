@@ -1,5 +1,5 @@
 /**
- * Nexus Memory Store (SQLite + FTS5)
+ * Kernova Memory Store (SQLite + FTS5)
  * 
  * Persistent storage for the five-layer memory system.
  * 

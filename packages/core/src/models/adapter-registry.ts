@@ -1,5 +1,5 @@
 /**
- * Nexus Adapter Registry
+ * Kernova Adapter Registry
  * 
  * The key to supporting ALL models — current and future.
  * 

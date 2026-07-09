@@ -1,5 +1,5 @@
 /**
- * Nexus Memory Engine
+ * Kernova Memory Engine
  * 
  * Pillar: Knowledge — "What do we know?"
  * 

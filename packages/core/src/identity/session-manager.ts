@@ -1,5 +1,5 @@
 /**
- * Nexus Session Manager
+ * Kernova Session Manager
  * 
  * Manages authenticated sessions for the Studio dashboard and API access.
  * Sessions are token-based with configurable TTL.

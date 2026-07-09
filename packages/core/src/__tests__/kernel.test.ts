@@ -1,5 +1,5 @@
 /**
- * Nexus Kernel Tests
+ * Kernova Kernel Tests
  * 
  * Tests the core runtime lifecycle and intent processing.
  */

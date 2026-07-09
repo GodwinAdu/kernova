@@ -1,5 +1,5 @@
 /**
- * Nexus Streaming Types
+ * Kernova Streaming Types
  * 
  * Defines the streaming response interface for real-time LLM output.
  */

@@ -1,5 +1,5 @@
 /**
- * Nexus Identity Store (SQLite)
+ * Kernova Identity Store (SQLite)
  * 
  * Persists identities, API keys, and sessions to the shared kernova.db.
  * This ensures auth state survives process restarts.

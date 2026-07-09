@@ -1,5 +1,5 @@
 /**
- * Nexus Embedding Engine
+ * Kernova Embedding Engine
  * 
  * Generates vector embeddings for semantic memory search.
  * Uses the ModelRouter to access any embedding-capable provider.

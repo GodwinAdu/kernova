@@ -1,7 +1,7 @@
 /**
- * Nexus Development Tools
+ * Kernova Development Tools
  * 
- * Hot-reload, file watching, and development server for `nexus dev`.
+ * Hot-reload, file watching, and development server for `kernova dev`.
  */
 
 export { DevServer } from './dev-server.js';

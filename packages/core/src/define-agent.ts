@@ -65,7 +65,7 @@ export interface DefinedAgent {
 }
 
 /**
- * Define a new Nexus agent
+ * Define a new Kernova agent
  */
 export function defineAgent(spec: AgentSpec): DefinedAgent {
   const definition: AgentDefinition = {

@@ -1,5 +1,5 @@
 /**
- * Nexus Model System Types
+ * Kernova Model System Types
  * 
  * Pillar: Reasoning — "How should we think?"
  * 

@@ -1,5 +1,5 @@
 /**
- * Nexus Model System
+ * Kernova Model System
  * 
  * Universal Model Protocol — supports ANY AI model, current or future.
  * 

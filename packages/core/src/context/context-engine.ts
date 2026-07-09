@@ -1,5 +1,5 @@
 /**
- * Nexus Context Engine
+ * Kernova Context Engine
  * 
  * Decision #67: Context is Computed.
  * We never store one giant context. Instead we calculate it.

@@ -1,7 +1,7 @@
 /**
- * Nexus Event System
+ * Kernova Event System
  * 
- * Nexus is Event Native.
+ * Kernova is Event Native.
  * Every object has a timeline. Every state change emits an event.
  * Events are the source of truth for what happened and when.
  */
@@ -30,7 +30,7 @@ export type EventSeverity = 'debug' | 'info' | 'warn' | 'error' | 'critical';
 /**
  * Base Event
  * 
- * Every event in Nexus follows this structure.
+ * Every event in Kernova follows this structure.
  * Events are immutable once created.
  */
 export interface NexusEvent {
