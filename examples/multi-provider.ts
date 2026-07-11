@@ -1,8 +1,8 @@
 /**
  * Multi-Provider Example
  * 
- * Demonstrates how to use different AI providers with Nexus.
- * Nexus supports 10+ providers out of the box.
+ * Demonstrates how to use different AI providers with Kernova.
+ * Kernova supports 10+ providers out of the box.
  * 
  * Supported:
  *   - OpenAI       (OPENAI_API_KEY)
@@ -24,7 +24,7 @@
  */
 
 import {
-  NexusKernel,
+  KernovaKernel,
   defineAgent,
   createProvider,
   listPresets,
@@ -33,7 +33,7 @@ import {
 
 async function main() {
   console.log('');
-  console.log('Nexus — Supported Providers');
+  console.log('Kernova — Supported Providers');
   console.log('═══════════════════════════════════════════');
   console.log('');
 
@@ -53,7 +53,7 @@ async function main() {
   console.log('');
 
   // === Method 1: Auto-detect (kernel does this automatically) ===
-  const kernel = new NexusKernel({
+  const kernel = new KernovaKernel({
     environment: 'development',
     debug: true,
   });
@@ -82,7 +82,7 @@ async function main() {
 
   // === Method 4: Specify providers in kernel config ===
   //
-  //   const kernel = new NexusKernel({
+  //   const kernel = new KernovaKernel({
   //     environment: 'development',
   //     providers: [
   //       createProvider('deepseek'),

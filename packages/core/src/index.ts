@@ -4,16 +4,16 @@
  * The Kernova Intelligent Systems Runtime.
  * 
  * Usage:
- *   import { NexusKernel } from '@kernova/core';
+ *   import { KernovaKernel } from '@kernova/core';
  *   
- *   const kernel = new NexusKernel({ environment: 'development' });
+ *   const kernel = new KernovaKernel({ environment: 'development' });
  *   await kernel.start();
  *   
  *   const result = await kernel.submit({ goal: 'Summarize this document' });
  *   console.log(result);
  */
 
-export { NexusKernel } from './kernel.js';
+export { KernovaKernel, NexusKernel } from './kernel.js';
 export type { KernelConfig } from './kernel.js';
 
 export { EventBus } from './events/event-bus.js';
@@ -58,6 +58,9 @@ export {
 export { defineAgent } from './define-agent.js';
 export type { AgentSpec, DefinedAgent } from './define-agent.js';
 
+export { DaemonRunner } from './daemon/index.js';
+export type { DaemonConfig } from './daemon/index.js';
+
 export { DevServer } from './dev/dev-server.js';
 export type { DevServerConfig } from './dev/dev-server.js';
 export { FileWatcher } from './dev/file-watcher.js';
@@ -68,6 +71,7 @@ export type { StudioServerConfig } from './studio/studio-server.js';
 
 export { PluginRegistry } from './plugins/plugin-registry.js';
 export type {
+  KernovaPlugin,
   NexusPlugin,
   ToolDefinition,
   MiddlewareHook,
@@ -78,6 +82,119 @@ export type {
 
 export { WorkflowEngine } from './workflows/workflow-engine.js';
 export type { WorkflowEngineConfig, ApprovalHandler } from './workflows/workflow-engine.js';
+
+export { AgentPlanner } from './planning/index.js';
+export type { AgentPlannerConfig } from './planning/index.js';
+export type { StepExecutor } from './planning/agent-planner.js';
+
+export { SelfReflection, clampConfidence, resolveReflectionConfig } from './reflection/index.js';
+export type { SelfReflectionConfig, ReflectionToggleConfig } from './reflection/index.js';
+
+export { ConversationManager } from './conversation/index.js';
+export type { ConversationManagerConfig } from './conversation/index.js';
+
+export { RAGPipeline } from './rag/index.js';
+export type { RAGPipelineConfig } from './rag/index.js';
+
+export { AgentTestRunner } from './testing/index.js';
+export { MockModelProvider } from './testing/index.js';
+export { ConversationSimulator } from './testing/index.js';
+export type { AgentTestRunnerConfig } from './testing/index.js';
+
+export { ModelFallbackManager } from './fallback/index.js';
+export type { ModelFallbackManagerConfig } from './fallback/index.js';
+
+export { SubAgentManager } from './subagents/index.js';
+export type { SubAgentManagerOptions } from './subagents/index.js';
+
+export { TrajectoryRecorder } from './trajectory/index.js';
+export type { TrajectoryRecorderConfig } from './trajectory/index.js';
+
+export { WebhookRouter } from './webhooks/index.js';
+export type { WebhookRouterConfig } from './webhooks/index.js';
+
+export { ToolAvailabilityEngine, ToolPolicyEngine } from './tool-availability/index.js';
+
+export { ContextEngineManager } from './context/context-engine-manager.js';
+export { DefaultContextEngine } from './context/default-context-engine.js';
+export type {
+  ContextEnginePlugin,
+  ContextEngineInfo,
+  ContextMessage,
+  AssembleResult,
+  CompactResult,
+  IngestResult,
+  BootstrapResult,
+  MaintenanceResult,
+} from './context/context-engine-plugin.js';
+
+export { MCPBridge } from './mcp/index.js';
+export type { MCPBridgeConfig } from './mcp/index.js';
+
+export { RateLimiter } from './rate-limiter/index.js';
+export type { RateLimiterConfig, RateLimitRule } from './rate-limiter/index.js';
+
+export { AuthProfileManager } from './auth-profiles/index.js';
+export type { AuthProfile, AuthProfileManagerConfig, KeyResult } from './auth-profiles/index.js';
+
+export { SandboxManager } from './sandbox/index.js';
+export type { SandboxConfig, SandboxPolicy } from './sandbox/index.js';
+
+export { ConfigManager } from './config-manager/index.js';
+export type { ConfigManagerOptions } from './config-manager/index.js';
+export {
+  parseAgentConfigFile,
+  parseAgentConfigString,
+  serializeAgentConfigToYaml,
+  serializeAgentConfigToJson,
+  validateAgentConfig,
+  mergeAgentConfigs,
+  loadAgentConfigWithExtends,
+  discoverAgentConfigFiles,
+  isAgentConfigFile,
+  watchAgentConfigFiles,
+  AgentConfigError,
+} from './config-manager/index.js';
+export type { AgentConfigLoadResult, AgentConfigLoaderOptions } from './config-manager/index.js';
+
+export { WebhookChannelAdapter } from './channels/adapters/webhook-adapter.js';
+export type { WebhookAdapterConfig } from './channels/adapters/webhook-adapter.js';
+export { WebSocketChannelAdapter } from './channels/adapters/websocket-adapter.js';
+export type { WebSocketAdapterConfig } from './channels/adapters/websocket-adapter.js';
+
+export { BuiltInToolRegistry } from './built-in-tools/index.js';
+export type { BuiltInToolConfig } from './built-in-tools/index.js';
+export { SandboxViolationError } from './built-in-tools/sandbox-error.js';
+export { createWebSearchTool, StubSearchProvider } from './built-in-tools/web-search.js';
+export type { WebSearchProvider, SearchResult } from './built-in-tools/web-search.js';
+
+export { TaskQueue } from './task-queue/index.js';
+export type { TaskQueueConfig, TaskHandler } from './task-queue/index.js';
+export { QueueStore } from './task-queue/index.js';
+export type { QueueStoreConfig } from './task-queue/index.js';
+
+export { ProactiveTriggerEngine } from './triggers/index.js';
+export type { TriggerEngineConfig } from './triggers/index.js';
+export { TriggerStore } from './triggers/trigger-store.js';
+export type { TriggerStoreConfig } from './triggers/trigger-store.js';
+
+export { AgentGateway } from './gateway/index.js';
+export type { GatewayConfig, GatewayAuthConfig } from './gateway/index.js';
+
+export { HotReloader } from './hot-reload/index.js';
+export type { HotReloaderConfig } from './hot-reload/index.js';
+
+export { PluginMarketplace } from './marketplace/index.js';
+export type { MarketplaceConfig, PluginListing } from './marketplace/index.js';
+
+export { SecurityAuditor } from './security-audit/index.js';
+export type { AuditResult, AuditCheck, AuditSeverity } from './security-audit/index.js';
+
+export { MetricsCollector } from './metrics/index.js';
+export type { MetricsSnapshot, MetricEntry, MetricsConfig } from './metrics/index.js';
+
+export { HealthMonitor } from './health/index.js';
+export type { HealthStatus, HealthCheck, HealthMonitorConfig } from './health/index.js';
 
 export { IdentityManager } from './identity/identity-manager.js';
 export type { RegisteredIdentity, Organization, ActorType, IdentityManagerConfig } from './identity/identity-manager.js';
@@ -92,3 +209,4 @@ export { BudgetManager } from './governance/budget-manager.js';
 export type { BudgetConfig, IdentityBudget, UsageRecord, BudgetCheckResult } from './governance/budget-manager.js';
 
 export * from './utils.js';
+export { ValidationError, QueueFullError, ConnectorError } from './errors.js';

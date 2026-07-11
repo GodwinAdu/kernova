@@ -8,10 +8,10 @@
  *   npx tsx examples/event-persistence.ts
  */
 
-import { NexusKernel, defineAgent } from '@kernova/core';
+import { KernovaKernel, defineAgent } from '@kernova/core';
 
 async function main() {
-  const kernel = new NexusKernel({
+  const kernel = new KernovaKernel({
     environment: 'development',
     debug: true,
     dataDir: './examples/data', // Store DB in examples directory for demo

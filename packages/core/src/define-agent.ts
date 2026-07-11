@@ -57,6 +57,16 @@ export interface AgentSpec {
     context: ComputedContext,
     tools: AgentTools,
   ) => Promise<IntentResult>;
+
+  /** Per-agent self-reflection configuration */
+  reflection?: {
+    /** Whether reflection is enabled for this agent */
+    enabled: boolean;
+    /** Confidence score threshold (overrides global, default: 0.7) */
+    threshold?: number;
+    /** Maximum regeneration attempts (overrides global, default: 2) */
+    maxAttempts?: number;
+  };
 }
 
 export interface DefinedAgent {
@@ -132,6 +142,7 @@ const defaultLLMExecutor: AgentExecutor = async (intent, context, tools) => {
     // If tools are available, use tool-calling mode (LLM decides which tools to use)
     // Otherwise fall back to plain text completion
     const availableTools = tools.listTools();
+    tools.log(`Available tools: ${availableTools.length} [${availableTools.map(t => t.id).join(', ')}]`);
     const response = availableTools.length > 0
       ? await tools.completeWithTools(prompt)
       : await tools.complete(prompt);

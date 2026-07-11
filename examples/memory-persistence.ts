@@ -13,10 +13,10 @@
  *   npx tsx examples/memory-persistence.ts
  */
 
-import { NexusKernel, defineAgent } from '@kernova/core';
+import { KernovaKernel, defineAgent } from '@kernova/core';
 
 async function main() {
-  const kernel = new NexusKernel({
+  const kernel = new KernovaKernel({
     environment: 'development',
     debug: false,
     dataDir: './examples/data',
@@ -44,7 +44,7 @@ async function main() {
 
   const memory = kernel.memoryEngine;
   console.log('');
-  console.log('  Nexus Memory Engine — Persistence Demo');
+  console.log('  Kernova Memory Engine — Persistence Demo');
   console.log('  ═══════════════════════════════════════');
   console.log('');
 
@@ -68,10 +68,10 @@ async function main() {
   });
 
   await memory.store({
-    content: 'The Nexus runtime uses TypeScript and SQLite for persistence',
+    content: 'The Kernova runtime uses TypeScript and SQLite for persistence',
     layer: 'longterm',
     memoryType: 'fact',
-    tags: ['nexus', 'typescript', 'architecture'],
+    tags: ['kernova', 'typescript', 'architecture'],
     owner: 'user_1',
     confidence: 0.95,
   });

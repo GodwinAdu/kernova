@@ -7,8 +7,8 @@
  */
 
 import type {
-  NexusObject,
-  NexusId,
+  KernovaObject,
+  KernovaId,
   Timestamp,
 } from './base.js';
 
@@ -22,7 +22,8 @@ export type EventCategory =
   | 'system'      // Platform-level events
   | 'tool'        // Tool execution events
   | 'model'       // Model interaction events
-  | 'governance'; // Policy/audit events
+  | 'governance'  // Policy/audit events
+  | 'test';       // Test/development events
 
 /** Event severity for observability */
 export type EventSeverity = 'debug' | 'info' | 'warn' | 'error' | 'critical';
@@ -33,9 +34,9 @@ export type EventSeverity = 'debug' | 'info' | 'warn' | 'error' | 'critical';
  * Every event in Kernova follows this structure.
  * Events are immutable once created.
  */
-export interface NexusEvent {
+export interface KernovaEvent {
   /** Unique event ID */
-  id: NexusId;
+  id: KernovaId;
 
   /** Event type (domain.action format) */
   eventType: string;
@@ -50,19 +51,19 @@ export interface NexusEvent {
   timestamp: Timestamp;
 
   /** What object this event is about */
-  subjectId: NexusId;
+  subjectId: KernovaId;
 
   /** What type of object */
   subjectType: string;
 
   /** Who/what caused this event */
-  actorId: NexusId;
+  actorId: KernovaId;
 
   /** Correlation ID for tracing related events */
-  correlationId: NexusId;
+  correlationId: KernovaId;
 
   /** Causation ID (which event caused this one) */
-  causationId?: NexusId;
+  causationId?: KernovaId;
 
   /** Event payload */
   data: Record<string, unknown>;
@@ -70,6 +71,9 @@ export interface NexusEvent {
   /** Metadata */
   metadata: EventMetadata;
 }
+
+/** @deprecated Use KernovaEvent instead. Will be removed in v1.0. */
+export type NexusEvent = KernovaEvent;
 
 export interface EventMetadata {
   /** Schema version of this event */
@@ -92,7 +96,7 @@ export interface EventMetadata {
  * Event Subscription
  * How consumers subscribe to events
  */
-export interface EventSubscription extends NexusObject {
+export interface EventSubscription extends KernovaObject {
   type: 'event_subscription';
 
   /** What event types to subscribe to (supports wildcards) */
@@ -116,7 +120,7 @@ export interface EventFilter {
   subjectTypes?: string[];
 
   /** Only events from these actors */
-  actorIds?: NexusId[];
+  actorIds?: KernovaId[];
 
   /** Custom filter expression */
   expression?: string;
@@ -139,10 +143,10 @@ export interface EventTarget {
  */
 export interface Timeline {
   /** The object this timeline belongs to */
-  subjectId: NexusId;
+  subjectId: KernovaId;
 
   /** Ordered events */
-  events: NexusEvent[];
+  events: KernovaEvent[];
 
   /** Total event count */
   total: number;

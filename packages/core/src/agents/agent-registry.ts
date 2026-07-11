@@ -417,6 +417,47 @@ export class AgentRegistry {
     return instance;
   }
 
+  /**
+   * Unregister an agent by definition ID.
+   * Removes the agent definition and any associated instances.
+   */
+  unregister(definitionId: NexusId): boolean {
+    const registered = this.agents.get(definitionId);
+    if (!registered) return false;
+
+    this.agents.delete(definitionId);
+
+    // Remove associated instances
+    for (const [instanceId, instance] of this.instances) {
+      if (instance.definitionId === definitionId) {
+        instance.state = 'offline';
+        this.instances.delete(instanceId);
+      }
+    }
+
+    this.eventBus.publish({
+      id: generateId('evt'),
+      eventType: 'agent.unregistered',
+      category: 'agent',
+      severity: 'info',
+      timestamp: now(),
+      subjectId: definitionId,
+      subjectType: 'agent_definition',
+      actorId: 'system',
+      correlationId: definitionId,
+      data: {
+        name: registered.definition.name,
+      },
+      metadata: {
+        schemaVersion: '1.0.0',
+        source: 'agent-registry',
+        environment: 'development',
+      },
+    });
+
+    return true;
+  }
+
   /** Get registered agent count */
   count(): number {
     return this.agents.size;
@@ -462,11 +503,18 @@ export class AgentRegistry {
     }
 
     // Convert to ToolSpec format for the model
+    // Sanitize tool IDs for OpenAI (replace colons with underscores)
     const toolSpecs: ToolSpec[] = availableTools.map(t => ({
-      name: t.id,
+      name: t.id.replace(/:/g, '_'),
       description: t.description,
       parameters: t.parameters,
     }));
+
+    // Build a map from sanitized name back to original tool ID
+    const nameToId = new Map<string, string>();
+    for (const t of availableTools) {
+      nameToId.set(t.id.replace(/:/g, '_'), t.id);
+    }
 
     // Build initial messages
     const messages: ModelMessage[] = [
@@ -476,6 +524,11 @@ export class AgentRegistry {
 
     // Tool-calling loop
     for (let iteration = 0; iteration < maxIterations; iteration++) {
+      // Debug logging: log tool count and names before sending to ModelRouter
+      if (toolSpecs.length > 0) {
+        console.debug(`[AgentRegistry] Sending ${toolSpecs.length} tools to ModelRouter: ${toolSpecs.map(t => t.name).join(', ')}`);
+      }
+
       const response = await this.modelRouter.complete({
         messages,
         model: '',
@@ -491,6 +544,9 @@ export class AgentRegistry {
 
       // If no tool calls, return the text response
       if (!response.toolCalls || response.toolCalls.length === 0) {
+        if (iteration === 0) {
+          console.log(`[Kernova] LLM returned text (no tool calls). Content length: ${response.content.length}`);
+        }
         return response.content;
       }
 
@@ -499,6 +555,7 @@ export class AgentRegistry {
       messages.push({
         role: 'assistant',
         content: response.content || '',
+        toolCalls: response.toolCalls,
       });
 
       for (const toolCall of response.toolCalls) {
@@ -524,10 +581,11 @@ export class AgentRegistry {
           },
         });
 
-        // Execute the tool
+        // Execute the tool (map sanitized name back to original ID with colons)
         let toolResult: string;
         try {
-          const result = await this.pluginRegistry.executeTool(toolCall.name, toolCall.arguments);
+          const originalToolId = nameToId.get(toolCall.name) || toolCall.name;
+          const result = await this.pluginRegistry.executeTool(originalToolId, toolCall.arguments);
           toolResult = typeof result === 'string' ? result : JSON.stringify(result);
         } catch (error) {
           toolResult = `Error: ${(error as Error).message}`;

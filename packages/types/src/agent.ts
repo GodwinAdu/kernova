@@ -174,6 +174,16 @@ export interface AgentConfig {
 
   /** Timeout for individual operations */
   timeoutMs: number;
+
+  /** Per-agent self-reflection configuration */
+  reflection?: {
+    /** Whether reflection is enabled for this agent */
+    enabled: boolean;
+    /** Confidence score threshold (overrides global, default: 0.7) */
+    threshold?: number;
+    /** Maximum regeneration attempts (overrides global, default: 2) */
+    maxAttempts?: number;
+  };
 }
 
 export interface AgentMetrics {

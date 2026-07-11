@@ -45,7 +45,7 @@ export class OpenAIProvider implements ModelProvider {
     this.apiKey = config.apiKey || process.env.OPENAI_API_KEY || '';
     this.baseUrl = config.baseUrl || 'https://api.openai.com/v1';
     this.defaultModel = config.defaultModel || 'gpt-4o';
-    this.timeoutMs = config.timeoutMs || 30000;
+    this.timeoutMs = config.timeoutMs || 60000;
   }
 
   isAvailable(): boolean {
@@ -84,6 +84,7 @@ export class OpenAIProvider implements ModelProvider {
           parameters: t.parameters,
         },
       }));
+      console.log('[Kernova:OpenAI] Sending tools:', JSON.stringify(body.tools, null, 2).slice(0, 500));
     }
 
     const controller = new AbortController();
@@ -110,6 +111,8 @@ export class OpenAIProvider implements ModelProvider {
       const data = await response.json() as OpenAIChatResponse;
       const latencyMs = Date.now() - startTime;
 
+      console.log('[Kernova:OpenAI] Response finish_reason:', data.choices[0]?.finish_reason, 'tool_calls:', data.choices[0]?.message?.tool_calls?.length || 0);
+
       const usage: TokenUsage = {
         promptTokens: data.usage?.prompt_tokens ?? 0,
         completionTokens: data.usage?.completion_tokens ?? 0,
@@ -122,6 +125,10 @@ export class OpenAIProvider implements ModelProvider {
         name: tc.function.name,
         arguments: JSON.parse(tc.function.arguments || '{}'),
       }));
+
+      if (toolCalls?.length) {
+        console.debug(`[OpenAIProvider] Parsed ${toolCalls.length} tool calls: ${toolCalls.map(tc => tc.name).join(', ')}`);
+      }
 
       return {
         content: data.choices[0]?.message?.content ?? '',
@@ -274,10 +281,11 @@ export class OpenAIProvider implements ModelProvider {
 }
 
 /** Map OpenAI finish reason to our standard */
-function mapFinishReason(reason?: string): 'stop' | 'length' | 'error' {
+function mapFinishReason(reason?: string): 'stop' | 'length' | 'error' | 'tool_call' {
   switch (reason) {
     case 'stop': return 'stop';
     case 'length': return 'length';
+    case 'tool_calls': return 'tool_call';
     default: return 'stop';
   }
 }

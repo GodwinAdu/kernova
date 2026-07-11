@@ -12,7 +12,7 @@
  */
 
 import { resolve } from 'node:path';
-import { NexusKernel } from '../kernel.js';
+import { KernovaKernel } from '../kernel.js';
 import type { KernelConfig } from '../kernel.js';
 import { FileWatcher } from './file-watcher.js';
 import { AgentLoader } from './agent-loader.js';
@@ -39,7 +39,7 @@ export interface DevServerConfig {
 }
 
 export class DevServer {
-  private kernel: NexusKernel;
+  private kernel: KernovaKernel;
   private watcher: FileWatcher;
   private loader: AgentLoader;
   private studio: StudioServer | null = null;
@@ -49,7 +49,7 @@ export class DevServer {
   constructor(config: DevServerConfig) {
     this.config = config;
 
-    this.kernel = new NexusKernel({
+    this.kernel = new KernovaKernel({
       environment: 'development',
       debug: true,
       dataDir: resolve(config.rootDir, 'kernova-data'),
@@ -154,7 +154,7 @@ export class DevServer {
   /**
    * Get the kernel instance (for submitting intents, etc.)
    */
-  getKernel(): NexusKernel {
+  getKernel(): KernovaKernel {
     return this.kernel;
   }
 

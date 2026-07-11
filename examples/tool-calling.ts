@@ -18,11 +18,11 @@
  *   npx tsx examples/tool-calling.ts
  */
 
-import { NexusKernel, defineAgent } from '@kernova/core';
-import type { NexusPlugin } from '@kernova/core';
+import { KernovaKernel, defineAgent } from '@kernova/core';
+import type { KernovaPlugin } from '@kernova/core';
 
 async function main() {
-  const kernel = new NexusKernel({
+  const kernel = new KernovaKernel({
     environment: 'development',
     debug: false,
     ephemeral: true, // No persistence for this demo
@@ -30,7 +30,7 @@ async function main() {
 
   // === Register Tools as Plugins ===
 
-  const mathPlugin: NexusPlugin = {
+  const mathPlugin: KernovaPlugin = {
     id: 'math',
     name: 'Math Tools',
     version: '1.0.0',
@@ -62,7 +62,7 @@ async function main() {
     ],
   };
 
-  const timePlugin: NexusPlugin = {
+  const timePlugin: KernovaPlugin = {
     id: 'time',
     name: 'Time Tools',
     version: '1.0.0',
@@ -87,7 +87,7 @@ async function main() {
     ],
   };
 
-  const weatherPlugin: NexusPlugin = {
+  const weatherPlugin: KernovaPlugin = {
     id: 'weather',
     name: 'Weather Tools',
     version: '1.0.0',

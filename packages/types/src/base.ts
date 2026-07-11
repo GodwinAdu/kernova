@@ -18,7 +18,10 @@
  */
 
 /** Unique identifier for any Kernova object */
-export type NexusId = string;
+export type KernovaId = string;
+
+/** @deprecated Use KernovaId instead. Will be removed in v1.0. */
+export type NexusId = KernovaId;
 
 /** ISO 8601 timestamp */
 export type Timestamp = string;
@@ -47,9 +50,9 @@ export type Confidence = number;
  * Every object in Kernova extends this base.
  * This is what makes the system consistent and auditable.
  */
-export interface NexusObject {
+export interface KernovaObject {
   /** Globally unique identifier */
-  id: NexusId;
+  id: KernovaId;
 
   /** Object type discriminator */
   type: string;
@@ -58,7 +61,7 @@ export interface NexusObject {
   version: Version;
 
   /** Who owns this object */
-  owner: NexusId;
+  owner: KernovaId;
 
   /** Current lifecycle status */
   status: LifecycleStatus;
@@ -72,6 +75,9 @@ export interface NexusObject {
   /** Arbitrary metadata */
   metadata: Record<string, unknown>;
 }
+
+/** @deprecated Use KernovaObject instead. Will be removed in v1.0. */
+export type NexusObject = KernovaObject;
 
 /**
  * Time-aware extension

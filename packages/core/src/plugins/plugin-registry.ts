@@ -61,7 +61,7 @@ export interface MiddlewareContext {
 }
 
 /** Plugin definition */
-export interface NexusPlugin {
+export interface KernovaPlugin {
   /** Plugin ID */
   id: string;
 
@@ -86,6 +86,9 @@ export interface NexusPlugin {
   /** Plugin teardown */
   destroy?: () => Promise<void>;
 }
+
+/** @deprecated Use `KernovaPlugin` instead */
+export type NexusPlugin = KernovaPlugin;
 
 /** Context passed to plugins during init */
 export interface PluginContext {

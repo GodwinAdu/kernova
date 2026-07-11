@@ -5,14 +5,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { NexusKernel } from '../kernel.js';
+import { KernovaKernel } from '../kernel.js';
 import { defineAgent } from '../define-agent.js';
 
-describe('NexusKernel', () => {
-  let kernel: NexusKernel;
+describe('KernovaKernel', () => {
+  let kernel: KernovaKernel;
 
   beforeEach(() => {
-    kernel = new NexusKernel({
+    kernel = new KernovaKernel({
       environment: 'development',
       ephemeral: true,
     });

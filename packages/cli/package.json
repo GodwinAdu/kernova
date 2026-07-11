@@ -1,25 +1,27 @@
 {
-  "name": "@kernova/cli",
-  "version": "0.1.1",
-  "description": "Kernova CLI - Developer tools for the Intelligent Systems Runtime",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "type": "module",
-  "bin": {
-    "kernova": "./dist/bin.js"
-  },
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "clean": "rimraf dist"
-  },
-  "dependencies": {
-    "@kernova/core": "*",
-    "@kernova/types": "*"
-  },
-  "devDependencies": {
-    "typescript": "^5.5.0",
-    "@types/node": "^22.0.0",
-    "rimraf": "^6.0.0"
-  }
+    "name":  "@kernova/cli",
+    "version":  "0.2.0",
+    "description":  "Kernova CLI - Developer tools for the Intelligent Systems Runtime",
+    "main":  "./dist/index.js",
+    "types":  "./dist/index.d.ts",
+    "type":  "module",
+    "bin":  {
+                "kernova":  "./dist/bin.js"
+            },
+    "scripts":  {
+                    "build":  "tsc",
+                    "dev":  "tsc --watch",
+                    "clean":  "rimraf dist"
+                },
+    "dependencies":  {
+                         "@kernova/core":  "*",
+                         "@kernova/types":  "*",
+                         "better-sqlite3":  "^12.11.1"
+                     },
+    "devDependencies":  {
+                            "typescript":  "^5.5.0",
+                            "@types/better-sqlite3":  "^7.6.13",
+                            "@types/node":  "^22.0.0",
+                            "rimraf":  "^6.0.0"
+                        }
 }

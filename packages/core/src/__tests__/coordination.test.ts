@@ -3,14 +3,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { NexusKernel } from '../kernel.js';
+import { KernovaKernel } from '../kernel.js';
 import { defineAgent } from '../define-agent.js';
 
 describe('Multi-Agent Coordination', () => {
-  let kernel: NexusKernel;
+  let kernel: KernovaKernel;
 
   beforeEach(async () => {
-    kernel = new NexusKernel({ environment: 'development', ephemeral: true });
+    kernel = new KernovaKernel({ environment: 'development', ephemeral: true });
   });
 
   afterEach(async () => {

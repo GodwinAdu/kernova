@@ -14,3 +14,6 @@ export * from './workflow.js';
 export * from './identity.js';
 export * from './model.js';
 export * from './streaming.js';
+export * from './autonomy.js';
+export * from './planning.js';
+export * from './advanced.js';

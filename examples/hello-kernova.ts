@@ -1,5 +1,5 @@
 /**
- * Hello Nexus — First Working Example
+ * Hello Kernova — First Working Example
  * 
  * This example demonstrates the complete flow:
  * 1. Create a kernel
@@ -11,14 +11,14 @@
  *   Set OPENAI_API_KEY or ANTHROPIC_API_KEY environment variable.
  * 
  * Run:
- *   npx tsx examples/hello-nexus.ts
+ *   npx tsx examples/hello-kernova.ts
  */
 
-import { NexusKernel, defineAgent } from '@kernova/core';
+import { KernovaKernel, defineAgent } from '@kernova/core';
 
 async function main() {
   // 1. Create the kernel
-  const kernel = new NexusKernel({
+  const kernel = new KernovaKernel({
     environment: 'development',
     debug: true,
   });
@@ -32,7 +32,7 @@ async function main() {
       { id: 'coding', name: 'Coding', description: 'Code generation and explanation', confidence: 0.8 },
     ],
     tools: [],
-    instructions: `You are a helpful assistant powered by the Nexus Intelligent Systems Runtime.
+    instructions: `You are a helpful assistant powered by the Kernova Intelligent Systems Runtime.
 You provide concise, accurate answers. When you don't know something, you say so.
 Keep responses brief unless asked for detail.`,
   });
@@ -49,7 +49,7 @@ Keep responses brief unless asked for detail.`,
 
   // 5. Submit an intent
   console.log('═══════════════════════════════════════════');
-  console.log('  Submitting intent to Nexus...');
+  console.log('  Submitting intent to Kernova...');
   console.log('═══════════════════════════════════════════');
   console.log('');
 

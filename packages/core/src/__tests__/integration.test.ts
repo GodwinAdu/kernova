@@ -6,11 +6,11 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { NexusKernel, defineAgent } from '../index.js';
+import { KernovaKernel, defineAgent } from '../index.js';
 import type { NexusPlugin } from '../plugins/plugin-registry.js';
 
 describe('Full Pipeline Integration', () => {
-  let kernel: NexusKernel;
+  let kernel: KernovaKernel;
 
   afterEach(async () => {
     if (kernel) await kernel.stop();
@@ -18,7 +18,7 @@ describe('Full Pipeline Integration', () => {
 
   it('should process an intent through agent with tools, memory, and events', async () => {
     // 1. Create kernel
-    kernel = new NexusKernel({ environment: 'development', ephemeral: true });
+    kernel = new KernovaKernel({ environment: 'development', ephemeral: true });
 
     // 2. Register a tool plugin
     const mathPlugin: NexusPlugin = {
@@ -101,7 +101,7 @@ describe('Full Pipeline Integration', () => {
   });
 
   it('should enforce budget limits', async () => {
-    kernel = new NexusKernel({ environment: 'development', ephemeral: true });
+    kernel = new KernovaKernel({ environment: 'development', ephemeral: true });
 
     // Record usage to exhaust budget, then check
     kernel.budget.setGlobalBudget({ maxTokens: 100 });
@@ -120,7 +120,7 @@ describe('Full Pipeline Integration', () => {
   });
 
   it('should track multiple agents and events correctly', async () => {
-    kernel = new NexusKernel({ environment: 'development', ephemeral: true });
+    kernel = new KernovaKernel({ environment: 'development', ephemeral: true });
 
     const a1 = defineAgent({
       name: 'agent-a', description: 'A', capabilities: [{ id: 'a', name: 'A', description: 'A', confidence: 1 }],
@@ -153,7 +153,7 @@ describe('Full Pipeline Integration', () => {
   });
 
   it('should support recall of stored memories within agents', async () => {
-    kernel = new NexusKernel({ environment: 'development', ephemeral: true });
+    kernel = new KernovaKernel({ environment: 'development', ephemeral: true });
 
     // Pre-store some memory
     await kernel.start();
@@ -181,7 +181,7 @@ describe('Full Pipeline Integration', () => {
   });
 
   it('should execute a full delegation pipeline with memory', async () => {
-    kernel = new NexusKernel({ environment: 'development', ephemeral: true });
+    kernel = new KernovaKernel({ environment: 'development', ephemeral: true });
 
     const researcher = defineAgent({
       name: 'researcher', description: 'Researches', capabilities: [{ id: 'res', name: 'Res', description: 'Res', confidence: 1 }],

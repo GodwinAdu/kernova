@@ -7,16 +7,28 @@
  * It's what most developers will use day-to-day.
  * 
  * Quick start:
- *   import { Nexus } from '@kernova/sdk';
+ *   import { Kernova } from '@kernova/sdk';
  *   
- *   const app = await Nexus.create();
+ *   const app = await Kernova.create();
  *   app.agent('assistant', { instructions: 'You are helpful.' });
  *   app.tool('search', { ... });
  *   const answer = await app.ask('What is the weather in London?');
  */
 
-export { Nexus } from './nexus.js';
-export type { NexusConfig, AskOptions, AskResult } from './nexus.js';
+export { Kernova, ThreadHandle } from './kernova.js';
+export type { KernovaConfig, AskOptions, AskResult, EnqueueOptions } from './kernova.js';
+
+// Re-export DaemonConfig for use with app.serve()
+export type { DaemonConfig } from '@kernova/core';
+
+// Re-export BuiltInToolConfig for use with builtInTools configuration
+export type { BuiltInToolConfig } from '@kernova/core';
+
+/** @deprecated Use Kernova instead. Will be removed in v1.0. */
+export { Nexus } from './kernova.js';
+/** @deprecated Use KernovaConfig instead. Will be removed in v1.0. */
+export type { NexusConfig } from './kernova.js';
+
 export { agent } from './helpers/agent.js';
 export { tool } from './helpers/tool.js';
 export { workflow } from './helpers/workflow.js';
@@ -28,5 +40,9 @@ export type {
   MemoryLayer,
   MemoryEntry,
   AgentDefinition,
-  NexusEvent,
+  KernovaEvent,
+  TriggerActionDef,
 } from '@kernova/types';
+
+/** @deprecated Use KernovaEvent instead. Will be removed in v1.0. */
+export type { NexusEvent } from '@kernova/types';

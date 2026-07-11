@@ -137,6 +137,20 @@ const TSCONFIG_TEMPLATE = `{
 }
 `;
 
+const AGENT_YAML_TEMPLATE = `name: my-assistant
+instructions: |
+  You are a helpful assistant powered by Kernova.
+  Help users with their tasks and answer questions clearly.
+model: gpt-4o
+tools:
+  - http-fetch
+  - date-time
+schedules:
+  - name: hourly-check
+    cron: "0 * * * *"
+    goal: "Check for pending tasks and process them"
+`;
+
 export async function handleInit(args: string[]): Promise<void> {
   const projectName = args[0] || 'my-kernova-app';
   const projectPath = resolve(process.cwd(), projectName);
@@ -179,6 +193,10 @@ export async function handleInit(args: string[]): Promise<void> {
   writeFileSync(join(projectPath, 'src/agents/assistant.ts'), AGENT_TEMPLATE);
 
   writeFileSync(join(projectPath, '.gitignore'), `node_modules/\ndist/\n.env\n`);
+
+  // Generate starter agent config
+  writeFileSync(join(projectPath, '.agent.yaml'), AGENT_YAML_TEMPLATE);
+  info('Created .agent.yaml — starter agent configuration');
 
   success(`Project created at ./${projectName}`);
   console.log('');

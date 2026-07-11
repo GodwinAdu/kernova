@@ -1,6 +1,6 @@
 {
   "name": "@kernova/types",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Nexus Type Definitions - The Universal Object Model",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,8 +11,17 @@
     "url": "https://github.com/nexus-runtime/nexus",
     "directory": "packages/types"
   },
-  "keywords": ["nexus", "ai", "runtime", "types", "intelligent-systems"],
-  "files": ["dist", "README.md"],
+  "keywords": [
+    "nexus",
+    "ai",
+    "runtime",
+    "types",
+    "intelligent-systems"
+  ],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

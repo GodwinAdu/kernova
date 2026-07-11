@@ -12,7 +12,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { readFileSync } from 'node:fs';
-import type { NexusKernel } from '../kernel.js';
+import type { KernovaKernel } from '../kernel.js';
 import type { NexusEvent } from '@kernova/types';
 import { getStudioHTML } from './studio-ui.js';
 
@@ -29,7 +29,7 @@ export interface StudioServerConfig {
 
 export class StudioServer {
   private server: ReturnType<typeof createServer> | null = null;
-  private kernel: NexusKernel;
+  private kernel: KernovaKernel;
   private port: number;
   private host: string;
   private requireAuth: boolean;
@@ -38,7 +38,7 @@ export class StudioServer {
   private sseClients: Set<ServerResponse> = new Set();
   private eventSubscriptionId: string | null = null;
 
-  constructor(kernel: NexusKernel, config: StudioServerConfig = {}) {
+  constructor(kernel: KernovaKernel, config: StudioServerConfig = {}) {
     this.kernel = kernel;
     this.port = config.port || 4200;
     this.host = config.host || 'localhost';

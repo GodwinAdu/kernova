@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Kernova.SDK</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>Kernova.SDK</PackageId>
+    <Version>0.1.0</Version>
+    <Description>Kernova C# SDK — HTTP client for the Kernova Gateway API</Description>
+    <Authors>Kernova</Authors>
+    <PackageProjectUrl>https://github.com/nexus-runtime/nexus</PackageProjectUrl>
+  </PropertyGroup>
+
+</Project>

@@ -22,6 +22,7 @@
 import type { ProviderConfig } from '@kernova/types';
 import type { ModelProvider } from './provider.js';
 import { OpenAICompatibleProvider } from './openai-compatible-provider.js';
+import { OpenAIProvider } from './openai-provider.js';
 import { AnthropicProvider } from './anthropic-provider.js';
 import { GeminiProvider } from './gemini-provider.js';
 import { OllamaProvider } from './ollama-provider.js';
@@ -36,6 +37,14 @@ export function createProviderFromConfig(config: ProviderConfig): ModelProvider 
 
   switch (config.adapter) {
     case 'openai':
+      if (config.id === 'openai') {
+        return new OpenAIProvider({
+          apiKey,
+          baseUrl: config.baseUrl,
+          defaultModel: config.defaultModel,
+          timeoutMs: config.timeoutMs,
+        });
+      }
       return new OpenAICompatibleProvider({
         id: config.id,
         name: config.name,

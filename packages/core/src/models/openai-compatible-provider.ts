@@ -29,6 +29,7 @@ import type {
   ModelProviderId,
   TokenUsage,
   StreamChunk,
+  ToolCall,
 } from '@kernova/types';
 import type { ModelProvider } from './provider.js';
 
@@ -99,16 +100,35 @@ export class OpenAICompatibleProvider implements ModelProvider {
     const model = request.model || this.defaultModel;
     const startTime = Date.now();
 
-    const body = {
+    const body: Record<string, unknown> = {
       model,
-      messages: request.messages.map(m => ({
-        role: m.role,
-        content: m.content,
-      })),
+      messages: request.messages.map(m => {
+        const mapped: Record<string, unknown> = { role: m.role, content: m.content };
+        if (m.toolCallId) mapped.tool_call_id = m.toolCallId;
+        if (m.toolCalls?.length) {
+          mapped.tool_calls = m.toolCalls.map(tc => ({
+            id: tc.id,
+            type: 'function',
+            function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
+          }));
+        }
+        return mapped;
+      }),
       temperature: request.temperature ?? 0.7,
       max_tokens: request.maxTokens ?? 4096,
       ...(request.stopSequences?.length && { stop: request.stopSequences }),
     };
+
+    // Forward tools to the API when present
+    if (request.tools?.length) {
+      body.tools = request.tools.map(t => ({
+        type: 'function',
+        function: { name: t.name, description: t.description, parameters: t.parameters },
+      }));
+      console.debug(`[OpenAICompatibleProvider] Forwarding ${request.tools.length} tools: ${request.tools.map(t => t.name).join(', ')}`);
+    } else {
+      console.warn('[OpenAICompatibleProvider] No tools received in request');
+    }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -141,11 +161,28 @@ export class OpenAICompatibleProvider implements ModelProvider {
         totalTokens: data.usage?.total_tokens ?? 0,
       };
 
+      // Parse tool_calls from response
+      const rawToolCalls = data.choices[0]?.message?.tool_calls;
+      let toolCalls: ToolCall[] | undefined;
+      if (rawToolCalls?.length) {
+        toolCalls = rawToolCalls.map(tc => {
+          let args: Record<string, unknown> = {};
+          try {
+            args = JSON.parse(tc.function.arguments || '{}');
+          } catch (e) {
+            console.warn(`[OpenAICompatibleProvider] Failed to parse tool call arguments for ${tc.function.name}:`, e);
+          }
+          return { id: tc.id, name: tc.function.name, arguments: args };
+        });
+        console.debug(`[OpenAICompatibleProvider] Parsed ${toolCalls.length} tool calls: ${toolCalls.map(tc => tc.name).join(', ')}`);
+      }
+
       return {
         content: data.choices[0]?.message?.content ?? '',
         model: data.model || model,
         provider: this.id,
         usage,
+        toolCalls,
         metadata: {
           latencyMs,
           responseId: data.id,
@@ -166,7 +203,18 @@ export class OpenAICompatibleProvider implements ModelProvider {
 
     const body = {
       model,
-      messages: request.messages.map(m => ({ role: m.role, content: m.content })),
+      messages: request.messages.map(m => {
+        const mapped: Record<string, unknown> = { role: m.role, content: m.content };
+        if (m.toolCallId) mapped.tool_call_id = m.toolCallId;
+        if (m.toolCalls?.length) {
+          mapped.tool_calls = m.toolCalls.map(tc => ({
+            id: tc.id,
+            type: 'function',
+            function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
+          }));
+        }
+        return mapped;
+      }),
       temperature: request.temperature ?? 0.7,
       max_tokens: request.maxTokens ?? 4096,
       stream: true,
@@ -271,10 +319,11 @@ export class OpenAICompatibleProvider implements ModelProvider {
   }
 }
 
-function mapFinishReason(reason?: string): 'stop' | 'length' | 'error' {
+function mapFinishReason(reason?: string): 'stop' | 'length' | 'error' | 'tool_call' {
   switch (reason) {
     case 'stop': return 'stop';
     case 'length': return 'length';
+    case 'tool_calls': return 'tool_call';
     default: return 'stop';
   }
 }
@@ -283,7 +332,15 @@ interface OpenAIStyleResponse {
   id: string;
   model: string;
   choices: Array<{
-    message: { role: string; content: string };
+    message: {
+      role: string;
+      content: string | null;
+      tool_calls?: Array<{
+        id: string;
+        type: string;
+        function: { name: string; arguments: string };
+      }>;
+    };
     finish_reason: string;
   }>;
   usage?: {

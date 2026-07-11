@@ -8,9 +8,9 @@ export function printBanner(): void {
   console.log(`
   ╔══════════════════════════════════════╗
   ║                                      ║
-  ║   ◆  K E R N O V A                   ║
+  ║   ◆  K E R N O V A                  ║
   ║      Intelligent Systems Runtime     ║
-  ║      v${VERSION}                          ║
+  ║      v${VERSION}                     ║
   ║                                      ║
   ╚══════════════════════════════════════╝
   `);
@@ -27,8 +27,12 @@ export function printHelp(): void {
   Commands:
     init [name]       Create a new kernova project
     dev               Start the development runtime
+    serve             Start the daemon in persistent mode
     deploy [target]   Prepare for production (docker, node)
     agent <action>    Manage agents (create, list, inspect)
+    schedule <action> Manage scheduled jobs (list, enable, disable)
+    queue <action>    Manage task queue (status, replay)
+    triggers <action> Manage proactive triggers (list)
     status            Show runtime status
     
   Options:
@@ -38,7 +42,11 @@ export function printHelp(): void {
   Examples:
     kernova init my-app
     kernova dev
+    kernova serve --config ./agents/ --watch
     kernova agent create assistant
+    kernova schedule list
+    kernova queue status
+    kernova triggers list
     kernova status
 
   Documentation: https://kernova.dev/docs

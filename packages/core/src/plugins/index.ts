@@ -6,6 +6,7 @@
 
 export { PluginRegistry } from './plugin-registry.js';
 export type {
+  KernovaPlugin,
   NexusPlugin,
   ToolDefinition,
   MiddlewareHook,

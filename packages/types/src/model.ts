@@ -59,6 +59,9 @@ export interface ModelMessage {
 
   /** Tool call ID (for tool responses) */
   toolCallId?: string;
+
+  /** Tool calls requested by the assistant (for multi-turn tool-calling history) */
+  toolCalls?: ToolCall[];
 }
 
 /**
