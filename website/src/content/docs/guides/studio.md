@@ -1,108 +1,209 @@
 ---
 title: Kernova Studio
-description: The web dashboard for inspecting and debugging your intelligent systems.
+description: Visual developer dashboard for managing agents, inspecting events, searching memory, and monitoring the runtime.
 ---
 
-# Kernova Studio
+Kernova Studio is a visual developer dashboard that connects to your running Kernova Gateway for real-time monitoring and management. Think of it as your control center — every agent, event, memory entry, and metric is visible and interactive.
 
-Studio is a **real-time web dashboard** that shows you exactly what your agents are doing — events flowing, memories being stored, intents being processed. It starts automatically with `Kernova dev`.
+## Quick Start
 
-## Accessing Studio
+### Option 1: CLI (Recommended)
 
 ```bash
-Kernova dev
-# → Studio: http://localhost:4200
+# Start your Kernova app (Gateway runs on port 3000 by default)
+kernova serve
+
+# In another terminal, launch Studio
+kernova studio
 ```
 
-Open it in your browser. You'll see:
+Studio opens at `http://localhost:4200` and connects to your Gateway automatically.
 
-- **Event stream** — Real-time feed of everything happening in the runtime
-- **Memory browser** — Search and inspect all memory layers
-- **Agent list** — See registered agents and their capabilities
-- **Intent submission** — Test intents directly from the browser
-- **System status** — Provider info, token usage, memory stats
+### Option 2: Development Mode
 
-## Why You'll Love It
+If you've cloned the Kernova monorepo and want to customize Studio:
 
-### Debugging without console.log
-
-Instead of sprinkling `console.log` everywhere, just watch Studio. Every intent lifecycle step, every tool call, every memory store appears in real-time.
-
-### Understanding agent behavior
-
-"Why did it call that tool?" — Look at the event stream. You'll see:
-```
-intent.created → intent.planning → intent.executing → agent.tool_call → intent.completed
+```bash
+cd packages/studio
+NEXT_PUBLIC_KERNOVA_URL=http://localhost:3000 npm run dev
 ```
 
-### Testing without writing code
+### Option 3: Custom Gateway URL
 
-Submit intents directly from the UI:
-1. Type a goal in the "Submit Intent" box
-2. Click Submit
-3. See the result (with timing and evidence)
+Point Studio at any Kernova Gateway — local, staging, or production:
 
-## API Endpoints
+```bash
+kernova studio --gateway https://staging.myapp.com:3000
+kernova studio --port 8080 --gateway http://192.168.1.50:3000
+```
 
-Studio exposes a full REST API. Use it from your own tools, scripts, or dashboards:
+## When to Use Studio
+
+| Scenario | What Studio Shows You |
+|----------|----------------------|
+| Debugging agent behavior | Events page shows the full intent lifecycle in real-time |
+| Inspecting memory | Memory Explorer lets you semantically search all stored context |
+| Monitoring performance | Dashboard and Monitoring show token usage, latency, error rates |
+| Managing identities | Permissions page lists all registered users, agents, and services |
+| Viewing logs | Logs page streams runtime events formatted as structured log entries |
+| Understanding context | Context Debugger visualizes token allocation across memory layers |
+
+## Architecture
+
+```
+┌─────────────────┐          ┌──────────────────────┐
+│  Kernova Studio │  ──────► │  Kernova Gateway API │
+│  (Next.js App)  │  HTTP    │  (Port 3000)         │
+│  Port 4200      │          │                      │
+└─────────────────┘          │  /health             │
+                             │  /v1/agents          │
+                             │  /v1/events          │
+                             │  /v1/memory/search   │
+                             │  /v1/metrics         │
+                             │  /v1/logs            │
+                             │  /v1/plugins         │
+                             │  /v1/workflows       │
+                             │  /v1/permissions/*   │
+                             │  /v1/deployments     │
+                             │  /v1/context/:id     │
+                             │  /v1/intents (POST)  │
+                             └──────────────────────┘
+```
+
+Studio is a **read-heavy client** that polls the Gateway API. It does not modify state except when you explicitly submit intents or install plugins.
+
+## Pages
+
+### Dashboard
+
+The landing page shows:
+- **Connection status** — green when Gateway is reachable
+- **Stat cards** — active agents, pending tasks, token usage, latency, uptime
+- **Intent submission** — send goals directly to the runtime from the UI
+
+### Agents
+
+Lists all registered agents with their model, capabilities, and status. You can submit intents targeted at specific agents.
+
+### Events
+
+Real-time event stream that auto-refreshes every 2 seconds. Filter by category (intent, agent, tool, memory, workflow, system) and severity. Click any event to see its full data payload.
+
+### Memory
+
+Semantic search across all memory layers: working, session, longterm, organizational, global. Results are ranked by relevance score.
+
+### Monitoring
+
+Health banner, request metrics, token breakdown, and latency stats. Auto-refreshes every 5 seconds.
+
+### Logs
+
+Terminal-style log viewer that formats events as structured log entries with level, source, message, and trace ID.
+
+### Plugins
+
+Shows installed plugins, their versions, and the tools they provide.
+
+### Workflows
+
+Lists registered workflow definitions and their execution status.
+
+### Context
+
+Enter an intent ID to visualize how the context window is allocated across memory layers — shows token counts per layer with a visual bar chart.
+
+### Deploy
+
+Displays running Kernova instances with their environment, version, and status.
+
+### Permissions
+
+Lists all registered identities (users, agents, services) with their roles, plus any configured API keys.
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NEXT_PUBLIC_KERNOVA_URL` | `http://localhost:3000` | Gateway API URL |
+
+### CLI Options
+
+```bash
+kernova studio [options]
+
+Options:
+  -p, --port <number>     Studio UI port (default: 4200)
+  -g, --gateway <url>     Gateway API URL (default: http://localhost:3000)
+  -h, --help              Show help
+```
+
+## Gateway API Endpoints (used by Studio)
+
+Studio uses these Gateway API endpoints. They are automatically available when your Kernova kernel starts with `kernel.start()`:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/health` | Health check (always public) |
-| GET | `/api/status` | Runtime status |
-| GET | `/api/agents` | List registered agents |
-| GET | `/api/events?type=intent.*&limit=50` | Query events |
-| GET | `/api/events/stream` | Server-Sent Events (real-time) |
-| GET | `/api/memory?q=search+term` | Search memories |
-| POST | `/api/intents` | Submit an intent |
-| GET | `/api/workflows` | View workflows + pending approvals |
-| GET | `/api/identity/users` | List identities |
-| GET | `/api/identity/keys` | List API keys (safe metadata) |
-| POST | `/api/identity/keys` | Create an API key |
+| GET | `/health` | Health check and connection status |
+| GET | `/v1/agents` | List registered agent definitions |
+| GET | `/v1/events?category=&severity=&limit=` | Recent events from EventBus |
+| POST | `/v1/memory/search` | Semantic memory search |
+| GET | `/v1/metrics` | Token usage, request count, uptime |
+| GET | `/v1/workflows` | Workflow definitions |
+| GET | `/v1/plugins` | Installed plugins and tools |
+| GET | `/v1/permissions/identities` | Registered identities |
+| GET | `/v1/permissions/keys` | Configured API keys |
+| GET | `/v1/logs?level=&limit=` | Events formatted as log entries |
+| GET | `/v1/deployments` | Running instances |
+| GET | `/v1/context/:intentId` | Context layer stats |
+| POST | `/v1/intents` | Submit a new intent |
 
-### Example: Submit intent via API
+## Offline Behavior
 
-```bash
-curl -X POST http://localhost:4200/api/intents \
-  -H "Content-Type: application/json" \
-  -d '{"goal": "What is 2+2?", "type": "query"}'
-```
+When the Gateway is offline, Studio shows:
+- A warning banner on the Dashboard
+- Empty states on all pages with helpful messages
+- The connection indicator in the sidebar turns red
 
-### Example: Stream events
+Studio continues checking every 5 seconds. When the Gateway comes back, data loads automatically — no refresh needed.
 
-```bash
-curl -N http://localhost:4200/api/events/stream
-# data: {"eventType":"intent.created","data":{...}}
-# data: {"eventType":"intent.completed","data":{...}}
-```
+## Production Use
 
-## Production Mode
+For production deployments:
 
-In production, enable authentication and HTTPS:
+1. **Auth tokens** — Configure `auth.tokens` on your Gateway to require Bearer authentication
+2. **CORS** — The Gateway enables CORS by default; disable in production if Studio runs on the same origin
+3. **Port binding** — Change the Gateway host from `0.0.0.0` to a specific IP if you don't want it exposed
 
 ```typescript
-new StudioServer(kernel, {
-  port: parseInt(process.env.PORT || '4200'),
-  host: '0.0.0.0',        // Accept external connections
-  requireAuth: true,       // All /api/ routes need Bearer token
-  tlsCert: './cert.pem',   // HTTPS
-  tlsKey: './key.pem',
+const kernel = new KernovaKernel({
+  environment: 'production',
+  gateway: {
+    port: 3000,
+    host: '127.0.0.1', // Only local connections
+    auth: {
+      allowAnonymous: false,
+      tokens: [process.env.GATEWAY_TOKEN!],
+    },
+  },
 });
 ```
 
-Access with: `Authorization: Bearer nxs_your_api_key`
+## Customizing Studio
 
-The `/health` endpoint is always public — use it for load balancer probes.
+Studio is a standard Next.js 16 app built with Tailwind CSS v4. To customize:
 
-## Custom Dashboards
-
-Because Studio exposes a standard REST API + SSE, you can build your own UI on top:
-
-```typescript
-// Connect to real-time events
-const source = new EventSource('http://localhost:4200/api/events/stream');
-source.onmessage = (e) => {
-  const event = JSON.parse(e.data);
-  updateDashboard(event);
-};
+```bash
+cd packages/studio
+npm install
+npm run dev
 ```
+
+- **Add pages** — Create new routes in `src/app/`
+- **Custom API endpoints** — Extend `src/lib/api.ts`
+- **Theming** — Edit `src/app/globals.css` (uses CSS custom properties)
+- **Components** — Reusable components in `src/components/`
+
+The Studio can be built as a static export (`next build && next export`) and served from any static hosting or bundled with your deployment.

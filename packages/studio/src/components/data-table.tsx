@@ -16,22 +16,25 @@ export function DataTable({
   emptyMessage = 'No data available',
 }: DataTableProps) {
   return (
-    <div className="border border-zinc-800 rounded-lg overflow-hidden">
+    <div className="glass-card rounded-xl overflow-hidden">
       <table className="w-full text-sm">
         <thead>
-          <tr className="bg-zinc-900/50 border-b border-zinc-800">
+          <tr className="border-b border-zinc-800/60">
             {columns.map((col) => (
-              <th key={col.key} className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wide">
+              <th key={col.key} className="text-left px-4 py-3 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
                 {col.header}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-800/50">
+        <tbody className="divide-y divide-zinc-800/40">
           {data.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="px-4 py-8 text-center text-zinc-600">
-                {emptyMessage}
+              <td colSpan={columns.length} className="px-4 py-12 text-center">
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-2xl text-zinc-700">⊘</span>
+                  <p className="text-sm text-zinc-600">{emptyMessage}</p>
+                </div>
               </td>
             </tr>
           ) : (
