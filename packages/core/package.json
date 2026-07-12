@@ -1,18 +1,18 @@
 {
     "name":  "@kernova/core",
-    "version":  "0.2.0",
-    "description":  "Nexus Core - The Intelligence Runtime Kernel",
+    "version": "1.0.0",
+    "description":  "Kernova Core - The AI Agent Runtime Engine",
     "main":  "./dist/index.js",
     "types":  "./dist/index.d.ts",
     "type":  "module",
     "license":  "MIT",
     "repository":  {
                        "type":  "git",
-                       "url":  "https://github.com/nexus-runtime/nexus",
+                       "url":  "https://github.com/kernova/kernova",
                        "directory":  "packages/core"
                    },
     "keywords":  [
-                     "nexus",
+                     "kernova",
                      "ai",
                      "runtime",
                      "kernel",
@@ -30,7 +30,7 @@
                     "clean":  "rimraf dist"
                 },
     "dependencies":  {
-                         "@kernova/types":  "*",
+                         "@kernova/types": "^1.0.0",
                          "better-sqlite3":  "^12.11.1",
                          "cron-parser":  "^4.9.0",
                          "ws":  "^8.18.0",

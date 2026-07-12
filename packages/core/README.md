@@ -1,6 +1,8 @@
 # @kernova/core
 
-The **Kernova Intelligent Systems Runtime** — the kernel that powers AI-driven applications.
+The **Kernova Runtime Engine** — the kernel that powers AI agent applications.
+
+> **Most developers should use `@kernova/framework` or `@kernova/sdk` instead.** This package is for advanced use cases where you need full control over the runtime.
 
 ## Installation
 
@@ -23,15 +25,15 @@ npm install @kernova/core @kernova/types
 - **Models** — 20+ providers, auto-detected, with fallback chains
 - **Streaming** — Token-by-token response streaming
 - **Multi-agent** — Delegation, ask, broadcast between agents
-- **Studio** — Web dashboard (localhost:4200) for inspection
+- **Studio** — Web dashboard for inspection
 
 ## Quick Start
 
 ```typescript
-import { NexusKernel, defineAgent } from '@kernova/core';
+import { KernovaKernel, defineAgent } from '@kernova/core';
 
 // Create the runtime
-const kernel = new NexusKernel({
+const kernel = new KernovaKernel({
   environment: 'development',
   debug: true,
 });
@@ -71,9 +73,8 @@ export DEEPSEEK_API_KEY=sk-...      # or any of 20+ providers
 
 | API | Description |
 |-----|-------------|
-| `NexusKernel` | The runtime kernel — start, submit, stop |
+| `KernovaKernel` | The runtime kernel — start, submit, stop |
 | `defineAgent()` | Define agents with instructions and optional custom logic |
-| `createProvider()` | Create model providers from presets |
 | `kernel.events` | Event bus — subscribe, query, stream |
 | `kernel.memoryEngine` | Memory — store, query, decay |
 | `kernel.plugins` | Plugin registry — tools, middleware |
@@ -81,23 +82,29 @@ export DEEPSEEK_API_KEY=sk-...      # or any of 20+ providers
 | `kernel.identity` | Identity — users, keys, sessions, permissions |
 | `kernel.budget` | Budget — limits, tracking, enforcement |
 | `kernel.models` | Model router — complete, stream, embed |
-| `DevServer` | Development server with hot-reload + Studio |
-| `StudioServer` | Web dashboard server |
+| `kernel.gateway` | Agent Gateway API server |
+| `kernel.scheduler` | Cron job scheduler |
+| `kernel.taskQueue` | Priority task queue with retries |
+| `kernel.channels` | Inbound/outbound messaging adapters |
+| `kernel.triggers` | Event-driven proactive triggers |
+| `DevServer` | Development server with hot-reload |
 
 ## For a Simpler API
 
-If you want less boilerplate, use `@kernova/sdk` instead:
-
-```bash
-npm install @kernova/sdk
-```
+Use `@kernova/sdk` for less boilerplate:
 
 ```typescript
-import { Nexus } from '@kernova/sdk';
-const app = await Nexus.create();
+import { Kernova } from '@kernova/sdk';
+const app = await Kernova.create();
 app.agent('assistant', { instructions: 'You are helpful.' });
 const { answer } = await app.ask('Hello!');
 await app.close();
+```
+
+Or use `@kernova/framework` for a full-stack app:
+
+```bash
+npx create-kernova-app my-app
 ```
 
 ## Documentation

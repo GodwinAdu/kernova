@@ -1,6 +1,6 @@
 {
     "name":  "@kernova/cli",
-    "version":  "0.2.0",
+    "version": "1.0.0",
     "description":  "Kernova CLI - Developer tools for the Intelligent Systems Runtime",
     "main":  "./dist/index.js",
     "types":  "./dist/index.d.ts",
@@ -14,8 +14,8 @@
                     "clean":  "rimraf dist"
                 },
     "dependencies":  {
-                         "@kernova/core":  "*",
-                         "@kernova/types":  "*",
+                         "@kernova/core": "^1.0.0",
+                         "@kernova/types": "^1.0.0",
                          "better-sqlite3":  "^12.11.1"
                      },
     "devDependencies":  {

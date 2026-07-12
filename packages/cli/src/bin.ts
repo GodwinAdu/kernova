@@ -7,7 +7,11 @@
  */
 
 import { handleInit } from './commands/init.js';
+import { handleCreate } from './commands/create.js';
 import { handleDev } from './commands/dev.js';
+import { handleBuild } from './commands/build.js';
+import { handleStart } from './commands/start.js';
+import { handleLogin, handleLogout } from './commands/login.js';
 import { handleAgent } from './commands/agent.js';
 import { handleStatus } from './commands/status.js';
 import { handleDeploy } from './commands/deploy.js';
@@ -20,7 +24,12 @@ import { printHelp, printVersion, printBanner } from './ui.js';
 
 const commands: Record<string, (args: string[]) => Promise<void>> = {
   init: handleInit,
+  create: handleCreate,
   dev: handleDev,
+  build: handleBuild,
+  start: handleStart,
+  login: handleLogin,
+  logout: handleLogout,
   agent: handleAgent,
   status: handleStatus,
   deploy: handleDeploy,

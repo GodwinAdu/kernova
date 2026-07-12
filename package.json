@@ -2,23 +2,24 @@
   "name": "nexus",
   "version": "0.1.0",
   "private": true,
-  "description": "The Intelligent Systems Runtime",
+  "description": "The Full-Stack AI Agent Platform",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
     "build": "turbo run build",
-    "build:all": "npm run build:types && npm run build:core && npm run build:sdk && npm run build:cli",
+    "build:all": "npm run build:types && npm run build:core && npm run build:sdk && npm run build:framework && npm run build:cli",
     "build:types": "tsc --project packages/types/tsconfig.json",
     "build:core": "tsc --project packages/core/tsconfig.json",
     "build:sdk": "tsc --project packages/sdk/tsconfig.json",
+    "build:framework": "tsc --project packages/framework/tsconfig.json",
     "build:cli": "tsc --project packages/cli/tsconfig.json",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "turbo run clean",
-    "publish:all": "npm run build:all && npm publish --workspace=packages/types && npm publish --workspace=packages/core && npm publish --workspace=packages/sdk && npm publish --workspace=packages/cli"
+    "publish:all": "npm run build:all && npm publish --workspace=packages/types && npm publish --workspace=packages/core && npm publish --workspace=packages/sdk && npm publish --workspace=packages/framework && npm publish --workspace=packages/cli"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -1,6 +1,6 @@
 # @kernova/types
 
-Type definitions for the **Kernova Intelligent Systems Runtime**.
+Type definitions for the **Kernova Runtime**.
 
 This package contains the Universal Object Model — all TypeScript interfaces and types used across the Kernova ecosystem.
 
@@ -20,6 +20,7 @@ npm install @kernova/types
 - **Identity** — Users, roles, permissions, organizations
 - **Model** — Provider-agnostic model types (20+ providers)
 - **Streaming** — Real-time token streaming types
+- **Autonomy** — Scheduler, triggers, task queue types
 
 ## Usage
 
@@ -28,23 +29,25 @@ import type {
   Intent,
   IntentResult,
   AgentDefinition,
+  AgentInstance,
   MemoryEntry,
   MemoryLayer,
-  NexusEvent,
+  KernovaEvent,
   CompletionRequest,
   CompletionResponse,
   StreamChunk,
   ToolSpec,
   ToolCall,
+  WorkflowDefinition,
 } from '@kernova/types';
 ```
 
 ## Key Types
 
-### NexusObject (base for everything)
+### KernovaObject (base for everything)
 
 ```typescript
-interface NexusObject {
+interface KernovaObject {
   id: string;
   type: string;
   version: string;
@@ -59,20 +62,33 @@ interface NexusObject {
 ### Intent
 
 ```typescript
-interface Intent extends NexusObject {
+interface Intent extends KernovaObject {
   goal: string;
   intentType: 'query' | 'action' | 'workflow' | 'creation' | 'analysis' | 'monitoring' | 'automation';
   priority: 'critical' | 'high' | 'medium' | 'low';
   intentStatus: 'pending' | 'planning' | 'executing' | 'completed' | 'failed';
   result?: IntentResult;
-  evidence?: Evidence;
+}
+```
+
+### AgentDefinition
+
+```typescript
+interface AgentDefinition extends KernovaObject {
+  name: string;
+  description: string;
+  capabilities: Capability[];
+  tools: ToolReference[];
+  instructions: string;
+  memoryConfig: MemoryConfig;
+  concurrency: number;
 }
 ```
 
 ### MemoryEntry
 
 ```typescript
-interface MemoryEntry extends NexusObject {
+interface MemoryEntry extends KernovaObject {
   layer: 'working' | 'session' | 'longterm' | 'organizational' | 'global';
   content: string;
   relevance: number;

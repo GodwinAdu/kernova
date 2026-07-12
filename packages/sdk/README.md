@@ -4,6 +4,12 @@ The **simplest way to build intelligent applications** with Kernova.
 
 5 lines from zero to a working AI app with memory, tools, and multi-agent coordination.
 
+> **For full-stack apps (frontend + agents), use `@kernova/framework` instead:**
+> ```bash
+> npx create-kernova-app my-app
+> ```
+> The SDK is for backend-only agent services or when you have your own frontend.
+
 ## Installation
 
 ```bash
@@ -369,14 +375,14 @@ The daemon:
 
 ## Backward Compatibility
 
-The `Nexus` class is still available as a deprecated alias:
+The `Nexus` class is available as a deprecated alias for users migrating from older versions:
 
 ```typescript
 import { Nexus } from '@kernova/sdk'; // ← deprecated, use Kernova instead
 import { Kernova } from '@kernova/sdk'; // ← preferred
 ```
 
-Both resolve to the same class. `Nexus.create()` and `Kernova.create()` are identical.
+Both resolve to the same class.
 
 ## Supported Providers (20+)
 

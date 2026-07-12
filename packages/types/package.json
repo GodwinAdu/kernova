@@ -1,18 +1,18 @@
 {
   "name": "@kernova/types",
-  "version": "0.2.0",
-  "description": "Nexus Type Definitions - The Universal Object Model",
+  "version": "1.0.0",
+  "description": "Kernova Type Definitions - The Universal Object Model",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nexus-runtime/nexus",
+    "url": "https://github.com/kernova/kernova",
     "directory": "packages/types"
   },
   "keywords": [
-    "nexus",
+    "kernova",
     "ai",
     "runtime",
     "types",

@@ -14,6 +14,39 @@ export default defineConfig({
         { label: 'Getting Started', autogenerate: { directory: 'getting-started' } },
         { label: 'Core Concepts', autogenerate: { directory: 'concepts' } },
         {
+          label: 'Framework',
+          items: [
+            { label: 'Introduction', slug: 'framework/introduction' },
+            { label: 'Create a Project', slug: 'framework/create-project' },
+            { label: 'Defining Agents', slug: 'framework/agents' },
+            { label: 'Custom Tools', slug: 'framework/tools' },
+            { label: 'React Hooks', slug: 'framework/react-hooks' },
+            { label: 'Middleware', slug: 'framework/middleware' },
+            { label: 'Multi-Agent', slug: 'framework/multi-agent' },
+            { label: 'Authentication', slug: 'framework/authentication' },
+            { label: 'Environment Variables', slug: 'framework/environment-variables' },
+            { label: 'Deploy to Cloud', slug: 'framework/deploy' },
+            { label: 'Self-Hosting', slug: 'framework/self-hosting' },
+            { label: 'CLI Reference', slug: 'framework/cli-reference' },
+            { label: 'Config Reference', slug: 'framework/config-reference' },
+            { label: 'Troubleshooting', slug: 'framework/troubleshooting' },
+            { label: 'Cloud Dashboard', slug: 'framework/cloud-dashboard' },
+            { label: 'Migration Guide', slug: 'framework/migration' },
+            { label: 'Contributing', slug: 'framework/contributing' },
+          ],
+        },
+        {
+          label: 'Tutorial: Build a Support Bot',
+          items: [
+            { label: '1. Project Setup', slug: 'framework/tutorial/01-setup' },
+            { label: '2. Define Your Agent', slug: 'framework/tutorial/02-agent' },
+            { label: '3. Build Custom Tools', slug: 'framework/tutorial/03-tools' },
+            { label: '4. Build the Chat UI', slug: 'framework/tutorial/04-frontend' },
+            { label: '5. Add Memory', slug: 'framework/tutorial/05-memory' },
+            { label: '6. Deploy to Production', slug: 'framework/tutorial/06-deploy' },
+          ],
+        },
+        {
           label: 'Guides',
           items: [
 

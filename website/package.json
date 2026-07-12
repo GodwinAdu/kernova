@@ -8,8 +8,10 @@
     "preview": "astro preview"
   },
   "dependencies": {
+    "@astrojs/check": "^0.9.9",
     "@astrojs/starlight": "^0.32.0",
     "astro": "^5.0.0",
-    "sharp": "^0.33.0"
+    "sharp": "^0.33.0",
+    "typescript": "^5.9.3"
   }
 }

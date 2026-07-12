@@ -1,8 +1,8 @@
 # @kernova/cli
 
-**Developer tools for the Kernova Intelligent Systems Runtime.**
+**Developer tools for the Kernova AI Agent Platform.**
 
-Project scaffolding, development server with hot-reload, web dashboard, and deployment.
+Create projects, develop with hot-reload, build for production, and deploy to Kernova Cloud.
 
 ## Installation
 
@@ -10,102 +10,130 @@ Project scaffolding, development server with hot-reload, web dashboard, and depl
 npm install -g @kernova/cli
 ```
 
-## Commands
-
-### `kernova init [name]`
-
-Create a new project with the standard structure:
+Or use via npx (no install needed):
 
 ```bash
-kernova init my-app
-cd my-app
-npm install
+npx @kernova/cli create my-app
 ```
 
-Generates:
-- `kernova.config.json` — Runtime configuration
-- `src/main.ts` — Entry point
-- `src/agents/assistant.ts` — Your first agent
-- `package.json` + `tsconfig.json`
+## Commands
 
-### `kernova dev`
+### `kernova create <name>` — Scaffold a full-stack project
 
-Start the development runtime:
+```bash
+kernova create my-app
+kernova create my-app --template multi-agent
+kernova create my-app --no-frontend
+```
+
+Generates a complete project with agents, tools, React frontend, and configuration.
+
+### `kernova dev` — Start development server
 
 ```bash
 kernova dev
 ```
 
-What you get:
-- ✓ Agents loaded from `src/agents/`
-- ✓ Hot-reload on file changes (no restart needed)
-- ✓ Kernova Studio at **http://localhost:4200** (web dashboard)
-- ✓ Persistent events and memory (SQLite)
-- ✓ Auto-detects model providers from environment
+Starts both the frontend (Next.js on port 3000) and agent backend (port 4555) behind a single URL. Includes hot-reload for agents.
 
-Output:
 ```
-  ╔══════════════════════════════════════╗
-  ║   ◆  K E R N O V A                   ║
-  ║      Intelligent Systems Runtime     ║
-  ╚══════════════════════════════════════╝
+  ✓ Ready at http://localhost:3000
 
-  ✓ Agent 'assistant' loaded (201ms)
-  → Watching: src/agents
-  → Studio: http://localhost:4200
-
-  ✓ Kernova runtime is running
-    Agents:     1
-    Providers:  openai
-    Events:     persistent (SQLite)
-    Memory:     persistent (SQLite + FTS5)
+    App:     http://localhost:3000
+    Chat:    http://localhost:3000/chat
+    Agents:  http://localhost:3000/api/agents/*
+    Health:  http://localhost:3000/v1/health
 ```
 
-### `kernova deploy [target]`
-
-Prepare for production:
+### `kernova build` — Build for production
 
 ```bash
-kernova deploy docker    # Generates Dockerfile + production entry
-kernova deploy node      # Generates production entry only
+kernova build
 ```
 
-### `kernova agent create <name>`
+Compiles agents (TypeScript), builds frontend (Next.js), validates config.
 
-Generate a new agent file:
+### `kernova start` — Run production server
 
 ```bash
-kernova agent create code-reviewer
-# → Created src/agents/code-reviewer.ts
+kernova start
 ```
 
-### `kernova agent list`
+Runs the built project in production mode.
 
-List agents in the project.
+### `kernova deploy` — Deploy to Kernova Cloud
 
-### `kernova status`
+```bash
+kernova deploy
+```
 
-Show project and runtime status.
+Deploys your app to [Kernova Cloud](https://cloud.kernova.app). One command, both frontend and agents.
+
+### `kernova login` — Authenticate with Kernova Cloud
+
+```bash
+kernova login --key kn_live_xxxxx
+```
+
+### `kernova logout` — Remove credentials
+
+```bash
+kernova logout
+```
+
+### `kernova init <name>` — Create a legacy project (agents-only)
+
+```bash
+kernova init my-agent
+```
+
+### `kernova serve` — Start agent runtime with Gateway API
+
+```bash
+kernova serve
+```
+
+### `kernova studio` — Open the admin dashboard
+
+```bash
+kernova studio
+```
+
+### `kernova agent` — Manage agent definitions
+
+```bash
+kernova agent create my-agent
+kernova agent list
+kernova agent inspect my-agent
+```
+
+### `kernova status` — Show runtime status
+
+```bash
+kernova status
+```
 
 ## Development Flow
 
 ```bash
-kernova init my-app     # Create project
-cd my-app && npm install
-kernova dev             # Start (hot-reload + Studio at :4200)
+# Create and start
+npx create-kernova-app my-app
+cd my-app
+kernova dev
 
-# Edit src/agents/assistant.ts → auto-reloads
-# Open http://localhost:4200 → inspect events, memory, agents
+# Develop: edit agents/ and app/ → hot reload
 
-kernova deploy docker   # When ready for production
-docker build -t my-app .
-docker run -p 4200:4200 --env-file .env my-app
+# Build and deploy
+kernova build
+kernova login --key kn_live_xxx
+kernova deploy
+# → https://my-app.kernova.app
 ```
 
 ## Requirements
 
 - Node.js 20+
-- At least one AI model provider API key
+- At least one AI model provider API key (e.g., `OPENAI_API_KEY`)
 
 ## Documentation
 
