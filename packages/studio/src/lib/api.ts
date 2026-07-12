@@ -1,3 +1,10 @@
+/**
+ * Kernova Studio API Client
+ * 
+ * Connects to the Kernova Gateway API for real-time data.
+ * Falls back gracefully when Gateway is unavailable.
+ */
+
 const API_URL = process.env.NEXT_PUBLIC_KERNOVA_URL || 'http://localhost:3000';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -9,14 +16,35 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-// Health & Status
-export async function fetchHealth() {
-  return request<{ status: string; uptime: number; version: string }>('/health');
+/**
+ * Safe request wrapper — returns null instead of throwing on failure.
+ * This allows the UI to show empty states when Gateway is offline.
+ */
+async function safeRequest<T>(path: string, options?: RequestInit): Promise<T | null> {
+  try {
+    return await request<T>(path, options);
+  } catch {
+    return null;
+  }
 }
 
-// Agents
+// ─── Health & Status ─────────────────────────────────────────
+
+export async function fetchHealth() {
+  const data = await safeRequest<{ status: string; running?: boolean; agents?: number; activeIntents?: number }>('/health');
+  return data || { status: 'offline', running: false, agents: 0, activeIntents: 0 };
+}
+
+export async function isGatewayConnected(): Promise<boolean> {
+  const health = await fetchHealth();
+  return health.status === 'ok';
+}
+
+// ─── Agents ─────────────────────────────────────────────────
+
 export async function fetchAgents() {
-  return request<{ agents: Agent[] }>('/v1/agents');
+  const data = await safeRequest<{ agents: Agent[] }>('/v1/agents');
+  return data || { agents: [] };
 }
 
 export async function fetchAgent(id: string) {
@@ -27,82 +55,103 @@ export async function createAgent(data: Partial<Agent>) {
   return request<Agent>('/v1/agents', { method: 'POST', body: JSON.stringify(data) });
 }
 
-// Intents
+// ─── Intents ────────────────────────────────────────────────
+
 export async function submitIntent(goal: string, agentId?: string) {
-  return request<{ id: string; status: string }>('/v1/intents', {
+  return request<{ id: string; status: string; result?: any }>('/v1/intents', {
     method: 'POST',
     body: JSON.stringify({ goal, agentId }),
   });
 }
 
-// Events
+// ─── Events ─────────────────────────────────────────────────
+
 export async function fetchEvents(params?: { category?: string; severity?: string; limit?: number }) {
   const query = new URLSearchParams();
   if (params?.category) query.set('category', params.category);
   if (params?.severity) query.set('severity', params.severity);
   if (params?.limit) query.set('limit', String(params.limit));
-  return request<{ events: KernovaEvent[] }>(`/v1/events?${query}`);
+  const data = await safeRequest<{ events: KernovaEvent[] }>(`/v1/events?${query}`);
+  return data || { events: [] };
 }
 
-// Memory
+// ─── Memory ─────────────────────────────────────────────────
+
 export async function searchMemory(query: string, layer?: string) {
-  return request<{ results: MemoryEntry[] }>('/v1/memory/search', {
+  const data = await safeRequest<{ results: MemoryEntry[] }>('/v1/memory/search', {
     method: 'POST',
     body: JSON.stringify({ query, layer }),
   });
+  return data || { results: [] };
 }
 
-// Metrics
+// ─── Metrics ────────────────────────────────────────────────
+
 export async function fetchMetrics() {
-  return request<Metrics>('/v1/metrics');
+  const data = await safeRequest<Metrics>('/v1/metrics');
+  return data || { totalTokens: 0, totalRequests: 0, errorRate: 0, avgLatency: 0, activeAgents: 0, pendingTasks: 0, uptime: 0 };
 }
 
-// Workflows
+// ─── Workflows ──────────────────────────────────────────────
+
 export async function fetchWorkflows() {
-  return request<{ workflows: Workflow[] }>('/v1/workflows');
+  const data = await safeRequest<{ workflows: Workflow[] }>('/v1/workflows');
+  return data || { workflows: [] };
 }
 
 export async function createWorkflow(data: Partial<Workflow>) {
   return request<Workflow>('/v1/workflows', { method: 'POST', body: JSON.stringify(data) });
 }
 
-// Plugins
+// ─── Plugins ────────────────────────────────────────────────
+
 export async function fetchPlugins() {
-  return request<{ plugins: Plugin[] }>('/v1/plugins');
+  const data = await safeRequest<{ plugins: Plugin[] }>('/v1/plugins');
+  return data || { plugins: [] };
 }
 
 export async function installPlugin(name: string) {
   return request<Plugin>('/v1/plugins/install', { method: 'POST', body: JSON.stringify({ name }) });
 }
 
-// Permissions
+// ─── Permissions ────────────────────────────────────────────
+
 export async function fetchIdentities() {
-  return request<{ identities: Identity[] }>('/v1/permissions/identities');
+  const data = await safeRequest<{ identities: Identity[] }>('/v1/permissions/identities');
+  return data || { identities: [] };
 }
 
 export async function fetchApiKeys() {
-  return request<{ keys: ApiKey[] }>('/v1/permissions/keys');
+  const data = await safeRequest<{ keys: ApiKey[] }>('/v1/permissions/keys');
+  return data || { keys: [] };
 }
 
-// Logs
+// ─── Logs ───────────────────────────────────────────────────
+
 export async function fetchLogs(params?: { level?: string; limit?: number }) {
   const query = new URLSearchParams();
   if (params?.level) query.set('level', params.level);
   if (params?.limit) query.set('limit', String(params.limit));
-  return request<{ logs: LogEntry[] }>(`/v1/logs?${query}`);
+  const data = await safeRequest<{ logs: LogEntry[] }>(`/v1/logs?${query}`);
+  return data || { logs: [] };
 }
 
-// Deploy
+// ─── Deployments ────────────────────────────────────────────
+
 export async function fetchDeployments() {
-  return request<{ deployments: Deployment[] }>('/v1/deployments');
+  const data = await safeRequest<{ deployments: Deployment[] }>('/v1/deployments');
+  return data || { deployments: [] };
 }
 
-// Context
+// ─── Context ────────────────────────────────────────────────
+
 export async function fetchContext(intentId: string) {
-  return request<ContextResult>(`/v1/context/${intentId}`);
+  const data = await safeRequest<ContextResult>(`/v1/context/${intentId}`);
+  return data || { intentId, layers: [], totalTokens: 0, computedAt: new Date().toISOString() };
 }
 
-// Types
+// ─── Types ──────────────────────────────────────────────────
+
 export interface Agent {
   id: string;
   name: string;

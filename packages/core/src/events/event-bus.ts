@@ -204,6 +204,13 @@ export class EventBus {
   }
 
   /**
+   * Get recent events from the hot cache (most recent first).
+   */
+  getRecentEvents(limit = 50): NexusEvent[] {
+    return this.history.slice(-limit).reverse();
+  }
+
+  /**
    * Get total event count (from store if available)
    */
   get eventCount(): number {

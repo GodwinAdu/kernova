@@ -4,41 +4,49 @@ import { useState, useEffect } from 'react';
 import { DataTable } from '@/components/data-table';
 import { fetchAgents, submitIntent, type Agent } from '@/lib/api';
 
-const mockAgents: Agent[] = [
-  { id: 'agent-001', name: 'Planner', capabilities: ['planning', 'decomposition'], status: 'active', model: 'gpt-4o', intentsProcessed: 142, createdAt: '2024-01-15T10:00:00Z' },
-  { id: 'agent-002', name: 'Coder', capabilities: ['code-generation', 'debugging'], status: 'active', model: 'claude-3.5', intentsProcessed: 89, createdAt: '2024-01-16T14:30:00Z' },
-  { id: 'agent-003', name: 'Researcher', capabilities: ['web-search', 'summarization'], status: 'idle', model: 'gpt-4o-mini', intentsProcessed: 56, createdAt: '2024-01-17T09:15:00Z' },
-  { id: 'agent-004', name: 'Reviewer', capabilities: ['code-review', 'testing'], status: 'error', model: 'claude-3.5', intentsProcessed: 23, createdAt: '2024-01-18T11:45:00Z' },
-];
-
 export default function AgentsPage() {
-  const [agents, setAgents] = useState<Agent[]>(mockAgents);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [intentGoal, setIntentGoal] = useState('');
   const [selectedAgent, setSelectedAgent] = useState('');
+  const [lastResult, setLastResult] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchAgents().then((r) => setAgents(r.agents)).catch(() => {});
+    const load = async () => {
+      const data = await fetchAgents();
+      setAgents(data.agents);
+    };
+    load();
+    const interval = setInterval(load, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleSubmit = async () => {
     if (!intentGoal.trim()) return;
-    await submitIntent(intentGoal, selectedAgent || undefined).catch(() => {});
-    setIntentGoal('');
+    try {
+      const result = await submitIntent(intentGoal, selectedAgent || undefined);
+      setLastResult(`Intent ${result.id} → ${result.status}`);
+      setIntentGoal('');
+    } catch (err: any) {
+      setLastResult(`Error: ${err.message}`);
+    }
   };
 
   const columns = [
     { key: 'name', header: 'Name', render: (a: Agent) => <span className="font-medium text-white">{a.name}</span> },
-    { key: 'status', header: 'Status', render: (a: Agent) => <span className={`badge badge-${a.status === 'active' ? 'active' : a.status === 'idle' ? 'idle' : 'error'}`}>{a.status}</span> },
-    { key: 'model', header: 'Model' },
+    { key: 'status', header: 'Status', render: (a: Agent) => (
+      <span className={`text-xs ${a.status === 'active' ? 'text-emerald-400' : a.status === 'idle' ? 'text-zinc-400' : 'text-red-400'}`}>
+        ● {a.status}
+      </span>
+    )},
+    { key: 'model', header: 'Model', render: (a: Agent) => <span className="font-mono text-xs text-zinc-400">{a.model}</span> },
     { key: 'capabilities', header: 'Capabilities', render: (a: Agent) => <span className="text-xs text-zinc-500">{a.capabilities.join(', ')}</span> },
-    { key: 'intentsProcessed', header: 'Intents', render: (a: Agent) => <span className="font-mono">{a.intentsProcessed}</span> },
   ];
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Agent Builder</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">Manage and interact with registered agents</p>
+        <h1 className="text-2xl font-bold text-white">Agents</h1>
+        <p className="text-sm text-zinc-500 mt-0.5">Registered agents and intent submission</p>
       </div>
 
       {/* Submit Intent */}
@@ -65,10 +73,11 @@ export default function AgentsPage() {
             Submit
           </button>
         </div>
+        {lastResult && <p className="mt-2 text-xs text-zinc-400 font-mono">{lastResult}</p>}
       </div>
 
       {/* Agents Table */}
-      <DataTable columns={columns} data={agents} emptyMessage="No agents registered" />
+      <DataTable columns={columns} data={agents} emptyMessage="No agents registered. Use kernel.agentRegistry.register() to add agents." />
     </div>
   );
 }

@@ -116,13 +116,42 @@ export class AgentGateway {
     const method = req.method ?? 'GET';
 
     try {
-      if (url === '/health' && method === 'GET') {
+      // Parse URL path and query string
+      const [pathname, queryString] = url.split('?');
+      const query = new URLSearchParams(queryString || '');
+
+      if (pathname === '/health' && method === 'GET') {
         await this.handleHealth(res);
-      } else if (url === '/v1/intents' && method === 'POST') {
+      } else if (pathname === '/v1/intents' && method === 'POST') {
         await this.handleIntentSubmit(req, res);
-      } else if (url === '/v1/chat/completions' && method === 'POST') {
+      } else if (pathname === '/v1/chat/completions' && method === 'POST') {
         await this.handleChatCompletion(req, res);
-      } else if (url.startsWith('/hooks/') && method === 'POST') {
+      } else if (pathname === '/v1/agents' && method === 'GET') {
+        this.handleGetAgents(res);
+      } else if (pathname === '/v1/events' && method === 'GET') {
+        this.handleGetEvents(res, query);
+      } else if (pathname === '/v1/memory/search' && method === 'POST') {
+        await this.handleMemorySearch(req, res);
+      } else if (pathname === '/v1/metrics' && method === 'GET') {
+        this.handleGetMetrics(res);
+      } else if (pathname === '/v1/workflows' && method === 'GET') {
+        this.handleGetWorkflows(res);
+      } else if (pathname === '/v1/plugins' && method === 'GET') {
+        this.handleGetPlugins(res);
+      } else if (pathname === '/v1/plugins/install' && method === 'POST') {
+        await this.handlePluginInstall(req, res);
+      } else if (pathname === '/v1/permissions/identities' && method === 'GET') {
+        this.handleGetIdentities(res);
+      } else if (pathname === '/v1/permissions/keys' && method === 'GET') {
+        this.handleGetApiKeys(res);
+      } else if (pathname === '/v1/logs' && method === 'GET') {
+        this.handleGetLogs(res, query);
+      } else if (pathname === '/v1/deployments' && method === 'GET') {
+        this.handleGetDeployments(res);
+      } else if (pathname?.startsWith('/v1/context/') && method === 'GET') {
+        const intentId = pathname.split('/v1/context/')[1];
+        this.handleGetContext(res, intentId);
+      } else if (pathname?.startsWith('/hooks/') && method === 'POST') {
         await this.handleWebhook(req, res, url);
       } else {
         this.sendJson(res, 404, { error: 'Not found' });
@@ -225,6 +254,260 @@ export class AgentGateway {
       this.sendJson(res, result.error ? 400 : 200, { ok: !result.error, error: result.error });
     } else {
       this.sendJson(res, 404, { error: 'No matching webhook route' });
+    }
+  }
+
+  // ─── Studio API Handlers ─────────────────────────────────────
+
+  private handleGetAgents(res: ServerResponse): void {
+    const agentDefs = this.kernel.agentRegistry.list();
+    const agents = agentDefs.map((a) => ({
+      id: a.id,
+      name: a.name || a.id,
+      capabilities: a.capabilities?.map((c: any) => typeof c === 'string' ? c : c.name) || [],
+      status: 'active',
+      model: a.models?.[0]?.model || 'default',
+      intentsProcessed: 0,
+      createdAt: a.createdAt || new Date().toISOString(),
+    }));
+    this.sendJson(res, 200, { agents });
+  }
+
+  private handleGetEvents(res: ServerResponse, query: URLSearchParams): void {
+    const category = query.get('category') || undefined;
+    const severity = query.get('severity') || undefined;
+    const limit = parseInt(query.get('limit') || '50', 10);
+
+    // Get recent events from EventBus history
+    let events = this.eventBus.getRecentEvents ? this.eventBus.getRecentEvents(limit) : [];
+
+    if (category) {
+      events = events.filter((e: any) => e.category === category);
+    }
+    if (severity) {
+      events = events.filter((e: any) => e.severity === severity);
+    }
+
+    const mapped = events.map((e: any) => ({
+      id: e.id,
+      type: e.eventType,
+      category: e.category,
+      severity: e.severity,
+      message: this.formatEventMessage(e),
+      data: e.data,
+      timestamp: e.timestamp,
+    }));
+
+    this.sendJson(res, 200, { events: mapped });
+  }
+
+  private async handleMemorySearch(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const body = await this.readBody(req);
+    if (!body || !body.query) {
+      this.sendJson(res, 400, { error: 'Missing required field: query' });
+      return;
+    }
+
+    const searchQuery = String(body.query);
+    const layer = body.layer as string | undefined;
+
+    try {
+      const memories = await this.kernel.memoryEngine.query({
+        query: searchQuery,
+        layers: layer ? [layer as any] : undefined,
+        limit: 20,
+      });
+
+      const results = memories.map((m: any) => ({
+        id: m.id,
+        content: m.content || '',
+        layer: m.layer || 'working',
+        tags: m.tags || [],
+        relevance: m.relevance ?? 0.5,
+        timestamp: m.createdAt || new Date().toISOString(),
+      }));
+
+      this.sendJson(res, 200, { results });
+    } catch {
+      this.sendJson(res, 200, { results: [] });
+    }
+  }
+
+  private handleGetMetrics(res: ServerResponse): void {
+    const status = this.kernel.getStatus();
+    const usageStats = status.modelUsage;
+
+    this.sendJson(res, 200, {
+      totalTokens: usageStats?.usage?.totalTokens ?? 0,
+      totalRequests: usageStats?.requestCount ?? 0,
+      errorRate: 0,
+      avgLatency: 0,
+      activeAgents: status.registeredAgents,
+      pendingTasks: status.activeIntents,
+      uptime: Math.floor(process.uptime()),
+    });
+  }
+
+  private handleGetWorkflows(res: ServerResponse): void {
+    const workflowDefs = this.kernel.workflows.listDefinitions();
+    const running = this.kernel.workflows.listRunning();
+    const runningIds = new Set(running.map((r: any) => r.definitionId));
+
+    const workflows = workflowDefs.map((w: any) => ({
+      id: w.id,
+      name: w.name || w.id,
+      steps: w.steps?.length ?? 0,
+      status: runningIds.has(w.id) ? 'active' : 'draft',
+      lastRun: '',
+      createdAt: w.createdAt || new Date().toISOString(),
+    }));
+    this.sendJson(res, 200, { workflows });
+  }
+
+  private handleGetPlugins(res: ServerResponse): void {
+    const tools = this.kernel.plugins.listTools();
+    const registeredPlugins = this.kernel.plugins.list ? this.kernel.plugins.list() : [];
+
+    // If plugins have a list method, use it directly
+    if (registeredPlugins.length > 0) {
+      const plugins = registeredPlugins.map((p: any) => ({
+        id: p.id,
+        name: p.name || p.id,
+        version: p.version || '0.1.0',
+        status: 'installed' as const,
+        description: p.description || `Plugin with ${p.tools?.length ?? 0} tool(s)`,
+        author: p.author || 'Kernova',
+      }));
+      this.sendJson(res, 200, { plugins });
+      return;
+    }
+
+    // Fallback: infer from tools
+    const plugins = [{
+      id: '@kernova/built-in-tools',
+      name: '@kernova/built-in-tools',
+      version: '0.2.0',
+      status: 'installed' as const,
+      description: `Provides ${tools.length} built-in tool(s)`,
+      author: 'Kernova',
+    }];
+    this.sendJson(res, 200, { plugins });
+  }
+
+  private async handlePluginInstall(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const body = await this.readBody(req);
+    if (!body || !body.name) {
+      this.sendJson(res, 400, { error: 'Missing required field: name' });
+      return;
+    }
+    // Plugin installation is a placeholder — in production this would download from marketplace
+    this.sendJson(res, 200, { id: generateId('pl'), name: body.name, status: 'installed' });
+  }
+
+  private handleGetIdentities(res: ServerResponse): void {
+    const identities = this.kernel.identity.listIdentities();
+    const mapped = identities.map((i: any) => ({
+      id: i.id,
+      name: i.name || i.id,
+      type: i.type || 'user',
+      roles: i.roles || [],
+      lastActive: i.lastActive || new Date().toISOString(),
+    }));
+    this.sendJson(res, 200, { identities: mapped });
+  }
+
+  private handleGetApiKeys(res: ServerResponse): void {
+    // API keys are managed through the auth config — return configured token prefixes
+    const tokens = this.config.auth.tokens || [];
+    const keys = tokens.map((t, i) => ({
+      id: `key-${String(i + 1).padStart(3, '0')}`,
+      name: `API Key ${i + 1}`,
+      prefix: `${t.slice(0, 8)}****...${t.slice(-4)}`,
+      lastUsed: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    }));
+    this.sendJson(res, 200, { keys });
+  }
+
+  private handleGetLogs(res: ServerResponse, query: URLSearchParams): void {
+    const level = query.get('level') || undefined;
+    const limit = parseInt(query.get('limit') || '100', 10);
+
+    // Get recent events and format as log entries
+    let events = this.eventBus.getRecentEvents ? this.eventBus.getRecentEvents(limit) : [];
+
+    if (level) {
+      const severityMap: Record<string, string[]> = {
+        debug: ['info'],
+        info: ['info'],
+        warn: ['warn', 'warning'],
+        error: ['error', 'critical'],
+      };
+      const allowed = severityMap[level] || [level];
+      events = events.filter((e: any) => allowed.includes(e.severity));
+    }
+
+    const logs = events.map((e: any) => ({
+      id: e.id,
+      level: e.severity === 'critical' ? 'error' : e.severity === 'warning' ? 'warn' : e.severity,
+      message: this.formatEventMessage(e),
+      source: e.metadata?.source || e.category || 'kernel',
+      traceId: e.correlationId?.slice(0, 8),
+      timestamp: e.timestamp,
+    }));
+
+    this.sendJson(res, 200, { logs });
+  }
+
+  private handleGetDeployments(res: ServerResponse): void {
+    const status = this.kernel.getStatus();
+    // The kernel itself is a "deployment" — return runtime info
+    this.sendJson(res, 200, {
+      deployments: [{
+        id: status.instanceId,
+        environment: status.environment,
+        status: status.running ? 'running' : 'stopped',
+        version: '0.2.0',
+        timestamp: new Date().toISOString(),
+      }],
+    });
+  }
+
+  private handleGetContext(res: ServerResponse, intentId: string): void {
+    const memoryStats = this.kernel.memoryEngine.getStats();
+
+    const layers = [
+      { name: 'system', entries: 1, tokens: 200 },
+      { name: 'organizational', entries: memoryStats.organizational ?? 0, tokens: (memoryStats.organizational ?? 0) * 50 },
+      { name: 'longterm', entries: memoryStats.longterm ?? 0, tokens: (memoryStats.longterm ?? 0) * 80 },
+      { name: 'session', entries: memoryStats.session ?? 0, tokens: (memoryStats.session ?? 0) * 100 },
+      { name: 'working', entries: memoryStats.working ?? 0, tokens: (memoryStats.working ?? 0) * 120 },
+      { name: 'intent', entries: 1, tokens: 100 },
+    ];
+
+    const totalTokens = layers.reduce((sum, l) => sum + l.tokens, 0);
+
+    this.sendJson(res, 200, {
+      intentId,
+      layers,
+      totalTokens,
+      computedAt: new Date().toISOString(),
+    });
+  }
+
+  private formatEventMessage(event: any): string {
+    const data = event.data || {};
+    switch (event.eventType) {
+      case 'intent.created': return `New intent submitted: ${data.goal || 'unknown'}`;
+      case 'intent.executing': return `Agent executing intent ${data.intentId || ''}`;
+      case 'intent.completed': return `Intent ${data.intentId || ''} completed`;
+      case 'intent.failed': return `Intent ${data.intentId || ''} failed: ${data.error || ''}`;
+      case 'agent.selected': return `Agent "${data.agentId || ''}" selected`;
+      case 'gateway.started': return `Gateway started on port ${data.port || 3000}`;
+      case 'gateway.stopped': return `Gateway stopped`;
+      case 'kernel.started': return `Kernel started (${data.instanceId || ''})`;
+      case 'kernel.stopping': return `Kernel stopping (${data.activeIntents || 0} active intents)`;
+      default: return event.eventType;
     }
   }
 
