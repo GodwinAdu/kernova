@@ -101,7 +101,7 @@ export class AgentGateway {
     // CORS
     if (this.config.cors) {
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
       if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
     }
@@ -151,6 +151,17 @@ export class AgentGateway {
       } else if (pathname?.startsWith('/v1/context/') && method === 'GET') {
         const intentId = pathname.split('/v1/context/')[1];
         this.handleGetContext(res, intentId);
+      } else if (pathname === '/v1/workflows' && method === 'POST') {
+        await this.handleCreateWorkflow(req, res);
+      } else if (pathname === '/v1/permissions/identities' && method === 'POST') {
+        await this.handleCreateIdentity(req, res);
+      } else if (pathname === '/v1/permissions/keys' && method === 'POST') {
+        await this.handleCreateApiKey(req, res);
+      } else if (pathname?.startsWith('/v1/permissions/keys/') && method === 'DELETE') {
+        const keyId = pathname.split('/v1/permissions/keys/')[1];
+        this.handleRevokeApiKey(res, keyId);
+      } else if (pathname?.startsWith('/v1/deployments/') && pathname.endsWith('/restart') && method === 'POST') {
+        this.handleRestartDeployment(res);
       } else if (pathname?.startsWith('/hooks/') && method === 'POST') {
         await this.handleWebhook(req, res, url);
       } else {
@@ -509,6 +520,120 @@ export class AgentGateway {
       case 'kernel.stopping': return `Kernel stopping (${data.activeIntents || 0} active intents)`;
       default: return event.eventType;
     }
+  }
+
+  // ─── Write Operations (Studio Actions) ─────────────────────
+
+  private async handleCreateWorkflow(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const body = await this.readBody(req);
+    if (!body || !body.name) {
+      this.sendJson(res, 400, { error: 'Missing required field: name' });
+      return;
+    }
+
+    const id = generateId('wf');
+    const steps = Array.isArray(body.steps) ? body.steps : [];
+
+    const definition = {
+      id,
+      type: 'workflow_definition' as const,
+      version: '1.0.0',
+      owner: 'system',
+      status: 'active' as const,
+      createdAt: now(),
+      updatedAt: now(),
+      metadata: {},
+      name: String(body.name),
+      description: String(body.description || ''),
+      steps: steps.map((s: any, i: number) => ({
+        id: `${id}-step-${i + 1}`,
+        name: String(s.name || `Step ${i + 1}`),
+        type: (s.type || 'agent') as 'agent' | 'tool' | 'human' | 'conditional' | 'parallel',
+        config: s.config || {},
+      })),
+    };
+
+    this.kernel.workflows.define(definition as any);
+    this.sendJson(res, 201, { id, name: body.name, steps: steps.length, status: 'draft' });
+  }
+
+  private async handleCreateIdentity(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const body = await this.readBody(req);
+    if (!body || !body.name) {
+      this.sendJson(res, 400, { error: 'Missing required field: name' });
+      return;
+    }
+
+    try {
+      const identity = this.kernel.identity.registerIdentity({
+        name: String(body.name),
+        type: (body.type as 'user' | 'agent' | 'service') || 'user',
+        roles: Array.isArray(body.roles) ? body.roles : [],
+      });
+
+      this.sendJson(res, 201, {
+        id: identity.id,
+        name: identity.name,
+        type: identity.type,
+        roles: Array.isArray(body.roles) ? body.roles : [],
+      });
+    } catch (err: any) {
+      this.sendJson(res, 400, { error: err.message });
+    }
+  }
+
+  private async handleCreateApiKey(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const body = await this.readBody(req);
+    if (!body || !body.name || !body.ownerId) {
+      this.sendJson(res, 400, { error: 'Missing required fields: name, ownerId' });
+      return;
+    }
+
+    try {
+      const result = this.kernel.identity.createApiKey({
+        name: String(body.name),
+        ownerId: String(body.ownerId),
+        permissions: Array.isArray(body.permissions) ? body.permissions : ['*'],
+      });
+
+      this.sendJson(res, 201, {
+        id: result.key.id,
+        name: result.key.name,
+        key: result.plaintext, // Only returned on creation — client must save this
+        prefix: result.key.prefix,
+        createdAt: result.key.createdAt,
+      });
+    } catch (err: any) {
+      this.sendJson(res, 400, { error: err.message });
+    }
+  }
+
+  private handleRevokeApiKey(res: ServerResponse, keyId: string): void {
+    if (!keyId) {
+      this.sendJson(res, 400, { error: 'Missing key ID' });
+      return;
+    }
+
+    try {
+      const revoked = this.kernel.identity.revokeApiKey(keyId);
+      if (revoked) {
+        this.sendJson(res, 200, { ok: true, id: keyId });
+      } else {
+        this.sendJson(res, 404, { error: 'API key not found' });
+      }
+    } catch (err: any) {
+      this.sendJson(res, 400, { error: err.message });
+    }
+  }
+
+  private handleRestartDeployment(res: ServerResponse): void {
+    // In a real deployment orchestrator this would restart the service.
+    // For the local runtime, we emit a restart event and confirm.
+    this.emitEvent('deployment.restart', this.kernel.getStatus().instanceId, {
+      action: 'restart',
+      timestamp: new Date().toISOString(),
+    });
+    this.sendJson(res, 200, { ok: true, message: 'Restart signal sent' });
   }
 
   // ─── Helpers ───────────────────────────────────────────────

@@ -99,8 +99,8 @@ export async function fetchWorkflows() {
   return data || { workflows: [] };
 }
 
-export async function createWorkflow(data: Partial<Workflow>) {
-  return request<Workflow>('/v1/workflows', { method: 'POST', body: JSON.stringify(data) });
+export async function createWorkflow(data: { name: string; description?: string; steps?: { name: string; type?: string }[] }) {
+  return request<{ id: string; name: string; steps: number; status: string }>('/v1/workflows', { method: 'POST', body: JSON.stringify(data) });
 }
 
 // ─── Plugins ────────────────────────────────────────────────
@@ -121,9 +121,21 @@ export async function fetchIdentities() {
   return data || { identities: [] };
 }
 
+export async function createIdentity(data: { name: string; type: 'user' | 'agent' | 'service'; roles?: string[] }) {
+  return request<Identity>('/v1/permissions/identities', { method: 'POST', body: JSON.stringify(data) });
+}
+
 export async function fetchApiKeys() {
   const data = await safeRequest<{ keys: ApiKey[] }>('/v1/permissions/keys');
   return data || { keys: [] };
+}
+
+export async function createApiKey(data: { name: string; ownerId: string; permissions?: string[] }) {
+  return request<{ id: string; name: string; key: string; prefix: string; createdAt: string }>('/v1/permissions/keys', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function revokeApiKey(keyId: string) {
+  return request<{ ok: boolean }>(`/v1/permissions/keys/${keyId}`, { method: 'DELETE' });
 }
 
 // ─── Logs ───────────────────────────────────────────────────
@@ -141,6 +153,10 @@ export async function fetchLogs(params?: { level?: string; limit?: number }) {
 export async function fetchDeployments() {
   const data = await safeRequest<{ deployments: Deployment[] }>('/v1/deployments');
   return data || { deployments: [] };
+}
+
+export async function restartDeployment(deploymentId: string) {
+  return request<{ ok: boolean; message: string }>(`/v1/deployments/${deploymentId}/restart`, { method: 'POST' });
 }
 
 // ─── Context ────────────────────────────────────────────────

@@ -206,6 +206,17 @@ export class IdentityManager {
   }
 
   /**
+   * Revoke an API key by ID
+   */
+  revokeApiKey(keyId: NexusId): boolean {
+    const revoked = this.apiKeys.revoke(keyId);
+    if (revoked && this.store) {
+      this.store.revokeKey(keyId);
+    }
+    return revoked;
+  }
+
+  /**
    * Create a session for an identity
    */
   createSession(options: CreateSessionOptions): Session {
