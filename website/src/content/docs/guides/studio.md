@@ -70,7 +70,7 @@ kernova studio --port 8080 --gateway http://192.168.1.50:3000
                              └──────────────────────┘
 ```
 
-Studio is a **read-heavy client** that polls the Gateway API. It does not modify state except when you explicitly submit intents or install plugins.
+Studio is a **local client** that polls the Gateway API for reads, and sends targeted commands for writes (creating workflows, managing identities, submitting intents). All data stays on your machine unless you point it at a remote Gateway.
 
 ## Pages
 
@@ -79,27 +79,27 @@ Studio is a **read-heavy client** that polls the Gateway API. It does not modify
 The landing page shows:
 - **Connection status** — green when Gateway is reachable
 - **Stat cards** — active agents, pending tasks, token usage, latency, uptime
-- **Intent submission** — send goals directly to the runtime from the UI
+- **Intent submission** — send goals directly to the runtime from the UI and see results
 
 ### Agents
 
-Lists all registered agents with their model, capabilities, and status. You can submit intents targeted at specific agents.
+Lists all registered agents with their model, capabilities, and status. You can submit intents targeted at specific agents and see the result inline.
 
 ### Events
 
-Real-time event stream that auto-refreshes every 2 seconds. Filter by category (intent, agent, tool, memory, workflow, system) and severity. Click any event to see its full data payload.
+Real-time event stream that auto-refreshes every 2 seconds. Filter by category (intent, agent, tool, memory, workflow, system) and severity. Click any event to expand its full data payload.
 
 ### Memory
 
-Semantic search across all memory layers: working, session, longterm, organizational, global. Results are ranked by relevance score.
+Semantic search across all memory layers: working, session, longterm, organizational, global. Results are ranked by relevance score with layer badges.
 
 ### Monitoring
 
-Health banner, request metrics, token breakdown, and latency stats. Auto-refreshes every 5 seconds.
+Health banner, request metrics, token breakdown (input/output/context/tool), and latency stats. Auto-refreshes every 5 seconds.
 
 ### Logs
 
-Terminal-style log viewer that formats events as structured log entries with level, source, message, and trace ID.
+Terminal-style log viewer that formats events as structured log entries with level, source, message, and trace ID. Filter by level (debug, info, warn, error).
 
 ### Plugins
 
@@ -107,7 +107,7 @@ Shows installed plugins, their versions, and the tools they provide.
 
 ### Workflows
 
-Lists registered workflow definitions and their execution status.
+Lists registered workflow definitions. Click **"+ New Workflow"** to create a workflow with a name and description — it's registered in the kernel immediately.
 
 ### Context
 
@@ -115,11 +115,14 @@ Enter an intent ID to visualize how the context window is allocated across memor
 
 ### Deploy
 
-Displays running Kernova instances with their environment, version, and status.
+Displays running Kernova instances with their environment, version, and status. **Restart** and **Retry** buttons send signals to the runtime.
 
 ### Permissions
 
-Lists all registered identities (users, agents, services) with their roles, plus any configured API keys.
+Full identity and API key management:
+- **Add Identity** — create users, agents, or service accounts with roles
+- **Generate API Key** — create a key for any identity (the full key is shown once on creation)
+- **Revoke Key** — permanently disable an API key with confirmation
 
 ## Configuration
 
@@ -152,13 +155,20 @@ Studio uses these Gateway API endpoints. They are automatically available when y
 | POST | `/v1/memory/search` | Semantic memory search |
 | GET | `/v1/metrics` | Token usage, request count, uptime |
 | GET | `/v1/workflows` | Workflow definitions |
+| POST | `/v1/workflows` | Create a new workflow definition |
 | GET | `/v1/plugins` | Installed plugins and tools |
+| POST | `/v1/plugins/install` | Install a plugin |
 | GET | `/v1/permissions/identities` | Registered identities |
+| POST | `/v1/permissions/identities` | Create a new identity |
 | GET | `/v1/permissions/keys` | Configured API keys |
+| POST | `/v1/permissions/keys` | Generate a new API key |
+| DELETE | `/v1/permissions/keys/:id` | Revoke an API key |
 | GET | `/v1/logs?level=&limit=` | Events formatted as log entries |
 | GET | `/v1/deployments` | Running instances |
+| POST | `/v1/deployments/:id/restart` | Send restart signal |
 | GET | `/v1/context/:intentId` | Context layer stats |
 | POST | `/v1/intents` | Submit a new intent |
+| POST | `/v1/chat/completions` | OpenAI-compatible chat endpoint |
 
 ## Offline Behavior
 
