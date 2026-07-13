@@ -123,7 +123,7 @@ export async function createServer(options: ServerOptions = {}) {
     };
 
     // Create the executor — uses the kernel's model router + tools
-    const executor = createAgentExecutor(def, tools);
+    const executor = createAgentExecutor(def, tools, projectRoot);
 
     kernel.agentRegistry.register(coreDefinition as any, executor);
     agentRouteMap.set(agent.route, definitionId);
@@ -178,10 +178,19 @@ export async function createServer(options: ServerOptions = {}) {
     // No teams directory — that's fine
   }
 
+  // Discover remote agents
+  let discoveredRemotes: any[] = [];
+  try {
+    discoveredRemotes = await discoverRemoteAgents(projectRoot);
+  } catch {
+    // No remotes — that's fine
+  }
+
   console.log(`\n  🧠 Kernova Framework Server`);
   console.log(`  ├─ Agents:  ${agents.length} discovered`);
   console.log(`  ├─ Tools:   ${tools.length} registered`);
   console.log(`  ├─ Teams:   ${discoveredTeams.length} configured`);
+  console.log(`  ├─ Remotes: ${discoveredRemotes.length} connected`);
   console.log(`  ├─ Memory:  ${memories.length} namespaces`);
   console.log(`  └─ Config:  ${config.name} v${config.version}\n`);
 
@@ -805,7 +814,8 @@ function buildRoutes(
  */
 function createAgentExecutor(
   agentDef: FrameworkAgentDef,
-  tools: DiscoveredTool[]
+  tools: DiscoveredTool[],
+  projectRoot: string,
 ): (intent: any, context: any, agentTools: any) => Promise<any> {
   return async (intent, context, agentTools) => {
     const startTime = Date.now();
@@ -847,9 +857,7 @@ function createAgentExecutor(
           return result.output || '';
         },
         askRemote: async (agentName: string, input: string, options?: any) => {
-          // Remote agent calls via KAP — handled by the remote agent client
-          // In production, this would be wired to discovered remote agents
-          return `[Remote agent "${agentName}" not configured. Use defineRemoteAgent() to set up connections.]`;
+          return await executeRemoteAgentCall(projectRoot, agentName, input, options);
         },
         workspace: noopWorkspace,
         teamMembers: undefined,
@@ -902,6 +910,199 @@ function createAgentExecutor(
       durationMs: Date.now() - startTime,
     };
   };
+}
+
+// ─── Remote Agent Execution ──────────────────────────────────────────────────
+
+/**
+ * Execute a remote agent call via KAP.
+ *
+ * Resolution order:
+ * 1. Check for defineRemoteAgent() files in agents/remotes/
+ * 2. If endpoint is set → call directly with provided auth
+ * 3. If discover: true → route through Kernova Cloud proxy
+ * 4. If KERNOVA_CLOUD_URL is set → always route through proxy
+ */
+async function executeRemoteAgentCall(
+  projectRoot: string,
+  agentName: string,
+  input: string,
+  options?: { capability?: string; params?: Record<string, unknown>; timeout?: number },
+): Promise<string> {
+  // Load remote agent definitions
+  const remoteAgents = await discoverRemoteAgents(projectRoot);
+  const remoteDef = remoteAgents.find(r => r.name === agentName);
+
+  // Determine the proxy URL
+  const cloudUrl = process.env.KERNOVA_CLOUD_URL || 'https://kernova-cloud.vercel.app';
+  const connectionToken = process.env[`KAP_TOKEN_${agentName.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`]
+    || process.env.KAP_CONNECTION_TOKEN;
+
+  // If we have a direct endpoint (from defineRemoteAgent), call it directly
+  if (remoteDef?.endpoint && remoteDef.auth?.token) {
+    return await callRemoteAgentDirect(
+      { name: remoteDef.name, endpoint: remoteDef.endpoint, auth: remoteDef.auth },
+      input,
+      options,
+    );
+  }
+
+  // Otherwise, route through Kernova Cloud proxy
+  if (connectionToken) {
+    return await callRemoteAgentViaProxy(cloudUrl, connectionToken, agentName, input, options);
+  }
+
+  // If no config at all, return helpful error
+  if (remoteDef) {
+    return `[Remote agent "${agentName}" is defined but has no auth token. Set KAP_TOKEN_${agentName.toUpperCase().replace(/[^A-Z0-9]/g, '_')} in your environment, or add a token to defineRemoteAgent().]`;
+  }
+
+  return `[Remote agent "${agentName}" not found. Define it with defineRemoteAgent() in agents/remotes/${agentName}.ts, or connect via Kernova Cloud dashboard.]`;
+}
+
+/**
+ * Call a remote agent directly (when endpoint + auth are provided)
+ */
+async function callRemoteAgentDirect(
+  remoteDef: { name: string; endpoint: string; auth: { type: string; token?: string; headerName?: string } },
+  input: string,
+  options?: { capability?: string; params?: Record<string, unknown>; timeout?: number },
+): Promise<string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Agent-Protocol': 'kap/1.0',
+  };
+
+  // Set auth header
+  if (remoteDef.auth.type === 'api-key' && remoteDef.auth.token) {
+    headers[remoteDef.auth.headerName || 'X-API-Key'] = remoteDef.auth.token;
+  } else if ((remoteDef.auth.type === 'bearer' || remoteDef.auth.type === 'oauth2') && remoteDef.auth.token) {
+    headers['Authorization'] = `Bearer ${remoteDef.auth.token}`;
+  }
+
+  const body = {
+    id: `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    protocol: 'kap/1.0',
+    from: { id: 'local', name: 'Local Agent', organization: 'self' },
+    capability: options?.capability || 'ask',
+    input,
+    params: options?.params,
+    timeout: options?.timeout || 30000,
+    timestamp: new Date().toISOString(),
+  };
+
+  try {
+    const res = await fetch(remoteDef.endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(options?.timeout || 30000),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      return `[Error from ${remoteDef.name}: HTTP ${res.status} — ${errText || res.statusText}]`;
+    }
+
+    const response = await res.json() as any;
+    return response.output || response.data || JSON.stringify(response);
+  } catch (err: any) {
+    return `[Failed to reach ${remoteDef.name}: ${err.message}]`;
+  }
+}
+
+/**
+ * Call a remote agent via Kernova Cloud's proxy (registry-authenticated)
+ */
+async function callRemoteAgentViaProxy(
+  cloudUrl: string,
+  connectionToken: string,
+  agentName: string,
+  input: string,
+  options?: { capability?: string; params?: Record<string, unknown>; timeout?: number },
+): Promise<string> {
+  const body = {
+    capability: options?.capability || 'ask',
+    input,
+    params: options?.params,
+    context: { agentName },
+  };
+
+  try {
+    const res = await fetch(`${cloudUrl}/api/kap/proxy`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${connectionToken}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(options?.timeout || 30000),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ error: { message: res.statusText } })) as any;
+      return `[KAP Proxy Error: ${errData.error?.message || res.statusText}]`;
+    }
+
+    const response = await res.json() as any;
+
+    if (response.status === 'error') {
+      return `[Remote agent error: ${response.error?.message || 'Unknown error'}]`;
+    }
+
+    return response.output || response.data || JSON.stringify(response);
+  } catch (err: any) {
+    return `[Failed to reach Kernova Cloud proxy: ${err.message}]`;
+  }
+}
+
+/**
+ * Discover remote agent definitions from the filesystem.
+ * Looks in: agents/remotes/, remotes/, src/agents/remotes/
+ */
+async function discoverRemoteAgents(projectRoot: string): Promise<Array<{
+  name: string;
+  endpoint?: string;
+  discover?: boolean;
+  auth: { type: string; token?: string; headerName?: string };
+  timeout?: number;
+}>> {
+  const { existsSync, readdirSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { pathToFileURL } = await import('node:url');
+
+  const dirs = [
+    join(projectRoot, 'agents', 'remotes'),
+    join(projectRoot, 'remotes'),
+    join(projectRoot, 'src', 'agents', 'remotes'),
+  ];
+
+  const results: Array<any> = [];
+
+  for (const dir of dirs) {
+    if (!existsSync(dir)) continue;
+
+    const files = readdirSync(dir).filter(
+      (f: string) => f.endsWith('.ts') || f.endsWith('.js') || f.endsWith('.mts') || f.endsWith('.mjs'),
+    );
+
+    for (const file of files) {
+      try {
+        const filePath = join(dir, file);
+        const fileUrl = pathToFileURL(filePath).href;
+        const mod = await import(fileUrl);
+        const def = mod.default || mod;
+
+        if (def && def.name && def.auth) {
+          results.push(def);
+        }
+      } catch {
+        // Skip files that fail to load
+      }
+    }
+  }
+
+  return results;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
