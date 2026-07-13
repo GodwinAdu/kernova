@@ -27,6 +27,16 @@ export interface AgentContext {
    */
   workspace: TeamWorkspace;
   /**
+   * Ask a remote agent from another organization.
+   * Uses the Kernova Agent Protocol (KAP) to communicate.
+   * The remote agent must be defined with defineRemoteAgent().
+   */
+  askRemote: (agentName: string, input: string, options?: {
+    capability?: string;
+    params?: Record<string, unknown>;
+    timeout?: number;
+  }) => Promise<string>;
+  /**
    * List of team members (available when in team context).
    * Useful for knowing who to delegate to.
    */
@@ -119,4 +129,6 @@ export interface AgentDefinition {
   permissions?: string[];
   /** Channels this agent listens on */
   channels?: string[];
+  /** Remote agents this agent can communicate with (cross-organization) */
+  remoteAgents?: string[];
 }

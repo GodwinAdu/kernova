@@ -3,7 +3,7 @@ title: "Step 2: Define the Agents"
 description: "Create four specialized agents with distinct personalities and expertise."
 ---
 
-# Step 2: Define the Agents
+
 
 Each agent is a specialist. They have different system prompts, different expertise, and think differently about problems.
 

@@ -22,6 +22,7 @@ export { defineChannel } from './define-channel.js';
 export { defineTask } from './define-task.js';
 export { definePlan } from './define-plan.js';
 export { defineTeam } from './define-team.js';
+export { defineRemoteAgent } from './define-remote-agent.js';
 
 // Types
 export type {
@@ -97,3 +98,14 @@ export type {
   TeamMemberDefinition,
   DelegationStrategy as TeamDelegationStrategy,
 } from './define-team.js';
+
+export type {
+  RemoteAgentDefinition,
+  RemoteAgentAuth,
+} from './define-remote-agent.js';
+
+export type {
+  ExposeAgentConfig,
+  ExposeAgentCapability,
+  ExposeAgentAuth,
+} from './expose-agent.js';

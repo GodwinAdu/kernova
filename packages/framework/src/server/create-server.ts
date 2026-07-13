@@ -846,6 +846,11 @@ function createAgentExecutor(
           const result = await agentTools.delegate(agentName, goal);
           return result.output || '';
         },
+        askRemote: async (agentName: string, input: string, options?: any) => {
+          // Remote agent calls via KAP — handled by the remote agent client
+          // In production, this would be wired to discovered remote agents
+          return `[Remote agent "${agentName}" not configured. Use defineRemoteAgent() to set up connections.]`;
+        },
         workspace: noopWorkspace,
         teamMembers: undefined,
         emit: (chunk) => {

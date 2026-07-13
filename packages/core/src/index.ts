@@ -127,6 +127,22 @@ export type {
   WorkspaceChangeEvent,
 } from './teams/index.js';
 
+export { RemoteAgentClient, AgentProtocolServer, AgentRegistry as KAPRegistry } from './agent-protocol/index.js';
+export type {
+  RemoteAgentClientOptions,
+  AgentServerConfig,
+  AgentRegistryConfig as KAPRegistryConfig,
+  AgentCard,
+  AgentAuthConfig,
+  AgentCapability,
+  AgentRequest,
+  AgentResponse,
+  AgentRegistryEntry,
+  RemoteAgentConnection,
+  RemoteAgentCredentials,
+  DiscoveryOptions,
+} from './agent-protocol/index.js';
+
 export { TrajectoryRecorder } from './trajectory/index.js';
 export type { TrajectoryRecorderConfig } from './trajectory/index.js';
 

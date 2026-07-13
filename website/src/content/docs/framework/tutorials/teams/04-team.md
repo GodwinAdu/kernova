@@ -3,7 +3,7 @@ title: "Step 3: Define the Team"
 description: "Wire the agents into a team with roles, delegation strategy, and shared workspace."
 ---
 
-# Step 3: Define the Team
+
 
 Now we connect the four agents into a team. The `defineTeam()` function declares who's on the team, what they're good at, and how tasks should flow between them.
 

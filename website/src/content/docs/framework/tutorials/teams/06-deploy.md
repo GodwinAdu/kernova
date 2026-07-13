@@ -3,7 +3,7 @@ title: "Step 5: Deploy & Next Steps"
 description: "Deploy your multi-agent team to production and explore advanced patterns."
 ---
 
-# Step 5: Deploy & Next Steps
+
 
 ## Deploy to Kernova Cloud
 

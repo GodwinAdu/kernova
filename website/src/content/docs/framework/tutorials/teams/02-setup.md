@@ -3,7 +3,7 @@ title: "Step 1: Project Setup"
 description: "Create a new Kernova project for your multi-agent coding team."
 ---
 
-# Step 1: Project Setup
+
 
 ## Create the Project
 

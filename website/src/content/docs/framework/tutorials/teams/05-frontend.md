@@ -3,7 +3,7 @@ title: "Step 4: Build the Chat UI"
 description: "Create a frontend that sends tasks to the team and shows real-time progress."
 ---
 
-# Step 4: Build the Chat UI
+
 
 Now let's build a frontend where users can give tasks to the team and watch the agents work in real-time.
 
