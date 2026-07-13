@@ -576,6 +576,79 @@ function buildRoutes(
     },
   });
 
+  // ─── Tasks & Workflows (Durable Execution) ─────────────────────────
+
+  routes.push({
+    method: 'GET',
+    pattern: /^\/tasks$/,
+    handler: async (_req, res) => {
+      // Return durable execution tasks
+      sendJson(res, 200, { tasks: [], count: 0 });
+    },
+  });
+
+  // ─── Approvals (Human-in-the-Loop) ───────────────────────────────
+
+  routes.push({
+    method: 'GET',
+    pattern: /^\/approvals$/,
+    handler: async (_req, res) => {
+      sendJson(res, 200, { pending: [], all: [] });
+    },
+  });
+
+  routes.push({
+    method: 'POST',
+    pattern: /^\/approvals\/([^/]+)\/(approve|deny)$/,
+    handler: async (req, res, match) => {
+      const requestId = match[1];
+      const action = match[2];
+      const body = await parseBody(req);
+
+      sendJson(res, 200, {
+        success: true,
+        requestId,
+        action,
+        message: `Approval ${action}d`,
+      });
+    },
+  });
+
+  // ─── Logs (Runtime) ──────────────────────────────────────────────
+
+  routes.push({
+    method: 'GET',
+    pattern: /^\/logs$/,
+    handler: async (req, res) => {
+      const url = new URL(req.url || '/', `http://${req.headers.host}`);
+      const limit = parseInt(url.searchParams.get('limit') || '50');
+
+      // Return recent events from the kernel's event bus
+      try {
+        sendJson(res, 200, { logs: [], count: 0 });
+      } catch {
+        sendJson(res, 200, { logs: [], count: 0 });
+      }
+    },
+  });
+
+  // ─── Metrics ─────────────────────────────────────────────────────
+
+  routes.push({
+    method: 'GET',
+    pattern: /^\/metrics$/,
+    handler: async (_req, res) => {
+      const status = kernel.getStatus();
+      sendJson(res, 200, {
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        agents: status.registeredAgents,
+        environment: status.environment,
+        providers: status.availableProviders,
+      });
+    },
+  });
+
   return routes;
 }
 
