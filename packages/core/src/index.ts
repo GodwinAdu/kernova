@@ -107,6 +107,26 @@ export type { ModelFallbackManagerConfig } from './fallback/index.js';
 export { SubAgentManager } from './subagents/index.js';
 export type { SubAgentManagerOptions } from './subagents/index.js';
 
+export { TeamRegistry, TeamExecutor, MessageBus, SharedWorkspace } from './teams/index.js';
+export type {
+  TeamConfig,
+  TeamMember,
+  DelegationStrategy,
+  TeamTask,
+  AgentMessage,
+  TeamExecuteOptions,
+  TeamExecutionTrace,
+  TeamProgressEvent,
+  WorkspaceEntry,
+  AgentExecutor as TeamAgentExecutor,
+  AgentExecutionContext as TeamAgentContext,
+  AgentExecutionResult as TeamAgentResult,
+  TeamExecutorOptions,
+  MessageBusOptions,
+  SharedWorkspaceOptions,
+  WorkspaceChangeEvent,
+} from './teams/index.js';
+
 export { TrajectoryRecorder } from './trajectory/index.js';
 export type { TrajectoryRecorderConfig } from './trajectory/index.js';
 

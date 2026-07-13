@@ -13,10 +13,47 @@ export interface AgentContext {
   recall: (query: string, options?: { limit?: number }) => Promise<MemoryResult[]>;
   /** Memory store helper */
   remember: (content: string, tags?: string[]) => Promise<void>;
-  /** Call another agent */
+  /** Call another agent (basic delegation) */
   delegate: (agentName: string, input: string) => Promise<AgentResponse>;
+  /**
+   * Delegate a task to a specific team member.
+   * Only available when running within a team context.
+   * Respects delegation depth limits and team membership.
+   */
+  delegateTo: (agentName: string, goal: string, context?: Record<string, unknown>) => Promise<string>;
+  /**
+   * Shared workspace — read/write state visible to all team members.
+   * Only available when running within a team context.
+   */
+  workspace: TeamWorkspace;
+  /**
+   * List of team members (available when in team context).
+   * Useful for knowing who to delegate to.
+   */
+  teamMembers?: Array<{ agent: string; role: string; description?: string; specialization?: string[] }>;
   /** Emit a streaming chunk */
   emit: (chunk: string) => void;
+  /** Log a message */
+  log: (message: string) => void;
+  /** Environment variables */
+  env: Record<string, string | undefined>;
+}
+
+export interface TeamWorkspace {
+  /** Get a value from the shared workspace */
+  get: <T = unknown>(key: string) => T | undefined;
+  /** Set a value in the shared workspace */
+  set: (key: string, value: unknown) => void;
+  /** Check if a key exists */
+  has: (key: string) => boolean;
+  /** Delete a key */
+  delete: (key: string) => void;
+  /** Get all workspace data */
+  getAll: () => Record<string, unknown>;
+  /** Merge data into an existing object key */
+  merge: (key: string, data: Record<string, unknown>) => void;
+  /** Append an item to an array key */
+  append: (key: string, item: unknown) => void;
 }
 
 export interface AgentResponse {

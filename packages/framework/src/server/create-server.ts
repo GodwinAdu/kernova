@@ -14,6 +14,7 @@ import { loadConfig } from './load-config.js';
 import { discoverAgents } from './discover-agents.js';
 import { discoverTools } from './discover-tools.js';
 import { discoverMemory } from './discover-memory.js';
+import { TeamExecutorLocal } from './team-executor-local.js';
 import type { KernovaFrameworkConfig } from '../types/config.js';
 import type { AgentDefinition as FrameworkAgentDef } from '../types/agent.js';
 import type { DiscoveredAgent } from './discover-agents.js';
@@ -168,14 +169,24 @@ export async function createServer(options: ServerOptions = {}) {
     }
   }
 
+  // Discover teams
+  const { discoverTeams: discoverTeamsFromDir } = await import('./discover-teams.js') as any;
+  let discoveredTeams: any[] = [];
+  try {
+    discoveredTeams = await discoverTeamsFromDir(projectRoot);
+  } catch {
+    // No teams directory — that's fine
+  }
+
   console.log(`\n  🧠 Kernova Framework Server`);
   console.log(`  ├─ Agents:  ${agents.length} discovered`);
   console.log(`  ├─ Tools:   ${tools.length} registered`);
+  console.log(`  ├─ Teams:   ${discoveredTeams.length} configured`);
   console.log(`  ├─ Memory:  ${memories.length} namespaces`);
   console.log(`  └─ Config:  ${config.name} v${config.version}\n`);
 
   // Build route table
-  const routes: RouteHandler[] = buildRoutes(kernel, agents, tools, memories, config, agentRouteMap, apiKey);
+  const routes: RouteHandler[] = buildRoutes(kernel, agents, tools, memories, config, agentRouteMap, apiKey, projectRoot);
 
   // Create HTTP server
   const server = createHttpServer(async (req, res) => {
@@ -237,13 +248,18 @@ export async function createServer(options: ServerOptions = {}) {
       console.log(`     POST /agents/${agent.route}/stream`);
     }
     console.log(`     POST /v1/intents`);
+    console.log(`     GET  /v1/teams`);
+    for (const team of discoveredTeams) {
+      const teamSlug = team.name.toLowerCase().replace(/\s+/g, '-');
+      console.log(`     POST /v1/teams/${teamSlug}/execute`);
+    }
     console.log(`     GET  /memory/search`);
     console.log(`     POST /memory`);
     console.log(`     GET  /health`);
     console.log('');
   });
 
-  return { server, kernel, config, agents, tools, memories };
+  return { server, kernel, config, agents, tools, memories, teams: discoveredTeams };
 }
 
 // ─── Route Builder ───────────────────────────────────────────────────────────
@@ -256,6 +272,7 @@ function buildRoutes(
   config: KernovaFrameworkConfig,
   agentRouteMap: Map<string, string>,
   apiKey: string | undefined,
+  projectRoot: string,
 ): RouteHandler[] {
   const routes: RouteHandler[] = [];
 
@@ -579,6 +596,134 @@ function buildRoutes(
   // ─── Tasks & Workflows (Durable Execution) ─────────────────────────
 
   routes.push({
+    method: 'POST',
+    pattern: /^\/v1\/teams\/([^/]+)\/execute$/,
+    handler: async (req, res, match) => {
+      const teamName = match[1];
+      const body = await parseBody(req);
+      const { goal, strategy, context, timeout } = body as {
+        goal?: string;
+        strategy?: string;
+        context?: Record<string, unknown>;
+        timeout?: number;
+      };
+
+      if (!goal) {
+        sendJson(res, 400, { error: 'Missing "goal" in request body' });
+        return;
+      }
+
+      // Discover teams from the project
+      const { discoverTeams } = await import('./discover-teams.js');
+      const teams = await discoverTeams(projectRoot);
+      const teamDef = teams.find(t => t.name.toLowerCase().replace(/\s+/g, '-') === teamName || t.name === teamName);
+
+      if (!teamDef) {
+        sendJson(res, 404, {
+          error: `Team "${teamName}" not found`,
+          available: teams.map(t => t.name.toLowerCase().replace(/\s+/g, '-')),
+        });
+        return;
+      }
+
+      // Build the agent executor that bridges team tasks → kernel agents
+      const teamAgentExecutor = async (agentName: string, input: string, ctx: any): Promise<{ content: string; metadata?: Record<string, unknown> }> => {
+        const defId = agentRouteMap.get(agentName);
+        if (!defId) {
+          return { content: `[Agent "${agentName}" not found]` };
+        }
+
+        const result = await kernel.submit({
+          goal: input,
+          intentType: 'action',
+          priority: 'medium',
+          owner: 'team-executor',
+          metadata: {
+            targetAgent: defId,
+            agentRoute: agentName,
+            teamExecution: true,
+            threadId: `team_${teamName}_${Date.now()}`,
+          },
+        });
+
+        const content: string = String(result.result?.summary || result.result?.data || '');
+        return { content, metadata: { intentId: result.id } };
+      };
+
+      // Create and execute the team
+      const executor = new TeamExecutorLocal(
+        {
+          id: teamName,
+          name: teamDef.name,
+          description: teamDef.description,
+          strategy: (strategy as any) || teamDef.strategy,
+          members: teamDef.members,
+          maxDelegationDepth: teamDef.maxDelegationDepth,
+          taskTimeout: timeout || teamDef.taskTimeout,
+          requireLeadApproval: teamDef.requireLeadApproval,
+          workspace: teamDef.workspace,
+        },
+        teamAgentExecutor,
+      );
+
+      // Set up SSE for progress tracking
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      });
+
+      const trace = await executor.execute({
+        goal,
+        context,
+        timeout: timeout || teamDef.taskTimeout,
+        onProgress: (event: any) => {
+          res.write(`data: ${JSON.stringify({ type: 'progress', event })}\n\n`);
+        },
+      });
+
+      // Send final result
+      res.write(`data: ${JSON.stringify({
+        type: 'result',
+        result: {
+          result: trace.result,
+          tasks: trace.tasks,
+          messages: trace.messages,
+          duration: trace.completedAt
+            ? new Date(trace.completedAt).getTime() - new Date(trace.startedAt).getTime()
+            : 0,
+          totalTasks: trace.tasks.length,
+        },
+      })}\n\n`);
+
+      res.write('data: [DONE]\n\n');
+      res.end();
+    },
+  });
+
+  routes.push({
+    method: 'GET',
+    pattern: /^\/v1\/teams$/,
+    handler: async (_req, res) => {
+      const { discoverTeams } = await import('./discover-teams.js');
+      const teams = await discoverTeams(projectRoot);
+      sendJson(res, 200, {
+        teams: teams.map(t => ({
+          name: t.name,
+          description: t.description,
+          strategy: t.strategy,
+          members: t.members.map(m => ({
+            agent: m.agent,
+            role: m.role,
+            description: m.description,
+            specialization: m.specialization,
+          })),
+        })),
+      });
+    },
+  });
+
+  routes.push({
     method: 'GET',
     pattern: /^\/tasks$/,
     handler: async (_req, res) => {
@@ -667,6 +812,16 @@ function createAgentExecutor(
 
     // If the agent has a custom handler, use it
     if (agentDef.handler) {
+      const noopWorkspace = {
+        get: <T = unknown>(_key: string): T | undefined => undefined,
+        set: (_key: string, _value: unknown) => {},
+        has: (_key: string) => false,
+        delete: (_key: string) => {},
+        getAll: () => ({}),
+        merge: (_key: string, _data: Record<string, unknown>) => {},
+        append: (_key: string, _item: unknown) => {},
+      };
+
       const result = await agentDef.handler({
         input: intent.goal,
         threadId: intent.metadata?.threadId || 'default',
@@ -687,9 +842,17 @@ function createAgentExecutor(
           const result = await agentTools.delegate(agentName, input);
           return { content: result.output || '', metadata: {} };
         },
+        delegateTo: async (agentName: string, goal: string) => {
+          const result = await agentTools.delegate(agentName, goal);
+          return result.output || '';
+        },
+        workspace: noopWorkspace,
+        teamMembers: undefined,
         emit: (chunk) => {
           agentTools.emit('model.token', { token: chunk, intentId: intent.id });
         },
+        log: (msg: string) => console.log(`  [agent:${agentDef.name}] ${msg}`),
+        env: process.env as Record<string, string | undefined>,
       });
 
       const content = typeof result === 'string' ? result : result.content;

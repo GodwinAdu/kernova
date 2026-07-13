@@ -14,6 +14,7 @@ export { useAgentStream } from './use-agent-stream.js';
 export { useMemory } from './use-memory.js';
 export { useThread } from './use-thread.js';
 export { useConnectionStatus } from './use-connection-status.js';
+export { useTeam } from './use-team.js';
 export { KernovaErrorBoundary } from './error-boundary.js';
 
 export type {
@@ -43,3 +44,10 @@ export type {
 export type {
   UseConnectionStatusReturn,
 } from './use-connection-status.js';
+
+export type {
+  UseTeamOptions,
+  UseTeamReturn,
+  TeamProgressEvent,
+  TeamExecutionResult,
+} from './use-team.js';

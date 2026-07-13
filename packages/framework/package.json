@@ -1,6 +1,6 @@
 {
   "name": "@kernova/framework",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Full-stack AI agent framework — frontend + agents in one project",
   "type": "module",
   "main": "./dist/index.js",

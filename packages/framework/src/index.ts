@@ -21,12 +21,15 @@ export { defineTrigger } from './define-trigger.js';
 export { defineChannel } from './define-channel.js';
 export { defineTask } from './define-task.js';
 export { definePlan } from './define-plan.js';
+export { defineTeam } from './define-team.js';
 
 // Types
 export type {
   AgentDefinition,
   AgentContext,
   AgentHandler,
+  AgentResponse,
+  TeamWorkspace,
 } from './types/agent.js';
 
 export type {
@@ -88,3 +91,9 @@ export type {
 export type {
   MCPServerConfig,
 } from './mcp/types.js';
+
+export type {
+  TeamDefinition,
+  TeamMemberDefinition,
+  DelegationStrategy as TeamDelegationStrategy,
+} from './define-team.js';
