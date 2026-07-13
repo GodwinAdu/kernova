@@ -131,21 +131,30 @@ export async function createServer(options: ServerOptions = {}) {
   // Register custom tools as plugins
   for (const tool of tools) {
     try {
+      // Use clean IDs that match OpenAI's pattern: ^[a-zA-Z0-9_-]+$
+      const cleanId = tool.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+
       await kernel.plugins.register({
-        id: `framework-tool:${tool.name}`,
-        name: tool.name,
+        id: `fw_${cleanId}`,
+        name: cleanId,
         version: '1.0.0',
         type: 'tool',
         tools: [{
-          id: tool.name,
-          name: tool.name,
+          id: cleanId,
+          name: cleanId,
           description: tool.definition.description,
-          parameters: Object.fromEntries(
-            Object.entries(tool.definition.parameters).map(([name, param]) => [
-              name,
-              { type: param.type, description: param.description, required: param.required ?? false },
-            ])
-          ),
+          parameters: {
+            type: 'object',
+            properties: Object.fromEntries(
+              Object.entries(tool.definition.parameters).map(([name, param]) => [
+                name,
+                { type: param.type, description: param.description },
+              ])
+            ),
+            required: Object.entries(tool.definition.parameters)
+              .filter(([_, param]) => param.required)
+              .map(([name]) => name),
+          },
           execute: async (params: Record<string, unknown>) => {
             return await tool.definition.execute(params as any, {
               env: process.env as Record<string, string | undefined>,
@@ -298,7 +307,7 @@ function buildRoutes(
           goal: input,
           intentType: 'action',
           priority: 'medium',
-          owner: user?.id || 'anonymous',
+          owner: user?.id || 'system',
           metadata: {
             threadId: threadId || `thread_${Date.now()}`,
             agentRoute: agent.route,
@@ -367,7 +376,7 @@ function buildRoutes(
             goal: input,
             intentType: 'action',
             priority: 'medium',
-            owner: user?.id || 'anonymous',
+            owner: user?.id || 'system',
             metadata: {
               threadId: threadId || `thread_${Date.now()}`,
               agentRoute: agent.route,
@@ -428,7 +437,7 @@ function buildRoutes(
         goal,
         intentType: 'action',
         priority: (priority as any) || 'medium',
-        owner: owner || 'anonymous',
+        owner: owner || 'system',
         metadata,
       });
 

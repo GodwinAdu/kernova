@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * useThread — Hook for managing conversation threads.
  *

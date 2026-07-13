@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * KernovaProvider — React context provider.
  *

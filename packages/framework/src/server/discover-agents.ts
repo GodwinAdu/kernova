@@ -7,8 +7,9 @@
  *   agents/sales/qualify.agent.ts → route: "sales/qualify"
  */
 
-import { resolve, relative, basename, extname } from 'node:path';
+import { resolve, relative } from 'node:path';
 import { readdirSync, statSync, existsSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import type { AgentDefinition } from '../types/agent.js';
 
 export interface DiscoveredAgent {
@@ -90,7 +91,7 @@ export async function discoverAgents(projectRoot: string): Promise<DiscoveredAge
 
   for (const { route, filePath } of agentFiles) {
     try {
-      const module = await import(filePath);
+      const module = await import(pathToFileURL(filePath).href);
       const definition = module.default || module;
 
       agents.push({

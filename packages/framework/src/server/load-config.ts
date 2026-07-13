@@ -4,6 +4,7 @@
 
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import type { KernovaFrameworkConfig } from '../types/config.js';
 
 const CONFIG_FILES = [
@@ -22,7 +23,8 @@ export async function loadConfig(projectRoot?: string): Promise<KernovaFramework
     const configPath = resolve(root, configFile);
     if (existsSync(configPath)) {
       try {
-        const module = await import(configPath);
+        const configUrl = pathToFileURL(configPath).href;
+        const module = await import(configUrl);
         const config = module.default || module;
         return config as KernovaFrameworkConfig;
       } catch (err) {

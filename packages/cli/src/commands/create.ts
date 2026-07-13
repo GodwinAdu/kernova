@@ -117,9 +117,9 @@ export default defineConfig({
 
   // Write package.json
   const deps: Record<string, string> = {
-    '@kernova/framework': '^0.1.0',
-    '@kernova/core': '^0.2.0',
-    '@kernova/cli': '^0.2.0',
+    '@kernova/framework': '^1.0.0',
+    '@kernova/core': '^1.0.0',
+    '@kernova/cli': '^1.0.0',
   };
 
   if (options.framework === 'next') {
@@ -255,8 +255,8 @@ const nextConfig: NextConfig = {
 export default nextConfig;
 `);
 
-    writeFileSync(resolve(projectDir, 'app', 'layout.tsx'), `import { KernovaProvider } from '@kernova/framework/react';
-import type { ReactNode } from 'react';
+    writeFileSync(resolve(projectDir, 'app', 'layout.tsx'), `import type { ReactNode } from 'react';
+import { Providers } from './providers';
 import './globals.css';
 
 export const metadata = {
@@ -268,11 +268,25 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <KernovaProvider>
+        <Providers>
           {children}
-        </KernovaProvider>
+        </Providers>
       </body>
     </html>
+  );
+}
+`);
+
+    writeFileSync(resolve(projectDir, 'app', 'providers.tsx'), `'use client';
+
+import { KernovaProvider } from '@kernova/framework/react';
+import type { ReactNode } from 'react';
+
+export function Providers({ children }: { children: ReactNode }) {
+  return (
+    <KernovaProvider>
+      {children}
+    </KernovaProvider>
   );
 }
 `);

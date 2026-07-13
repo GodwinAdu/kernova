@@ -75,51 +75,7 @@ export async function handleStart(args: string[]): Promise<void> {
 
   const processes: ChildProcess[] = [];
 
-  // Start agent backend
-  if (hasAgents) {
-    const agentProcess = spawn('node', [
-      '--input-type=module',
-    ], {
-      cwd: projectRoot,
-      stdio: 'pipe',
-      shell: false,
-      env: {
-        ...process.env,
-        NODE_ENV: 'production',
-        KERNOVA_PORT: String(options.agentPort),
-      },
-      // Feed the startup script via stdin
-    });
-
-    // Write the startup script via a generated entry point
-    const entryScript = generateProductionEntry(projectRoot, options.agentPort);
-    agentProcess.stdin?.write(entryScript);
-    agentProcess.stdin?.end();
-
-    agentProcess.stdout?.on('data', (data: Buffer) => {
-      const msg = data.toString().trim();
-      if (msg) console.log(`  [agents] ${msg}`);
-    });
-
-    agentProcess.stderr?.on('data', (data: Buffer) => {
-      const msg = data.toString().trim();
-      if (msg) console.error(`  [agents] ${msg}`);
-    });
-
-    agentProcess.on('exit', (code) => {
-      if (code !== 0) {
-        error(`Agent backend exited with code ${code}`);
-        processes.forEach(p => p.kill());
-        process.exit(1);
-      }
-    });
-
-    processes.push(agentProcess);
-    await sleep(1500); // Wait for agent backend to boot
-    success(`Agent backend running on port ${options.agentPort}`);
-  }
-
-  // Start Next.js frontend
+  // Start Next.js frontend FIRST (so Render detects its port as primary)
   if (hasApp) {
     const nextProcess = spawn('npx', ['next', 'start', '--port', String(options.port)], {
       cwd: projectRoot,
@@ -154,6 +110,50 @@ export async function handleStart(args: string[]): Promise<void> {
     });
 
     processes.push(nextProcess);
+    await sleep(2000); // Wait for Next.js to bind to port
+  }
+
+  // Start agent backend (on internal port, not exposed by Render)
+  if (hasAgents) {
+    const agentProcess = spawn('node', [
+      '--input-type=module',
+    ], {
+      cwd: projectRoot,
+      stdio: 'pipe',
+      shell: false,
+      env: {
+        ...process.env,
+        NODE_ENV: 'production',
+        KERNOVA_PORT: String(options.agentPort),
+      },
+    });
+
+    // Write the startup script via a generated entry point
+    const entryScript = generateProductionEntry(projectRoot, options.agentPort);
+    agentProcess.stdin?.write(entryScript);
+    agentProcess.stdin?.end();
+
+    agentProcess.stdout?.on('data', (data: Buffer) => {
+      const msg = data.toString().trim();
+      if (msg) console.log(`  [agents] ${msg}`);
+    });
+
+    agentProcess.stderr?.on('data', (data: Buffer) => {
+      const msg = data.toString().trim();
+      if (msg) console.error(`  [agents] ${msg}`);
+    });
+
+    agentProcess.on('exit', (code) => {
+      if (code !== 0) {
+        error(`Agent backend exited with code ${code}`);
+        processes.forEach(p => p.kill());
+        process.exit(1);
+      }
+    });
+
+    processes.push(agentProcess);
+    await sleep(1500); // Wait for agent backend to boot
+    success(`Agent backend running on port ${options.agentPort}`);
   }
 
   // Ready

@@ -15,7 +15,7 @@
  *   - User sees ONE URL: http://localhost:3000
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
@@ -275,16 +275,38 @@ function resolveAgentEntry(projectRoot: string): string {
   const entryDir = join(projectRoot, 'node_modules', '.kernova');
 
   // Generate the dev entry script
-  const { mkdirSync, writeFileSync } = require('node:fs');
   try { mkdirSync(entryDir, { recursive: true }); } catch {}
 
   writeFileSync(entryPath, `
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { createServer } from '@kernova/framework/server';
+
+// Load .env.local into process.env (like Next.js does)
+const projectRoot = '${projectRoot.replace(/\\/g, '/')}';
+const envFiles = ['.env.local', '.env'];
+for (const envFile of envFiles) {
+  const envPath = resolve(projectRoot, envFile);
+  if (existsSync(envPath)) {
+    const content = readFileSync(envPath, 'utf-8');
+    for (const line of content.split('\\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIndex = trimmed.indexOf('=');
+      if (eqIndex === -1) continue;
+      const key = trimmed.slice(0, eqIndex).trim();
+      const value = trimmed.slice(eqIndex + 1).trim();
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
+    }
+  }
+}
 
 const port = parseInt(process.env.KERNOVA_PORT || '4555');
 
 createServer({
-  projectRoot: '${projectRoot.replace(/\\/g, '/')}',
+  projectRoot,
   port,
 }).then(() => {
   // Server started

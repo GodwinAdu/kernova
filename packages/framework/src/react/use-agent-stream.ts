@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * useAgentStream — Streaming hook for real-time agent responses.
  *

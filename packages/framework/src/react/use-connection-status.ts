@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * useConnectionStatus — Monitor the connection to the Kernova backend.
  *

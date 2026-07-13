@@ -8,6 +8,7 @@
 
 import { resolve, relative } from 'node:path';
 import { readdirSync, existsSync, statSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import type { ToolDefinition } from '../types/tool.js';
 
 export interface DiscoveredTool {
@@ -59,7 +60,7 @@ export async function discoverTools(projectRoot: string): Promise<DiscoveredTool
 
     for (const filePath of files) {
       try {
-        const module = await import(filePath);
+        const module = await import(pathToFileURL(filePath).href);
         const definition = module.default || module;
 
         if (definition && definition.name && definition.execute) {

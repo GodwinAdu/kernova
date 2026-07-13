@@ -91,20 +91,36 @@ export async function handleBuild(args: string[]): Promise<void> {
       const distDir = join(projectRoot, 'dist');
       if (!existsSync(distDir)) mkdirSync(distDir, { recursive: true });
 
-      execSync('npx tsc --outDir dist --declaration --skipLibCheck', {
+      // Only compile agents/ and memory/ — not app/ (that's handled by next build)
+      execSync('npx tsc --outDir dist --declaration --skipLibCheck --noEmit false --include "agents/**/*" "memory/**/*" "kernova.config.ts" --exclude "app/**/*" "node_modules/**/*" ".next/**/*"', {
         cwd: projectRoot,
         stdio: options.verbose ? 'inherit' : 'pipe',
       });
       success('Agents compiled → dist/');
       buildSteps.push('agents');
     } catch (err) {
-      // Try with looser settings
+      // tsc with --include flag might not work, try alternative approach
       try {
-        execSync('npx tsc --outDir dist --skipLibCheck --noEmit false --declaration false', {
+        // Create a temporary tsconfig for agent compilation
+        const agentTsconfig = {
+          compilerOptions: {
+            target: "ES2022",
+            module: "ESNext",
+            moduleResolution: "bundler",
+            outDir: "./dist",
+            skipLibCheck: true,
+            declaration: false,
+            esModuleInterop: true,
+          },
+          include: ["agents/**/*", "memory/**/*", "kernova.config.ts"],
+          exclude: ["app/**/*", "node_modules/**/*", ".next/**/*"],
+        };
+        writeFileSync(join(projectRoot, 'tsconfig.build.json'), JSON.stringify(agentTsconfig, null, 2));
+        execSync('npx tsc --project tsconfig.build.json', {
           cwd: projectRoot,
           stdio: options.verbose ? 'inherit' : 'pipe',
         });
-        success('Agents compiled → dist/ (with warnings)');
+        success('Agents compiled → dist/');
         buildSteps.push('agents');
       } catch {
         error('Agent compilation failed. Run with --verbose to see errors.');

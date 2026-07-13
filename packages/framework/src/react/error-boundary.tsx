@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * KernovaErrorBoundary — React error boundary for agent interactions.
  *

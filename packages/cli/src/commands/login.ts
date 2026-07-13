@@ -17,7 +17,7 @@ import { printBanner, success, info, error } from '../ui.js';
 
 const CREDENTIALS_DIR = join(homedir(), '.kernova');
 const CREDENTIALS_FILE = join(CREDENTIALS_DIR, 'credentials.json');
-const CLOUD_URL = process.env.KERNOVA_CLOUD_URL || 'https://cloud.kernova.app';
+const CLOUD_URL = process.env.KERNOVA_CLOUD_URL || 'https://kernova-cloud.vercel.app';
 
 interface Credentials {
   apiKey: string;

@@ -145,33 +145,75 @@ async function deployToCloud(
   writeFileSync(join(deployDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
   success('Deploy package created');
 
-  // Step 3: Deploy (placeholder — will connect to real Kernova Cloud API)
+  // Step 3: Deploy to Kernova Cloud API
   console.log('');
   info('Uploading to Kernova Cloud...');
-  console.log('');
 
-  // Simulated deployment output
-  console.log('  ┌──────────────────────────────────────────────────┐');
-  console.log('  │  ✅ Deployed successfully                        │');
-  console.log('  ├──────────────────────────────────────────────────┤');
-  console.log(`  │  URL:     https://${name}.kernova.app           `);
-  console.log(`  │  Region:  ${options.region}                     `);
-  console.log('  │                                                  │');
+  // Load credentials
+  const { getCredentials } = await import('./login.js');
+  const credentials = getCredentials();
 
-  if (hasApp && !options.agentsOnly) {
-    console.log(`  │  App:     https://${name}.kernova.app          `);
-  }
-  if (hasAgents && !options.appOnly) {
-    console.log(`  │  Agents:  https://${name}.kernova.app/api/agents/*`);
-    console.log(`  │  Gateway: https://${name}.kernova.app/v1/*     `);
+  if (!credentials) {
+    error('Not logged in. Run "kernova login" first.');
+    process.exit(1);
   }
 
-  console.log('  └──────────────────────────────────────────────────┘');
-  console.log('');
+  try {
+    // Try to detect git remote URL for the project
+    let repoUrl: string | undefined;
+    try {
+      const { execSync: exec } = await import('node:child_process');
+      const remote = exec('git remote get-url origin', { cwd: projectRoot, encoding: 'utf-8' }).trim();
+      if (remote && remote.includes('github.com')) {
+        repoUrl = remote;
+      }
+    } catch {}
 
-  info('Your app is live. One URL for everything:');
-  console.log(`    https://${name}.kernova.app`);
-  console.log('');
+    const response = await fetch(`${credentials.cloudUrl}/api/deploy`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${credentials.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        projectName: name,
+        manifest,
+        config: { deploy: { region: options.region } },
+        commitMsg: `Deployed via kernova deploy`,
+        repo: repoUrl,
+      }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+      error(`Deploy failed: ${(data as any).error || response.statusText}`);
+      process.exit(1);
+    }
+
+    const data = await response.json() as any;
+
+    console.log('');
+    console.log('  ┌──────────────────────────────────────────────────┐');
+    console.log('  │  ✅ Deployed successfully                        │');
+    console.log('  ├──────────────────────────────────────────────────┤');
+    console.log(`  │  URL:     ${data.deployment?.url || `https://${name}.kernova.app`}`);
+    console.log(`  │  Status:  ${data.deployment?.status || 'queued'}`);
+    console.log(`  │  ID:      ${data.deployment?.id || '—'}`);
+    console.log('  └──────────────────────────────────────────────────┘');
+    console.log('');
+
+    if (data.message) {
+      info(data.message);
+    }
+    console.log('');
+  } catch (err: any) {
+    if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
+      error('Cannot reach Kernova Cloud. Check your internet connection.');
+    } else {
+      error(`Deploy failed: ${err.message}`);
+    }
+    process.exit(1);
+  }
 }
 
 function deployDocker(

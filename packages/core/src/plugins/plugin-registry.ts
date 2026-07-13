@@ -301,7 +301,9 @@ export class PluginRegistry {
 
   private registerTool(tool: ToolDefinition, pluginId: string): void {
     const fullId = tool.id.includes(':') ? tool.id : `${pluginId}:${tool.id}`;
-    this.tools.set(fullId, { ...tool, id: fullId });
+    // Sanitize the ID to be compatible with OpenAI's function name pattern: ^[a-zA-Z0-9_-]+$
+    const sanitizedId = fullId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    this.tools.set(sanitizedId, { ...tool, id: sanitizedId });
   }
 
   private registerMiddleware(hook: MiddlewareHook): void {

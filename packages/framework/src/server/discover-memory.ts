@@ -4,6 +4,7 @@
 
 import { resolve } from 'node:path';
 import { readdirSync, existsSync, statSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import type { MemoryDefinition } from '../types/memory.js';
 
 export interface DiscoveredMemory {
@@ -36,7 +37,7 @@ export async function discoverMemory(projectRoot: string): Promise<DiscoveredMem
     if (!MEMORY_EXTENSIONS.some((ext) => entry.endsWith(ext))) continue;
 
     try {
-      const module = await import(fullPath);
+      const module = await import(pathToFileURL(fullPath).href);
       const definition = module.default || module;
 
       if (definition && definition.name && definition.schema) {

@@ -101,8 +101,8 @@ export default defineConfig({
 
 function generatePackageJson(name: string, framework: string): string {
   const deps: Record<string, string> = {
-    '@kernova/framework': '^0.1.0',
-    '@kernova/core': '^0.2.0',
+    '@kernova/framework': '^1.0.0',
+    '@kernova/core': '^1.0.0',
   };
 
   const devDeps: Record<string, string> = {

@@ -1,6 +1,6 @@
 {
   "name": "@kernova/framework",
-  "version": "1.0.0",
+  "version": "1.0.6",
   "description": "Full-stack AI agent framework — frontend + agents in one project",
   "type": "module",
   "main": "./dist/index.js",
@@ -8,19 +8,24 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./react": {
       "types": "./dist/react/index.d.ts",
-      "import": "./dist/react/index.js"
+      "import": "./dist/react/index.js",
+      "default": "./dist/react/index.js"
     },
     "./server": {
       "types": "./dist/server/index.d.ts",
-      "import": "./dist/server/index.js"
+      "import": "./dist/server/index.js",
+      "require": "./dist/server/index.js",
+      "default": "./dist/server/index.js"
     },
     "./config": {
       "types": "./dist/config/index.d.ts",
-      "import": "./dist/config/index.js"
+      "import": "./dist/config/index.js",
+      "default": "./dist/config/index.js"
     }
   },
   "scripts": {

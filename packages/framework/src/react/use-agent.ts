@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * useAgent — The primary hook for talking to a Kernova agent.
  *

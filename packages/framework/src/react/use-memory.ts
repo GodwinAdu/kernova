@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * useMemory — Hook for interacting with agent memory from the frontend.
  *

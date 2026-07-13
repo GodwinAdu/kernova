@@ -4,6 +4,9 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { globalsCss } from './templates/globals-css.js';
+import { landingPage } from './templates/landing-page.js';
+import { chatPage } from './templates/chat-page.js';
 
 export interface ScaffoldOptions {
   name: string;
@@ -57,10 +60,12 @@ export function scaffoldProject(options: ScaffoldOptions): void {
   // Frontend
   if (framework === 'next') {
     writeFileSync(join(directory, 'app', 'layout.tsx'), layoutTemplate(name));
+    writeFileSync(join(directory, 'app', 'providers.tsx'), providersTemplate());
     writeFileSync(join(directory, 'app', 'page.tsx'), homePageTemplate(name));
     writeFileSync(join(directory, 'app', 'chat', 'page.tsx'), chatPageTemplate());
     writeFileSync(join(directory, 'app', 'globals.css'), globalsCssTemplate());
     writeFileSync(join(directory, 'next.config.ts'), nextConfigTemplate());
+    writeFileSync(join(directory, 'postcss.config.mjs'), postcssTemplate());
   }
 }
 
@@ -94,21 +99,22 @@ export default defineConfig({
 
 function packageJsonTemplate(name: string, framework: string): string {
   const deps: Record<string, string> = {
-    '@kernova/framework': '^0.1.0',
-    '@kernova/core': '^0.2.0',
-    '@kernova/cli': '^0.2.0',
+    '@kernova/framework': '^1.0.0',
+    '@kernova/core': '^1.0.0',
+    '@kernova/cli': '^1.0.0',
   };
 
-  const devDeps: Record<string, string> = {
-    'typescript': '^5.5.0',
-    '@types/node': '^22.0.0',
-    '@types/react': '^19.0.0',
-  };
+  const devDeps: Record<string, string> = {};
 
   if (framework === 'next') {
     deps['next'] = '^16.0.0';
     deps['react'] = '^19.0.0';
     deps['react-dom'] = '^19.0.0';
+    deps['@tailwindcss/postcss'] = '^4';
+    deps['tailwindcss'] = '^4';
+    deps['typescript'] = '^5.5.0';
+    deps['@types/node'] = '^22.0.0';
+    deps['@types/react'] = '^19.0.0';
   }
 
   return JSON.stringify({
@@ -123,7 +129,6 @@ function packageJsonTemplate(name: string, framework: string): string {
       deploy: 'kernova deploy',
     },
     dependencies: deps,
-    devDependencies: devDeps,
   }, null, 2) + '\n';
 }
 
@@ -135,8 +140,8 @@ function tsconfigTemplate(framework: string): string {
   return JSON.stringify({
     compilerOptions: {
       target: 'ES2022',
-      module: 'NodeNext',
-      moduleResolution: 'NodeNext',
+      module: 'ESNext',
+      moduleResolution: 'bundler',
       lib,
       jsx: framework !== 'none' ? 'react-jsx' : undefined,
       strict: true,
@@ -155,6 +160,9 @@ function tsconfigTemplate(framework: string): string {
 function envTemplate(): string {
   return `# AI Model Configuration
 OPENAI_API_KEY=your-openai-key-here
+
+# Web Search (Tavily — get free key at https://tavily.com)
+TAVILY_API_KEY=your-tavily-key-here
 
 # Kernova
 # KERNOVA_URL=https://your-app.kernova.app  (set after deploying)
@@ -245,28 +253,115 @@ function webSearchToolTemplate(): string {
 
 export default defineTool({
   name: 'web-search',
-  description: 'Search the web for current information',
+  description: 'Search the web for current, real-time information. Returns titles, URLs, and content snippets from search results.',
   parameters: {
     query: {
       type: 'string',
       description: 'The search query',
       required: true,
     },
-    limit: {
-      type: 'number',
-      description: 'Max results to return',
-      default: 5,
-    },
   },
-  execute: async ({ query, limit }, ctx) => {
-    ctx.log(\`Searching for: \${query}\`);
+  execute: async ({ query }, ctx) => {
+    ctx.log(\`Searching web for: \${query}\`);
 
-    // TODO: Replace with your preferred search API
-    return {
-      results: [
-        { title: \`Result for "\${query}"\`, url: 'https://example.com', snippet: 'Example result' },
-      ],
-    };
+    // If Tavily key is available, use it (better results)
+    const tavilyKey = ctx.env.TAVILY_API_KEY;
+    if (tavilyKey && tavilyKey !== 'your-tavily-key-here') {
+      try {
+        const res = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: tavilyKey,
+            query: query as string,
+            max_results: 5,
+            include_answer: true,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json() as any;
+          return {
+            answer: data.answer || null,
+            results: (data.results || []).map((r: any) => ({
+              title: r.title,
+              url: r.url,
+              content: r.content?.slice(0, 300),
+            })),
+          };
+        }
+      } catch {}
+    }
+
+    // Fallback: DuckDuckGo instant answer API (free, no key needed)
+    try {
+      const encoded = encodeURIComponent(query as string);
+      const res = await fetch(\`https://api.duckduckgo.com/?q=\${encoded}&format=json&no_html=1&skip_disambig=1\`);
+      if (res.ok) {
+        const data = await res.json() as any;
+        const results: Array<{ title: string; url: string; content: string }> = [];
+
+        // Abstract (main answer)
+        if (data.Abstract) {
+          results.push({ title: data.Heading || 'Answer', url: data.AbstractURL || '', content: data.Abstract });
+        }
+
+        // Related topics
+        if (data.RelatedTopics) {
+          for (const topic of data.RelatedTopics.slice(0, 5)) {
+            if (topic.Text && topic.FirstURL) {
+              results.push({ title: topic.Text.slice(0, 80), url: topic.FirstURL, content: topic.Text });
+            }
+          }
+        }
+
+        if (results.length > 0) {
+          return { answer: data.Abstract || null, results };
+        }
+      }
+    } catch {}
+
+    // Final fallback: scrape DuckDuckGo HTML
+    try {
+      const encoded = encodeURIComponent(query as string);
+      const res = await fetch(\`https://html.duckduckgo.com/html/?q=\${encoded}\`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; KernovaBot/1.0)' },
+      });
+      if (res.ok) {
+        const html = await res.text();
+        const results: Array<{ title: string; url: string; content: string }> = [];
+
+        // Simple regex extraction of search results
+        const resultRegex = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([^<]*)<\\/a>[\\s\\S]*?<a[^>]*class="result__snippet"[^>]*>([^<]*)/g;
+        let match;
+        while ((match = resultRegex.exec(html)) !== null && results.length < 5) {
+          results.push({
+            title: match[2].trim(),
+            url: match[1],
+            content: match[3].trim(),
+          });
+        }
+
+        // Alternative simpler extraction
+        if (results.length === 0) {
+          const snippetRegex = /class="result__snippet"[^>]*>([^<]+)/g;
+          const titleRegex = /class="result__a"[^>]*>([^<]+)/g;
+          const titles: string[] = [];
+          const snippets: string[] = [];
+          let m;
+          while ((m = titleRegex.exec(html)) !== null) titles.push(m[1]);
+          while ((m = snippetRegex.exec(html)) !== null) snippets.push(m[1]);
+          for (let i = 0; i < Math.min(titles.length, snippets.length, 5); i++) {
+            results.push({ title: titles[i], url: '', content: snippets[i] });
+          }
+        }
+
+        if (results.length > 0) {
+          return { results };
+        }
+      }
+    } catch {}
+
+    return { results: [], message: 'No results found. Try a different query.' };
   },
 });
 `;
@@ -321,8 +416,8 @@ export default defineMemory({
 // ─── Frontend Templates ──────────────────────────────────────────────────────
 
 function layoutTemplate(name: string): string {
-  return `import { KernovaProvider } from '@kernova/framework/react';
-import type { ReactNode } from 'react';
+  return `import type { ReactNode } from 'react';
+import { Providers } from './providers';
 import './globals.css';
 
 export const metadata = {
@@ -332,11 +427,11 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body>
-        <KernovaProvider>
+    <html lang="en" suppressHydrationWarning>
+      <body className="antialiased">
+        <Providers>
           {children}
-        </KernovaProvider>
+        </Providers>
       </body>
     </html>
   );
@@ -344,250 +439,44 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 `;
 }
 
-function homePageTemplate(name: string): string {
-  return `import Link from 'next/link';
+function providersTemplate(): string {
+  return `'use client';
 
-export default function HomePage() {
+import { KernovaProvider } from '@kernova/framework/react';
+import type { ReactNode } from 'react';
+
+export function Providers({ children }: { children: ReactNode }) {
   return (
-    <main className="container">
-      <h1>${name}</h1>
-      <p>Your AI-powered app is running. Agents are ready.</p>
-      <Link href="/chat" className="btn">
-        Open Chat →
-      </Link>
-    </main>
+    <KernovaProvider>
+      {children}
+    </KernovaProvider>
   );
 }
 `;
+}
+
+function homePageTemplate(name: string): string {
+  return landingPage(name);
 }
 
 function chatPageTemplate(): string {
-  return `'use client';
-
-import { useAgentStream } from '@kernova/framework/react';
-import { useState, useRef, useEffect } from 'react';
-
-export default function ChatPage() {
-  const { messages, send, isStreaming, streamingContent } = useAgentStream('assistant');
-  const [input, setInput] = useState('');
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingContent]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isStreaming) return;
-    send(input.trim());
-    setInput('');
-  };
-
-  return (
-    <main className="chat-container">
-      <header className="chat-header">
-        <h1>Chat</h1>
-      </header>
-
-      <div className="messages">
-        {messages.length === 0 && (
-          <div className="empty-state">
-            <p>Send a message to start talking to your agent.</p>
-          </div>
-        )}
-
-        {messages.map((msg) => (
-          <div key={msg.id} className={\`message \${msg.role}\`}>
-            <div className="message-role">{msg.role === 'user' ? 'You' : 'Agent'}</div>
-            <div className="message-content">{msg.content}</div>
-          </div>
-        ))}
-
-        {isStreaming && (
-          <div className="message assistant streaming">
-            <div className="message-role">Agent</div>
-            <div className="message-content">{streamingContent || '...'}</div>
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
-      </div>
-
-      <form onSubmit={handleSubmit} className="input-form">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Type a message..."
-          disabled={isStreaming}
-          autoFocus
-        />
-        <button type="submit" disabled={isStreaming || !input.trim()}>
-          Send
-        </button>
-      </form>
-    </main>
-  );
-}
-`;
+  return chatPage;
 }
 
 function globalsCssTemplate(): string {
-  return `* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+  return globalsCss;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #fafafa;
-  color: #111;
-}
+function postcssTemplate(): string {
+  return `const config = {
+  plugins: {
+    "@tailwindcss/postcss": {},
+  },
+};
 
-.container {
-  max-width: 600px;
-  margin: 0 auto;
-  padding: 4rem 2rem;
-  text-align: center;
-}
-
-.container h1 {
-  font-size: 2.5rem;
-  margin-bottom: 1rem;
-}
-
-.container p {
-  color: #666;
-  margin-bottom: 2rem;
-}
-
-.btn {
-  display: inline-block;
-  padding: 0.75rem 2rem;
-  background: #000;
-  color: #fff;
-  text-decoration: none;
-  border-radius: 8px;
-  font-weight: 500;
-  transition: opacity 0.2s;
-}
-
-.btn:hover {
-  opacity: 0.8;
-}
-
-/* Chat Page */
-.chat-container {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.chat-header {
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid #eee;
-}
-
-.chat-header h1 {
-  font-size: 1.25rem;
-}
-
-.messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1.5rem;
-}
-
-.empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: #999;
-}
-
-.message {
-  margin-bottom: 1.5rem;
-  max-width: 80%;
-}
-
-.message.user {
-  margin-left: auto;
-}
-
-.message-role {
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: #999;
-  margin-bottom: 0.25rem;
-}
-
-.message-content {
-  padding: 0.75rem 1rem;
-  border-radius: 12px;
-  line-height: 1.5;
-}
-
-.message.user .message-content {
-  background: #000;
-  color: #fff;
-}
-
-.message.assistant .message-content {
-  background: #f0f0f0;
-}
-
-.message.streaming .message-content {
-  opacity: 0.7;
-}
-
-.input-form {
-  display: flex;
-  gap: 0.5rem;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid #eee;
-}
-
-.input-form input {
-  flex: 1;
-  padding: 0.75rem 1rem;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 1rem;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.input-form input:focus {
-  border-color: #000;
-}
-
-.input-form button {
-  padding: 0.75rem 1.5rem;
-  background: #000;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.input-form button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.input-form button:hover:not(:disabled) {
-  opacity: 0.8;
-}
+export default config;
 `;
 }
-
 function nextConfigTemplate(): string {
   return `import type { NextConfig } from 'next';
 
