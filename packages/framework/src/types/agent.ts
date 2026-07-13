@@ -65,4 +65,21 @@ export interface AgentDefinition {
   mcp?: string[];
   /** Schedule for autonomous execution */
   schedule?: string | { cron: string; goal: string }[];
+  /** Proactive triggers */
+  triggers?: Array<{
+    event: string;
+    goal: string;
+    priority?: 'critical' | 'high' | 'medium' | 'low';
+    cooldown?: number;
+  }>;
+  /** Budget limits for this agent */
+  budget?: {
+    maxTokens?: number;
+    maxCostUsd?: number;
+    maxRequestsPerMinute?: number;
+  };
+  /** Permissions (what this agent is allowed to do) */
+  permissions?: string[];
+  /** Channels this agent listens on */
+  channels?: string[];
 }
