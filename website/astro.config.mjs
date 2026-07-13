@@ -51,6 +51,19 @@ export default defineConfig({
           ],
         },
         {
+          label: 'More Tutorials',
+          items: [
+            { label: 'Personal Assistant: Intro', slug: 'framework/tutorials/assistant/01-intro' },
+            { label: 'Personal Assistant: Create', slug: 'framework/tutorials/assistant/02-create-project' },
+            { label: 'Personal Assistant: Personality', slug: 'framework/tutorials/assistant/03-personality' },
+            { label: 'Personal Assistant: Memory', slug: 'framework/tutorials/assistant/04-memory' },
+            { label: 'Personal Assistant: Chat UI', slug: 'framework/tutorials/assistant/05-chat-ui' },
+            { label: 'Personal Assistant: Deploy', slug: 'framework/tutorials/assistant/06-deploy' },
+            { label: 'Research Pipeline (overview)', slug: 'framework/tutorial-research-pipeline' },
+            { label: 'DevOps Agent (overview)', slug: 'framework/tutorial-devops-agent' },
+          ],
+        },
+        {
           label: 'Guides',
           items: [
 
