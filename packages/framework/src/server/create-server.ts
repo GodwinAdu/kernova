@@ -918,10 +918,13 @@ function createAgentExecutor(
  * Execute a remote agent call via KAP.
  *
  * Resolution order:
- * 1. Check for defineRemoteAgent() files in agents/remotes/
- * 2. If endpoint is set → call directly with provided auth
- * 3. If discover: true → route through Kernova Cloud proxy
- * 4. If KERNOVA_CLOUD_URL is set → always route through proxy
+ * 1. If defineRemoteAgent has endpoint + auth → call directly (external agent)
+ * 2. Otherwise → route through Kernova Cloud proxy using the project's API key
+ *    (the same key from `kernova login` — no extra keys needed)
+ *
+ * For Kernova Cloud agents: the developer clicks "Connect" in the dashboard,
+ * and `ctx.askRemote()` just works. Kernova Cloud uses the project's identity
+ * to look up the connection and proxy the request.
  */
 async function executeRemoteAgentCall(
   projectRoot: string,
@@ -933,12 +936,7 @@ async function executeRemoteAgentCall(
   const remoteAgents = await discoverRemoteAgents(projectRoot);
   const remoteDef = remoteAgents.find(r => r.name === agentName);
 
-  // Determine the proxy URL
-  const cloudUrl = process.env.KERNOVA_CLOUD_URL || 'https://kernova-cloud.vercel.app';
-  const connectionToken = process.env[`KAP_TOKEN_${agentName.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`]
-    || process.env.KAP_CONNECTION_TOKEN;
-
-  // If we have a direct endpoint (from defineRemoteAgent), call it directly
+  // If we have a direct endpoint + auth (external non-Kernova agent), call directly
   if (remoteDef?.endpoint && remoteDef.auth?.token) {
     return await callRemoteAgentDirect(
       { name: remoteDef.name, endpoint: remoteDef.endpoint, auth: remoteDef.auth },
@@ -948,16 +946,20 @@ async function executeRemoteAgentCall(
   }
 
   // Otherwise, route through Kernova Cloud proxy
-  if (connectionToken) {
-    return await callRemoteAgentViaProxy(cloudUrl, connectionToken, agentName, input, options);
+  // Auth: use the project's KERNOVA_API_KEY (from `kernova login` or dashboard env)
+  // Kernova Cloud identifies the calling project and checks its connections
+  const cloudUrl = process.env.KERNOVA_CLOUD_URL || 'https://kernova-cloud.vercel.app';
+  const projectApiKey = process.env.KERNOVA_API_KEY || process.env.KERNOVA_PROJECT_KEY;
+
+  if (projectApiKey) {
+    return await callRemoteAgentViaProxy(cloudUrl, projectApiKey, agentName, input, options);
   }
 
-  // If no config at all, return helpful error
-  if (remoteDef) {
-    return `[Remote agent "${agentName}" is defined but has no auth token. Set KAP_TOKEN_${agentName.toUpperCase().replace(/[^A-Z0-9]/g, '_')} in your environment, or add a token to defineRemoteAgent().]`;
-  }
-
-  return `[Remote agent "${agentName}" not found. Define it with defineRemoteAgent() in agents/remotes/${agentName}.ts, or connect via Kernova Cloud dashboard.]`;
+  // No API key at all — give helpful error
+  return `[Cannot reach remote agent "${agentName}". Either:\n` +
+    `  1. Connect via Kernova Cloud dashboard (recommended — no keys needed)\n` +
+    `  2. Set KERNOVA_API_KEY in your environment (from kernova login)\n` +
+    `  3. Use defineRemoteAgent() with endpoint + auth for external agents]`;
 }
 
 /**

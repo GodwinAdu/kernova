@@ -1,42 +1,43 @@
 /**
  * defineRemoteAgent — Connect to agents from other organizations.
  *
- * Enables cross-company agent communication via the Kernova Agent Protocol (KAP).
- * Your agent can discover, authenticate, and talk to any agent that implements KAP.
+ * For agents on Kernova Cloud: NO API key needed. Just declare the connection
+ * and connect via the dashboard. Kernova Cloud authenticates both sides.
  *
- * Usage:
- *   // agents/remotes/vercel.ts
+ * For external agents (not on Kernova Cloud): provide endpoint + auth.
+ *
+ * Usage (Kernova Cloud — no key needed):
+ *   // agents/remotes/stripe.ts
  *   import { defineRemoteAgent } from '@kernova/framework';
  *
  *   export default defineRemoteAgent({
- *     name: 'vercel',
- *     description: 'Vercel deployment agent — deploy and manage projects',
- *     endpoint: 'https://agents.vercel.com',
+ *     name: 'stripe',
+ *     description: 'Stripe billing agent',
+ *     // No endpoint, no auth — connected via Kernova Cloud dashboard
+ *   });
+ *
+ * Usage (External agent — needs endpoint + auth):
+ *   // agents/remotes/custom.ts
+ *   import { defineRemoteAgent } from '@kernova/framework';
+ *
+ *   export default defineRemoteAgent({
+ *     name: 'partner-agent',
+ *     description: 'Partner company agent',
+ *     endpoint: 'https://partner.com/agent',
  *     auth: {
- *       type: 'api-key',
- *       token: process.env.VERCEL_AGENT_KEY!,
+ *       type: 'bearer',
+ *       token: process.env.PARTNER_TOKEN!,
  *     },
  *   });
  *
  * Then in your agent:
  *   export default defineAgent({
  *     name: 'my-agent',
- *     remoteAgents: ['vercel', 'stripe'],
+ *     instructions: '...',
  *     handler: async (ctx) => {
- *       const result = await ctx.askRemote('vercel', 'Deploy my-app to production');
+ *       // Works for both Kernova Cloud and external agents
+ *       const result = await ctx.askRemote('stripe', 'Get subscription status');
  *       return { content: result };
- *     },
- *   });
- *
- * Or with auto-discovery from the Kernova Registry:
- *   import { defineRemoteAgent } from '@kernova/framework';
- *
- *   export default defineRemoteAgent({
- *     name: 'github-copilot',
- *     discover: true, // Find from Kernova's global registry
- *     auth: {
- *       type: 'oauth2',
- *       token: process.env.GITHUB_TOKEN!,
  *     },
  *   });
  */
@@ -60,14 +61,18 @@ export interface RemoteAgentDefinition {
   name: string;
   /** Description of what this remote agent does */
   description?: string;
-  /** Direct endpoint URL (skip discovery) */
+  /**
+   * Direct endpoint URL (only for agents NOT on Kernova Cloud).
+   * If omitted, the framework routes through Kernova Cloud's proxy automatically.
+   */
   endpoint?: string;
-  /** Discover from the Kernova Agent Registry */
-  discover?: boolean;
-  /** Remote agent ID (if different from name, for registry lookup) */
+  /**
+   * Authentication credentials (only for agents NOT on Kernova Cloud).
+   * For Kernova Cloud agents: leave this empty — the platform handles auth.
+   */
+  auth?: RemoteAgentAuth;
+  /** Remote agent ID in the registry (if different from name) */
   remoteId?: string;
-  /** Authentication credentials */
-  auth: RemoteAgentAuth;
   /** Default timeout in ms (default: 30000) */
   timeout?: number;
   /** Max retries (default: 2) */
@@ -79,18 +84,18 @@ export interface RemoteAgentDefinition {
 }
 
 /**
- * Define a connection to a remote agent from another organization.
+ * Define a connection to a remote agent.
+ *
+ * For Kernova Cloud agents: just provide a name. Connect via the dashboard.
+ * For external agents: provide endpoint + auth.
  */
 export function defineRemoteAgent(definition: RemoteAgentDefinition): RemoteAgentDefinition {
   if (!definition.name) {
     throw new Error('defineRemoteAgent: "name" is required');
   }
-  if (!definition.endpoint && !definition.discover) {
-    throw new Error('defineRemoteAgent: either "endpoint" or "discover: true" is required');
-  }
-  if (!definition.auth) {
-    throw new Error('defineRemoteAgent: "auth" is required');
-  }
+
+  // External agents need endpoint + auth
+  // Kernova Cloud agents need neither (the platform handles it)
 
   return {
     timeout: 30000,
