@@ -14,6 +14,8 @@ export { defineTool } from './define-tool.js';
 export { defineMemory } from './define-memory.js';
 export { defineConfig } from './config/index.js';
 export { defineMiddleware } from './define-middleware.js';
+export { defineSkill } from './skills/define-skill.js';
+export { defineMCP } from './mcp/define-mcp.js';
 
 // Types
 export type {

@@ -59,6 +59,10 @@ export interface AgentDefinition {
   temperature?: number;
   /** Capabilities this agent has */
   capabilities?: string[];
+  /** Skills to load (skill names or paths) */
+  skills?: string[];
+  /** MCP servers this agent needs */
+  mcp?: string[];
   /** Schedule for autonomous execution */
   schedule?: string | { cron: string; goal: string }[];
 }
