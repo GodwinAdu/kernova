@@ -5,11 +5,18 @@ description: Build systems where multiple agents collaborate, delegate, and spec
 
 # Multi-Agent Architecture
 
-Real-world applications often need multiple agents working together. A support bot delegates billing questions to a billing agent. A research pipeline chains researcher → analyzer → writer.
+Real-world applications often need multiple agents working together. A support bot delegates billing questions to a billing agent. A development team has a lead who assigns tasks to specialists. A research pipeline chains researcher → analyzer → writer.
 
-## Multiple Agents in One Project
+Kernova gives you **two approaches**:
 
-Just create multiple `.agent.ts` files:
+1. **Manual delegation** — Use `ctx.delegate()` to call agents from handlers (full control)
+2. **Teams** — Use `defineTeam()` to let the framework orchestrate multiple agents automatically
+
+---
+
+## Approach 1: Manual Delegation (`ctx.delegate`)
+
+Create multiple `.agent.ts` files and delegate between them:
 
 ```
 agents/
@@ -20,9 +27,7 @@ agents/
     └── ...
 ```
 
-Each agent has its own endpoint. Your frontend can call any of them directly.
-
-## Pattern 1: Router Agent
+### Router Pattern
 
 A single entry point that delegates to specialists:
 
@@ -36,117 +41,55 @@ export default defineAgent({
     You are a routing agent. Based on the user's message, delegate to the right specialist:
     - For product questions, technical issues → delegate to "support"
     - For billing, payments, subscriptions → delegate to "billing"
-    - For everything else → answer directly with a brief helpful response
+    - For everything else → answer directly
   `,
   handler: async (ctx) => {
     const input = ctx.input.toLowerCase();
 
-    if (input.includes('bill') || input.includes('payment') || input.includes('subscription') || input.includes('charge')) {
-      return await ctx.delegate('billing', ctx.input);
+    if (input.includes('bill') || input.includes('payment') || input.includes('subscription')) {
+      const result = await ctx.delegate('billing', ctx.input);
+      return result;
     }
 
-    if (input.includes('bug') || input.includes('error') || input.includes('how do i') || input.includes('help')) {
-      return await ctx.delegate('support', ctx.input);
+    if (input.includes('bug') || input.includes('error') || input.includes('help')) {
+      const result = await ctx.delegate('support', ctx.input);
+      return result;
     }
 
-    // Default: handle directly
-    return { content: "I can help with support or billing questions. What do you need?" };
+    return { content: "I can help with support or billing. What do you need?" };
   },
 });
 ```
 
-```typescript
-// agents/support.agent.ts
-import { defineAgent } from '@kernova/framework';
+### Pipeline Pattern
 
-export default defineAgent({
-  name: 'Support Agent',
-  instructions: 'You handle product support questions...',
-  tools: ['search-kb'],
-});
-```
-
-```typescript
-// agents/billing.agent.ts
-import { defineAgent } from '@kernova/framework';
-
-export default defineAgent({
-  name: 'Billing Agent',
-  instructions: 'You handle billing and payment questions...',
-  tools: ['lookup-subscription', 'apply-credit'],
-});
-```
-
-Frontend calls the router:
-
-```tsx
-const { messages, send } = useAgentStream('router');
-```
-
-The router delegates internally — the user never knows multiple agents are involved.
-
-## Pattern 2: Pipeline (Chain of Agents)
-
-Agents process sequentially, each adding value:
-
-```typescript
-// agents/researcher.agent.ts
-export default defineAgent({
-  name: 'Researcher',
-  instructions: 'Search for information and return raw findings. Be thorough.',
-  tools: ['web-search', 'search-papers'],
-});
-
-// agents/analyzer.agent.ts
-export default defineAgent({
-  name: 'Analyzer',
-  instructions: 'Take research findings and identify key insights, patterns, and conclusions.',
-});
-
-// agents/writer.agent.ts
-export default defineAgent({
-  name: 'Writer',
-  instructions: 'Take analysis and write a clear, well-structured report for a non-technical audience.',
-});
-```
-
-Orchestrate from your frontend or a handler:
+Agents process sequentially, each building on the previous output:
 
 ```typescript
 // agents/research-pipeline.agent.ts
+import { defineAgent } from '@kernova/framework';
+
 export default defineAgent({
   name: 'Research Pipeline',
   instructions: 'Orchestrate a research pipeline',
   handler: async (ctx) => {
-    // Step 1: Research
     const research = await ctx.delegate('researcher', ctx.input);
-
-    // Step 2: Analyze
-    const analysis = await ctx.delegate('analyzer',
-      `Analyze these findings:\n${research.content}`
-    );
-
-    // Step 3: Write
-    const report = await ctx.delegate('writer',
-      `Write a report based on this analysis:\n${analysis.content}`
-    );
-
+    const analysis = await ctx.delegate('analyzer', `Analyze:\n${research.content}`);
+    const report = await ctx.delegate('writer', `Write report:\n${analysis.content}`);
     return report;
   },
 });
 ```
 
-## Pattern 3: Parallel Agents
+### Parallel Pattern
 
-Multiple agents work on the same input simultaneously:
+Multiple agents work simultaneously:
 
 ```typescript
-// agents/multi-perspective.agent.ts
 export default defineAgent({
   name: 'Multi-Perspective',
-  instructions: 'Get multiple viewpoints on a topic',
+  instructions: 'Get multiple viewpoints',
   handler: async (ctx) => {
-    // Run in parallel
     const [optimist, pessimist, pragmatist] = await Promise.all([
       ctx.delegate('optimist', ctx.input),
       ctx.delegate('pessimist', ctx.input),
@@ -154,30 +97,227 @@ export default defineAgent({
     ]);
 
     return {
-      content: `## Optimistic View\n${optimist.content}\n\n## Cautious View\n${pessimist.content}\n\n## Practical View\n${pragmatist.content}`,
+      content: `## Optimistic\n${optimist.content}\n\n## Cautious\n${pessimist.content}\n\n## Practical\n${pragmatist.content}`,
     };
   },
 });
 ```
 
-## Pattern 4: Agent-per-Feature in the UI
+---
 
-Different pages talk to different agents:
+## Approach 2: Teams (`defineTeam`)
 
-```tsx
-// app/chat/page.tsx — general support
-const chat = useAgentStream('support');
+For complex scenarios where you want the framework to handle orchestration — task decomposition, assignment, delegation chains, reviews, and shared state.
 
-// app/billing/page.tsx — billing assistant
-const billing = useAgent('billing');
+### Define a Team
 
-// app/onboarding/page.tsx — onboarding guide
-const onboarding = useAgentStream('onboarding');
+```typescript
+// agents/teams/engineering.ts
+import { defineTeam } from '@kernova/framework';
+
+export default defineTeam({
+  name: 'Engineering Team',
+  strategy: 'hierarchical',
+  members: [
+    {
+      agent: 'senior-dev',
+      role: 'lead',
+      description: 'Decomposes tasks, reviews code, makes architectural decisions',
+      canDelegate: true,
+      canApprove: true,
+    },
+    {
+      agent: 'frontend-dev',
+      role: 'member',
+      description: 'Builds React components, CSS, client-side logic',
+      specialization: ['react', 'typescript', 'css', 'tailwind', 'ui'],
+    },
+    {
+      agent: 'backend-dev',
+      role: 'member',
+      description: 'Builds APIs, database schemas, server-side logic',
+      specialization: ['node', 'api', 'database', 'prisma', 'auth'],
+    },
+    {
+      agent: 'tester',
+      role: 'reviewer',
+      description: 'Writes tests, runs QA, finds bugs',
+      specialization: ['testing', 'jest', 'playwright'],
+      canApprove: true,
+    },
+  ],
+});
 ```
 
-## Sharing Tools Between Agents
+### Delegation Strategies
 
-Multiple agents can use the same tools:
+| Strategy | How It Works | Best For |
+|---|---|---|
+| `hierarchical` | Lead decomposes → assigns to members → reviews results | Dev teams, management structures |
+| `sequential` | Agent A → B → C in fixed order | Content pipelines, approval chains |
+| `pipeline` | Output of one feeds into next as input | Data processing, ETL |
+| `collaborative` | Agents freely delegate to each other | Creative work, brainstorming |
+| `round-robin` | Tasks distributed evenly | Load balancing, parallel processing |
+| `broadcast` | All agents work on same task, best result wins | Quality optimization |
+
+### Execute a Team Task
+
+**From the backend:**
+
+```typescript
+// Inside any agent handler
+const result = await ctx.delegateTo('frontend-dev', 'Build a login form with shadcn/ui');
+```
+
+**From the frontend (React):**
+
+```tsx
+import { useTeam } from '@kernova/framework/react';
+
+function TeamDashboard() {
+  const { execute, isRunning, progress, result } = useTeam('engineering-team');
+
+  return (
+    <div>
+      <button onClick={() => execute('Build a user profile page with avatar upload')}>
+        Start Team Task
+      </button>
+
+      {isRunning && (
+        <div className="space-y-2">
+          {progress.map((event, i) => (
+            <div key={i} className="text-sm">
+              <span className="font-mono">[{event.agent}]</span> {event.type}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {result && (
+        <div className="mt-4">
+          <h3>Result</h3>
+          <pre>{result.result}</pre>
+          <p>Tasks completed: {result.totalTasks}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+**Via HTTP API:**
+
+```bash
+curl -X POST http://localhost:4555/v1/teams/engineering-team/execute \
+  -H "Content-Type: application/json" \
+  -d '{"goal": "Build a user profile page with avatar upload"}'
+```
+
+### How Hierarchical Execution Works
+
+```
+Goal: "Build a user profile page"
+  ↓
+[senior-dev] Decomposes into sub-tasks:
+  - frontend-dev: "Build the ProfileCard component with Tailwind"
+  - backend-dev: "Create GET /api/profile endpoint with Prisma"
+  - tester: "Write tests for the profile feature"
+  ↓
+[frontend-dev] Builds the component → returns code
+[backend-dev] Builds the API → returns code
+[tester] Writes tests → returns test file
+  ↓
+[senior-dev] Reviews all outputs → synthesizes final result
+  ↓
+Final output returned to caller
+```
+
+### Shared Workspace
+
+Agents in a team share a workspace — a key-value store visible to all members:
+
+```typescript
+// agents/senior-dev.ts
+export default defineAgent({
+  name: 'senior-dev',
+  instructions: 'You are a senior developer...',
+  handler: async (ctx) => {
+    // Write to shared workspace
+    ctx.workspace.set('architecture', { pattern: 'MVC', database: 'PostgreSQL' });
+
+    // Delegate — the other agent can read workspace
+    const result = await ctx.delegateTo('backend-dev', 'Build the API layer');
+
+    // Read what they stored
+    const apiSpec = ctx.workspace.get('api-spec');
+
+    return { content: `Architecture decided. API spec: ${JSON.stringify(apiSpec)}` };
+  },
+});
+
+// agents/backend-dev.ts
+export default defineAgent({
+  name: 'backend-dev',
+  instructions: 'You are a backend developer...',
+  handler: async (ctx) => {
+    // Read what the lead decided
+    const arch = ctx.workspace.get('architecture');
+
+    // Do the work
+    const apiCode = `// Using ${arch?.database}...`;
+
+    // Store result for others
+    ctx.workspace.set('api-spec', { endpoints: ['/api/users'], database: arch?.database });
+
+    return { content: apiCode };
+  },
+});
+```
+
+### Depth Limits (Prevent Infinite Loops)
+
+Teams have a `maxDelegationDepth` (default: 5). If Agent A delegates to Agent B, who delegates to Agent C, who delegates to Agent D — that's depth 3. If it hits the max, the delegation returns an error instead of recursing infinitely.
+
+```typescript
+defineTeam({
+  name: 'My Team',
+  strategy: 'collaborative',
+  maxDelegationDepth: 3, // Agents can delegate max 3 levels deep
+  members: [...],
+});
+```
+
+---
+
+## Team Member Roles
+
+| Role | Default Permissions | Purpose |
+|---|---|---|
+| `lead` | Can delegate, can approve | Coordinates the team, decomposes tasks |
+| `member` | Cannot delegate (unless enabled) | Does the actual work |
+| `reviewer` | Can approve | Reviews output quality |
+| `specialist` | Same as member | Like member, but implies narrow expertise |
+
+---
+
+## Agent-per-Feature in the UI
+
+Different pages can talk to different agents:
+
+```tsx
+// app/chat/page.tsx
+const chat = useAgentStream('support');
+
+// app/billing/page.tsx
+const billing = useAgent('billing');
+
+// app/admin/page.tsx — uses a team for complex tasks
+const team = useTeam('engineering-team');
+```
+
+---
+
+## Sharing Tools Between Agents
 
 ```typescript
 // agents/support.agent.ts
@@ -189,25 +329,14 @@ tools: ['search-kb', 'lookup-subscription']
 // 'search-kb' is shared — defined once in agents/tools/search-kb.ts
 ```
 
-## Sharing Memory Between Agents
-
-By default, each agent has its own memory scope. To share:
-
-```typescript
-// Both agents use the same memory namespace
-// agents/support.agent.ts
-memory: { type: 'persistent', ttl: '30d' }
-
-// agents/billing.agent.ts
-memory: { type: 'persistent', ttl: '30d' }
-```
-
-When agents delegate to each other via `ctx.delegate()`, the receiving agent sees the same thread context.
+---
 
 ## Best Practices
 
-1. **Keep agents focused** — Each agent should do one thing well. Don't make a "god agent" that handles everything.
-2. **Use a router** — A single entry point that delegates is easier to maintain than exposing 10 agents to the frontend.
-3. **Share tools, not instructions** — Reuse tools across agents. Don't copy instructions between them.
-4. **Test delegation** — Verify that the router correctly identifies which agent should handle each type of request.
-5. **Monitor handoffs** — Check monitoring for failed delegations or routing errors.
+1. **Keep agents focused** — Each agent does one thing well
+2. **Use teams for complex orchestration** — Don't write manual delegation logic when `defineTeam` handles it
+3. **Use a router for simple cases** — If you just need routing, a manual handler is simpler than a full team
+4. **Set sensible depth limits** — `maxDelegationDepth: 3` is usually enough
+5. **Use the shared workspace** — Don't pass massive strings between agents; store structured data in workspace
+6. **Monitor execution** — Watch the progress events to see which agents are doing what
+7. **Start with hierarchical** — It's the most natural for most use cases (one lead + specialists)

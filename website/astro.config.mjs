@@ -23,6 +23,7 @@ export default defineConfig({
             { label: 'React Hooks', slug: 'framework/react-hooks' },
             { label: 'Middleware', slug: 'framework/middleware' },
             { label: 'Multi-Agent', slug: 'framework/multi-agent' },
+            { label: 'Teams & Delegation', slug: 'framework/teams' },
             { label: 'Skills', slug: 'framework/skills' },
             { label: 'MCP Integration', slug: 'framework/mcp-integration' },
             { label: 'Durable Execution', slug: 'framework/durable-execution' },
@@ -83,6 +84,17 @@ export default defineConfig({
             { label: '5. Triggers & Channels', slug: 'framework/tutorials/devops/05-triggers' },
             { label: '6. Durable Workflows', slug: 'framework/tutorials/devops/06-workflow' },
             { label: '7. Deploy to Production', slug: 'framework/tutorials/devops/07-deploy' },
+          ],
+        },
+        {
+          label: 'Tutorial: Multi-Agent Team',
+          items: [
+            { label: '1. Introduction', slug: 'framework/tutorials/teams/01-intro' },
+            { label: '2. Project Setup', slug: 'framework/tutorials/teams/02-setup' },
+            { label: '3. Define the Agents', slug: 'framework/tutorials/teams/03-agents' },
+            { label: '4. Define the Team', slug: 'framework/tutorials/teams/04-team' },
+            { label: '5. Build the Chat UI', slug: 'framework/tutorials/teams/05-frontend' },
+            { label: '6. Deploy & Next Steps', slug: 'framework/tutorials/teams/06-deploy' },
           ],
         },
         {
