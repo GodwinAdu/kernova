@@ -1,6 +1,6 @@
 {
   "name": "create-kernova-app",
-  "version": "1.2.0",
+  "version": "1.2.2",
   "description": "Create a full-stack Kernova AI agent app",
   "type": "module",
   "bin": {
@@ -21,7 +21,10 @@
     "rimraf": "^6.0.0",
     "typescript": "^5.5.0"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "license": "MIT",
   "keywords": [
     "create",
