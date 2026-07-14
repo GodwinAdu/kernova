@@ -442,22 +442,17 @@ function buildRoutes(
             let memoryLines: string[] = [];
 
             if (memoryProvider) {
-              let results = await memoryProvider.search({ query: input, layer: 'longterm', limit: 10 });
-              if (results.length === 0) {
-                results = await memoryProvider.getAll({ layer: 'longterm', limit: 20 });
-                results = results.map((e: any) => ({ entry: e, score: 1 }));
-              }
-              memoryLines = results.map((r: any) => r.entry?.content || r.content || '').filter(Boolean);
+              // Always load ALL long-term memories (for personal AI with single user, this is fast)
+              const allMemories = await memoryProvider.getAll({ layer: 'longterm', limit: 50 });
+              memoryLines = (Array.isArray(allMemories) ? allMemories : []).map((e: any) => e.content || '').filter(Boolean);
             } else {
-              let memories = await kernel.memoryEngine.query({ query: input, limit: 10, layers: ['longterm'] });
-              if (!memories || memories.length === 0) {
-                memories = await kernel.memoryEngine.query({ limit: 20, layers: ['longterm'] });
-              }
+              // Kernel memory — get all
+              const memories = await kernel.memoryEngine.query({ limit: 50, layers: ['longterm'] });
               memoryLines = (memories || []).map((m: any) => m.content || '').filter(Boolean);
             }
 
             if (memoryLines.length > 0) {
-              memoryContext = '\n\nTHINGS I REMEMBER ABOUT YOU (facts from past conversations — use these!):\n' +
+              memoryContext = '\n\nTHINGS I REMEMBER ABOUT YOU (facts from past conversations — ALWAYS reference these!):\n' +
                 memoryLines.map((m: string) => `• ${m}`).join('\n') + '\n';
             }
           } catch (err) {
