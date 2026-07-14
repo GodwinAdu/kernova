@@ -28,8 +28,14 @@ export function scaffoldProject(options: ScaffoldOptions): void {
     'public',
   ];
 
-  if (framework !== 'none') {
+  if (framework === 'next') {
     dirs.push('app', 'app/chat');
+  } else if (framework === 'react') {
+    dirs.push('src');
+  }
+
+  if (template === 'multi-agent') {
+    dirs.push('agents/teams');
   }
 
   for (const dir of dirs) {
@@ -49,6 +55,7 @@ export function scaffoldProject(options: ScaffoldOptions): void {
     writeFileSync(join(directory, 'agents', 'researcher.agent.ts'), researcherAgentTemplate());
     writeFileSync(join(directory, 'agents', 'tools', 'search-kb.ts'), searchKbToolTemplate());
     writeFileSync(join(directory, 'agents', 'tools', 'web-search.ts'), webSearchToolTemplate());
+    writeFileSync(join(directory, 'agents', 'teams', 'main-team.ts'), teamTemplate());
   } else {
     writeFileSync(join(directory, 'agents', 'assistant.agent.ts'), assistantAgentTemplate());
     writeFileSync(join(directory, 'agents', 'tools', 'web-search.ts'), webSearchToolTemplate());
@@ -66,6 +73,13 @@ export function scaffoldProject(options: ScaffoldOptions): void {
     writeFileSync(join(directory, 'app', 'globals.css'), globalsCssTemplate());
     writeFileSync(join(directory, 'next.config.ts'), nextConfigTemplate());
     writeFileSync(join(directory, 'postcss.config.mjs'), postcssTemplate());
+  } else if (framework === 'react') {
+    writeFileSync(join(directory, 'index.html'), reactIndexHtml(name));
+    writeFileSync(join(directory, 'vite.config.ts'), viteConfigTemplate());
+    writeFileSync(join(directory, 'src', 'main.tsx'), reactMainTemplate());
+    writeFileSync(join(directory, 'src', 'App.tsx'), reactAppTemplate(name));
+    writeFileSync(join(directory, 'src', 'Chat.tsx'), reactChatTemplate());
+    writeFileSync(join(directory, 'src', 'index.css'), reactCssTemplate());
   }
 }
 
@@ -115,20 +129,28 @@ function packageJsonTemplate(name: string, framework: string): string {
     deps['typescript'] = '^5.5.0';
     deps['@types/node'] = '^22.0.0';
     deps['@types/react'] = '^19.0.0';
+  } else if (framework === 'react') {
+    deps['react'] = '^19.0.0';
+    deps['react-dom'] = '^19.0.0';
+    devDeps['vite'] = '^6.0.0';
+    devDeps['@vitejs/plugin-react'] = '^4.0.0';
+    devDeps['typescript'] = '^5.5.0';
+    devDeps['@types/react'] = '^19.0.0';
+    devDeps['@types/react-dom'] = '^19.0.0';
   }
+
+  const scripts: Record<string, string> = framework === 'react'
+    ? { dev: 'kernova dev', build: 'vite build', start: 'kernova start', deploy: 'kernova deploy' }
+    : { dev: 'kernova dev', build: 'kernova build', start: 'kernova start', deploy: 'kernova deploy' };
 
   return JSON.stringify({
     name,
     version: '0.1.0',
     private: true,
     type: 'module',
-    scripts: {
-      dev: 'kernova dev',
-      build: 'kernova build',
-      start: 'kernova start',
-      deploy: 'kernova deploy',
-    },
+    scripts,
     dependencies: deps,
+    devDependencies: Object.keys(devDeps).length > 0 ? devDeps : undefined,
   }, null, 2) + '\n';
 }
 
@@ -507,5 +529,276 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+`;
+}
+
+
+// ─── React (Vite) Templates ─────────────────────────────────────────────────
+
+function reactIndexHtml(name: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${name}</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+`;
+}
+
+function viteConfigTemplate(): string {
+  return `import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 3000,
+    proxy: {
+      '/api/agents': 'http://localhost:4555',
+      '/agents': 'http://localhost:4555',
+      '/memory': 'http://localhost:4555',
+      '/threads': 'http://localhost:4555',
+      '/health': 'http://localhost:4555',
+    },
+  },
+});
+`;
+}
+
+function reactMainTemplate(): string {
+  return `import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
+`;
+}
+
+function reactAppTemplate(name: string): string {
+  return `import Chat from './Chat';
+
+export default function App() {
+  return (
+    <div className="app">
+      <Chat />
+    </div>
+  );
+}
+`;
+}
+
+function reactChatTemplate(): string {
+  return `import { useState, useRef, useEffect } from 'react';
+
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export default function Chat() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages]);
+
+  const send = async () => {
+    if (!input.trim() || loading) return;
+    const userMsg: Message = { id: \`u_\${Date.now()}\`, role: 'user', content: input.trim() };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setLoading(true);
+
+    try {
+      const res = await fetch('/agents/assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: userMsg.content, threadId: 'main' }),
+      });
+      const data = await res.json();
+      setMessages(prev => [...prev, { id: \`a_\${Date.now()}\`, role: 'assistant', content: data.content || '' }]);
+    } catch {
+      setMessages(prev => [...prev, { id: \`a_\${Date.now()}\`, role: 'assistant', content: 'Error connecting to server.' }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="chat-container">
+      <header className="chat-header">
+        <h1>AI Assistant</h1>
+        <span className="status">{loading ? 'Thinking...' : 'Ready'}</span>
+      </header>
+
+      <div className="messages" ref={scrollRef}>
+        {messages.length === 0 && (
+          <div className="empty">
+            <p>Start a conversation with your AI agent.</p>
+          </div>
+        )}
+        {messages.map(msg => (
+          <div key={msg.id} className={\`message \${msg.role}\`}>
+            <p>{msg.content}</p>
+          </div>
+        ))}
+        {loading && <div className="message assistant loading"><p>...</p></div>}
+      </div>
+
+      <div className="input-area">
+        <input
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && send()}
+          placeholder="Type a message..."
+          disabled={loading}
+        />
+        <button onClick={send} disabled={!input.trim() || loading}>Send</button>
+      </div>
+    </div>
+  );
+}
+`;
+}
+
+function reactCssTemplate(): string {
+  return `* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #0a0a0a;
+  color: #fafafa;
+}
+
+.chat-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #222;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-header h1 { font-size: 1rem; font-weight: 600; }
+.chat-header .status { font-size: 0.75rem; color: #888; }
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem;
+  max-width: 48rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #666;
+}
+
+.message {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 1rem;
+  max-width: 80%;
+}
+
+.message.user {
+  background: #7c3aed;
+  color: white;
+  margin-left: auto;
+}
+
+.message.assistant {
+  background: #1a1a2e;
+}
+
+.message.loading { opacity: 0.6; }
+
+.input-area {
+  padding: 1rem;
+  border-top: 1px solid #222;
+  display: flex;
+  gap: 0.5rem;
+  max-width: 48rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.input-area input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid #333;
+  background: #111;
+  color: white;
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.input-area input:focus { border-color: #7c3aed; }
+
+.input-area button {
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  background: #7c3aed;
+  color: white;
+  border: none;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.input-area button:disabled { opacity: 0.3; cursor: not-allowed; }
+`;
+}
+
+// ─── Multi-Agent Team Template ──────────────────────────────────────────────
+
+function teamTemplate(): string {
+  return `import { defineTeam } from '@kernova/framework';
+
+export default defineTeam({
+  name: 'Main Team',
+  description: 'Support + Research team with delegation',
+  strategy: 'hierarchical',
+  members: [
+    {
+      agent: 'support',
+      role: 'lead',
+      description: 'Handles user queries, delegates research tasks',
+      canDelegate: true,
+    },
+    {
+      agent: 'researcher',
+      role: 'member',
+      description: 'Searches the web and provides research findings',
+      specialization: ['research', 'search', 'data'],
+    },
+  ],
+});
 `;
 }
