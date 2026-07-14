@@ -433,33 +433,59 @@ function buildRoutes(
 
         const resolvedThreadId = threadId || `thread_${Date.now()}`;
 
-        // ─── MEMORY RECALL (configurable via kernova.config.ts memory settings) ───
+        // ─── MEMORY RECALL (vector search for scale, fallback to all for small stores) ───
         let memoryContext = '';
         const autoRecall = config.memory?.autoRecall !== false; // Default: ON
 
         if (autoRecall) {
           try {
             let memoryLines: string[] = [];
-
-            console.log(`  [debug] Memory recall: provider=${memoryProvider ? 'postgres' : 'kernel'}, autoRecall=${autoRecall}`);
+            const useVectors = config.memory?.vectorSearch !== false; // Default: ON if provider supports it
 
             if (memoryProvider) {
-              // Always load ALL long-term memories (for personal AI with single user, this is fast)
-              const allMemories = await memoryProvider.getAll({ layer: 'longterm', limit: 50 });
-              console.log(`  [debug] Memory provider returned: ${Array.isArray(allMemories) ? allMemories.length : 'not-array'} entries`);
-              memoryLines = (Array.isArray(allMemories) ? allMemories : [])
-                .map((e: any) => e.content || '')
-                .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
+              const totalCount = await memoryProvider.count('longterm').catch(() => 0);
+
+              if (totalCount > 30 && useVectors && memoryProvider.searchByVector) {
+                // VECTOR SEARCH — generate embedding of user input, find relevant memories
+                const embedding = await generateEmbedding(input);
+                if (embedding) {
+                  const results = await memoryProvider.searchByVector(embedding, { limit: 15, layer: 'longterm', minScore: 0.3 });
+                  memoryLines = results
+                    .map((r: any) => {
+                      const content = r.entry?.content || r.content || '';
+                      const date = r.entry?.createdAt || r.createdAt || '';
+                      const dateStr = date ? ` [${new Date(date).toLocaleDateString()}]` : '';
+                      return content + dateStr;
+                    })
+                    .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
+                }
+
+                // If vector search returned nothing, fallback to text search
+                if (memoryLines.length === 0) {
+                  const textResults = await memoryProvider.search({ query: input, layer: 'longterm', limit: 15 });
+                  memoryLines = textResults
+                    .map((r: any) => (r.entry?.content || r.content || ''))
+                    .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
+                }
+              } else {
+                // Small store (< 30) — load all
+                const allMemories = await memoryProvider.getAll({ layer: 'longterm', limit: 50 });
+                memoryLines = (Array.isArray(allMemories) ? allMemories : [])
+                  .map((e: any) => {
+                    const content = e.content || '';
+                    const date = e.createdAt || '';
+                    const dateStr = date ? ` [${new Date(date).toLocaleDateString()}]` : '';
+                    return content + dateStr;
+                  })
+                  .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
+              }
             } else {
-              // Kernel memory — get all
+              // Kernel memory — get all (SQLite, no vectors)
               const memories = await kernel.memoryEngine.query({ limit: 50, layers: ['longterm'] });
-              console.log(`  [debug] Kernel memory returned: ${memories?.length || 0} entries`);
               memoryLines = (memories || [])
                 .map((m: any) => m.content || '')
                 .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
             }
-
-            console.log(`  [debug] Memory lines for prompt: ${memoryLines.length} (first: "${memoryLines[0]?.slice(0, 40) || 'none'}")`);
 
             if (memoryLines.length > 0) {
               memoryContext = '\n\nTHINGS I REMEMBER ABOUT YOU (facts from past conversations — ALWAYS reference these!):\n' +
@@ -521,6 +547,9 @@ function buildRoutes(
 
           if (isPersonalInfo) {
             try {
+              // Generate embedding for vector search later
+              const embedding = await generateEmbedding(input);
+
               const memEntry = {
                 id: `mem_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
                 content: input,
@@ -529,6 +558,7 @@ function buildRoutes(
                 metadata: { threadId: resolvedThreadId, timestamp: new Date().toISOString() },
                 relevance: 1.0,
                 confidence: 0.9,
+                embedding: embedding || undefined,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
               };
@@ -1217,6 +1247,38 @@ function startTriggerScheduler(
       }
     }, intervalMs);
   }
+}
+
+/**
+ * Generate an embedding vector using OpenAI's embedding API.
+ * Returns null if no API key or request fails.
+ */
+async function generateEmbedding(text: string): Promise<number[] | null> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-3-small',
+        input: text.slice(0, 8000), // Max input for embedding
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (res.ok) {
+      const data = await res.json() as any;
+      return data.data?.[0]?.embedding || null;
+    }
+  } catch {
+    // Embedding generation failed — non-critical
+  }
+  return null;
 }
 
 /**
