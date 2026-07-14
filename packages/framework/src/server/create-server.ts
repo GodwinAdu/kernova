@@ -244,10 +244,25 @@ export async function createServer(options: ServerOptions = {}) {
     // No remotes — that's fine
   }
 
+  // Discover triggers and start scheduler
+  let discoveredTriggers: any[] = [];
+  try {
+    const { discoverTriggers } = await import('./discover-triggers.js');
+    discoveredTriggers = await discoverTriggers(projectRoot);
+  } catch {
+    // No triggers — that's fine
+  }
+
+  // Start autonomous scheduler for triggers
+  if (discoveredTriggers.length > 0) {
+    startTriggerScheduler(discoveredTriggers, kernel, agentRouteMap);
+  }
+
   console.log(`\n  🧠 Kernova Framework Server`);
   console.log(`  ├─ Agents:  ${agents.length} discovered`);
   console.log(`  ├─ Tools:   ${tools.length} registered`);
   console.log(`  ├─ Teams:   ${discoveredTeams.length} configured`);
+  console.log(`  ├─ Triggers: ${discoveredTriggers.length} scheduled`);
   console.log(`  ├─ Remotes: ${discoveredRemotes.length} connected`);
   console.log(`  ├─ Memory:  ${memories.length} namespaces`);
   console.log(`  └─ Config:  ${config.name} v${config.version}\n`);
@@ -1127,6 +1142,104 @@ function createAgentExecutor(
       durationMs: Date.now() - startTime,
     };
   };
+}
+
+// ─── Trigger Scheduler (Autonomous Background Tasks) ─────────────────────────
+
+/**
+ * Starts background timers that fire triggers at their configured intervals.
+ * Each trigger submits a goal to the specified agent when it fires.
+ */
+function startTriggerScheduler(
+  triggers: Array<{ name: string; event: string; agent: string; goal: string; priority?: string; cooldown?: number }>,
+  kernel: any,
+  agentRouteMap: Map<string, string>,
+): void {
+  const lastFired = new Map<string, number>();
+
+  for (const trigger of triggers) {
+    // Parse interval from event pattern
+    const intervalMs = parseEventInterval(trigger.event);
+    if (intervalMs <= 0) continue;
+
+    console.log(`  ⏰ Trigger: "${trigger.name}" → every ${formatInterval(intervalMs)}`);
+
+    // Set up the interval
+    setInterval(async () => {
+      // Check cooldown
+      const last = lastFired.get(trigger.name) || 0;
+      const cooldown = trigger.cooldown || intervalMs;
+      if (Date.now() - last < cooldown) return;
+
+      lastFired.set(trigger.name, Date.now());
+
+      console.log(`  [trigger] Firing: ${trigger.name}`);
+
+      try {
+        // Find the target agent
+        const defId = agentRouteMap.get(trigger.agent);
+        if (!defId) {
+          console.warn(`  [trigger] Agent "${trigger.agent}" not found for trigger "${trigger.name}"`);
+          return;
+        }
+
+        // Submit the goal to the agent
+        await kernel.submit({
+          goal: trigger.goal,
+          intentType: 'action',
+          priority: trigger.priority || 'medium',
+          owner: 'trigger-scheduler',
+          metadata: {
+            triggerName: trigger.name,
+            triggerEvent: trigger.event,
+            autonomous: true,
+            threadId: `trigger_${trigger.name}`,
+            targetAgent: defId,
+            agentRoute: trigger.agent,
+          },
+        });
+
+        console.log(`  [trigger] ✓ ${trigger.name} completed`);
+      } catch (err) {
+        console.error(`  [trigger] ✗ ${trigger.name} failed:`, (err as Error).message);
+      }
+    }, intervalMs);
+  }
+}
+
+/**
+ * Parse event pattern to interval in milliseconds.
+ * Supports: schedule.5m, schedule.1h, schedule.12h, schedule.24h, schedule.weekly
+ */
+function parseEventInterval(event: string): number {
+  if (!event.startsWith('schedule.')) return 0;
+  const value = event.replace('schedule.', '');
+
+  if (value === 'weekly') return 7 * 24 * 60 * 60 * 1000;
+
+  const match = value.match(/^(\d+)(m|h|d|s)$/);
+  if (!match) {
+    // Try as hours (e.g., "24h")
+    if (value.endsWith('h')) return parseInt(value) * 3600000;
+    if (value.endsWith('m')) return parseInt(value) * 60000;
+    return 0;
+  }
+
+  const num = parseInt(match[1]);
+  switch (match[2]) {
+    case 's': return num * 1000;
+    case 'm': return num * 60000;
+    case 'h': return num * 3600000;
+    case 'd': return num * 86400000;
+    default: return 0;
+  }
+}
+
+function formatInterval(ms: number): string {
+  if (ms >= 86400000) return `${ms / 86400000}d`;
+  if (ms >= 3600000) return `${ms / 3600000}h`;
+  if (ms >= 60000) return `${ms / 60000}m`;
+  return `${ms / 1000}s`;
 }
 
 // ─── Remote Agent Execution ──────────────────────────────────────────────────
