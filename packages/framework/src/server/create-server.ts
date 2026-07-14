@@ -252,8 +252,35 @@ export async function createServer(options: ServerOptions = {}) {
   console.log(`  ├─ Memory:  ${memories.length} namespaces`);
   console.log(`  └─ Config:  ${config.name} v${config.version}\n`);
 
+  // Initialize conversation store (PostgreSQL or SQLite — persistent)
+  let conversationStore: any;
+  try {
+    const { createConversationStore } = await import('@kernova/core') as any;
+    const dbUrl = config.memory?.url || process.env.DATABASE_URL;
+    conversationStore = await createConversationStore({
+      provider: dbUrl ? 'postgres' : 'sqlite',
+      url: dbUrl,
+      path: `${projectRoot}/kernova-data/conversations.db`,
+    });
+    console.log(`  ✓ Conversation store: ${dbUrl ? 'postgres' : 'sqlite'} connected`);
+  } catch (err) {
+    // Fallback to in-memory
+    const inMemoryThreads = new Map<string, any>();
+    conversationStore = {
+      async createThread(id: string, title: string, agentName?: string) { const t = { id, title, agentName: agentName || 'assistant', messageCount: 0, messages: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }; inMemoryThreads.set(id, t); return t; },
+      async getThread(id: string) { return inMemoryThreads.get(id) || null; },
+      async listThreads(limit = 50) { return Array.from(inMemoryThreads.values()).sort((a: any, b: any) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, limit); },
+      async deleteThread(id: string) { inMemoryThreads.delete(id); },
+      async addMessage(threadId: string, role: string, content: string) { if (!inMemoryThreads.has(threadId)) { await (this as any).createThread(threadId, content.slice(0, 60)); } const t = inMemoryThreads.get(threadId)!; const msg = { id: `msg_${Date.now()}`, threadId, role, content, createdAt: new Date().toISOString() }; t.messages.push(msg); t.messageCount++; t.updatedAt = msg.createdAt; if (t.messageCount === 1 && role === 'user') t.title = content.slice(0, 60); return msg; },
+      async getMessages(threadId: string, limit = 50) { const t = inMemoryThreads.get(threadId); if (!t) return []; return t.messages.slice(-limit); },
+      async getMessageCount(threadId: string) { return inMemoryThreads.get(threadId)?.messageCount || 0; },
+      async close() { inMemoryThreads.clear(); },
+    };
+    console.log('  ↳ Conversation store: in-memory (fallback)');
+  }
+
   // Build route table
-  const routes: RouteHandler[] = buildRoutes(kernel, agents, tools, memories, config, agentRouteMap, apiKey, projectRoot, memoryProvider);
+  const routes: RouteHandler[] = buildRoutes(kernel, agents, tools, memories, config, agentRouteMap, apiKey, projectRoot, memoryProvider, conversationStore);
 
   // Create HTTP server
   const server = createHttpServer(async (req, res) => {
@@ -341,6 +368,7 @@ function buildRoutes(
   apiKey: string | undefined,
   projectRoot: string,
   memoryProvider: any,
+  conversationStore: any,
 ): RouteHandler[] {
   const routes: RouteHandler[] = [];
 
@@ -421,35 +449,15 @@ function buildRoutes(
 
         // Load conversation history from store
         let conversationContext = '';
-        if (conversationStore.has(resolvedThreadId)) {
-          const thread = conversationStore.get(resolvedThreadId)!;
-          const recentMessages = thread.messages.slice(-20); // Last 20 messages
-          if (recentMessages.length > 0) {
-            conversationContext = '\n\nCONVERSATION HISTORY (use this for context):\n' +
-              recentMessages.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n') +
-              '\n\n---\nNow respond to the latest user message above. Reference conversation history and memories when relevant.\n';
-          }
+        const recentMessages = await conversationStore.getMessages(resolvedThreadId, 20);
+        if (recentMessages.length > 0) {
+          conversationContext = '\n\nCONVERSATION HISTORY (use this for context):\n' +
+            recentMessages.map((m: any) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n') +
+            '\n\n---\nNow respond to the latest user message above. Reference conversation history and memories when relevant.\n';
         }
 
         // Save user message to conversation store
-        if (!conversationStore.has(resolvedThreadId)) {
-          conversationStore.set(resolvedThreadId, {
-            id: resolvedThreadId,
-            title: input.slice(0, 60),
-            agentName: agent.route,
-            messages: [],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          });
-        }
-        const thread = conversationStore.get(resolvedThreadId)!;
-        thread.messages.push({
-          id: `msg_${Date.now()}_u`,
-          role: 'user',
-          content: input,
-          timestamp: new Date().toISOString(),
-        });
-        thread.updatedAt = new Date().toISOString();
+        await conversationStore.addMessage(resolvedThreadId, 'user', input);
 
         // Build the full prompt with memory + history
         const fullInput = `${input}${memoryContext}${conversationContext}`;
@@ -513,13 +521,7 @@ function buildRoutes(
         }
 
         // Save assistant response to conversation store
-        thread.messages.push({
-          id: `msg_${Date.now()}_a`,
-          role: 'assistant',
-          content: String(responseContent),
-          timestamp: new Date().toISOString(),
-        });
-        thread.updatedAt = new Date().toISOString();
+        await conversationStore.addMessage(resolvedThreadId, 'assistant', String(responseContent));
 
         sendJson(res, 200, {
           content: responseContent,
@@ -741,37 +743,14 @@ function buildRoutes(
 
   // ─── Thread management (Conversation Persistence) ─────────────────────────
 
-  // In-memory conversation store backed by SQLite via the kernel
-  // This persists across server restarts (stored in kernova-data/kernova.db)
-  const conversationStore = new Map<string, {
-    id: string;
-    title: string;
-    agentName: string;
-    messages: Array<{ id: string; role: string; content: string; timestamp: string }>;
-    createdAt: string;
-    updatedAt: string;
-  }>();
-
-  // Load existing threads from kernel's conversation manager
-  // (The in-memory store is fresh on each server start — for persistence
-  //  across restarts, the kernel's SQLite DB handles it via ConversationManager)
-  // For now, in-memory is fine for dev mode.
+  // (Conversation store is passed in from createServer)
 
   // GET /threads — list all conversations
   routes.push({
     method: 'GET',
     pattern: /^\/threads$/,
     handler: async (_req, res) => {
-      const threads = Array.from(conversationStore.values()).map(t => ({
-        id: t.id,
-        title: t.title,
-        agentName: t.agentName,
-        messageCount: t.messages.length,
-        lastMessage: t.messages[t.messages.length - 1]?.content?.slice(0, 100),
-        createdAt: t.createdAt,
-        updatedAt: t.updatedAt,
-      }));
-      threads.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      const threads = await conversationStore.listThreads(50);
       sendJson(res, 200, { threads });
     },
   });
@@ -783,39 +762,25 @@ function buildRoutes(
     handler: async (req, res) => {
       const body = await parseBody(req);
       const { title, agentName } = body as { title?: string; agentName?: string };
-
-      const thread = {
-        id: `thread_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        title: title || 'New Conversation',
-        agentName: agentName || agents[0]?.route || 'assistant',
-        messages: [] as Array<{ id: string; role: string; content: string; timestamp: string }>,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      conversationStore.set(thread.id, thread);
+      const id = `thread_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const thread = await conversationStore.createThread(id, title || 'New Conversation', agentName);
       sendJson(res, 201, { id: thread.id, title: thread.title });
     },
   });
 
-  // GET /threads/:id — get a thread with all messages
+  // GET /threads/:id — get a thread
   routes.push({
     method: 'GET',
     pattern: /^\/threads\/([^/]+)$/,
     handler: async (_req, res, match) => {
       const threadId = match[1];
-      const thread = conversationStore.get(threadId);
-
-      if (!thread) {
-        sendJson(res, 404, { error: 'Thread not found' });
-        return;
-      }
-
+      const thread = await conversationStore.getThread(threadId);
+      if (!thread) { sendJson(res, 404, { error: 'Thread not found' }); return; }
       sendJson(res, 200, thread);
     },
   });
 
-  // POST /threads/:id/messages — add a message to a thread
+  // POST /threads/:id/messages — add a message
   routes.push({
     method: 'POST',
     pattern: /^\/threads\/([^/]+)\/messages$/,
@@ -823,61 +788,23 @@ function buildRoutes(
       const threadId = match[1];
       const body = await parseBody(req);
       const { role, content } = body as { role?: string; content?: string };
-
-      if (!content) {
-        sendJson(res, 400, { error: 'Missing "content"' });
-        return;
-      }
-
-      // Auto-create thread if it doesn't exist
-      if (!conversationStore.has(threadId)) {
-        conversationStore.set(threadId, {
-          id: threadId,
-          title: content.slice(0, 50),
-          agentName: 'assistant',
-          messages: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-      }
-
-      const thread = conversationStore.get(threadId)!;
-      const message = {
-        id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        role: role || 'user',
-        content,
-        timestamp: new Date().toISOString(),
-      };
-
-      thread.messages.push(message);
-      thread.updatedAt = message.timestamp;
-
-      // Update title from first user message
-      if (thread.messages.length === 1 && role === 'user') {
-        thread.title = content.slice(0, 60);
-      }
-
+      if (!content) { sendJson(res, 400, { error: 'Missing "content"' }); return; }
+      const message = await conversationStore.addMessage(threadId, role || 'user', content);
       sendJson(res, 201, { message });
     },
   });
 
-  // GET /threads/:id/messages — get messages for a thread
+  // GET /threads/:id/messages — get messages (paginated)
   routes.push({
     method: 'GET',
     pattern: /^\/threads\/([^/]+)\/messages$/,
     handler: async (req, res, match) => {
       const threadId = match[1];
-      const thread = conversationStore.get(threadId);
-
-      if (!thread) {
-        sendJson(res, 200, { messages: [] });
-        return;
-      }
-
       const url = new URL(req.url || '/', `http://${req.headers.host}`);
       const limit = parseInt(url.searchParams.get('limit') || '50');
-
-      sendJson(res, 200, { messages: thread.messages.slice(-limit) });
+      const before = url.searchParams.get('before') || undefined;
+      const messages = await conversationStore.getMessages(threadId, limit, before);
+      sendJson(res, 200, { messages });
     },
   });
 
@@ -887,7 +814,7 @@ function buildRoutes(
     pattern: /^\/threads\/([^/]+)$/,
     handler: async (_req, res, match) => {
       const threadId = match[1];
-      conversationStore.delete(threadId);
+      await conversationStore.deleteThread(threadId);
       sendJson(res, 200, { deleted: true, id: threadId });
     },
   });

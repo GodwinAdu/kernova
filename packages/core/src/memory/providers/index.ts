@@ -21,6 +21,8 @@ export type { MemoryProvider, MemoryEntry, MemorySearchOptions, MemorySearchResu
 export { SqliteMemoryProvider } from './sqlite-provider.js';
 export { PostgresMemoryProvider } from './postgres-provider.js';
 export { InMemoryProvider } from './memory-provider.js';
+export { createConversationStore, PostgresConversationStore, SqliteConversationStore } from './conversation-store.js';
+export type { ConversationStore, ConversationStoreConfig, Thread, ChatMessage } from './conversation-store.js';
 
 import type { MemoryProvider, MemoryProviderConfig } from './types.js';
 import { SqliteMemoryProvider } from './sqlite-provider.js';

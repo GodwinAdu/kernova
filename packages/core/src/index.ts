@@ -26,8 +26,10 @@ export { MemoryStore } from './memory/memory-store.js';
 export type { MemoryStoreConfig } from './memory/memory-store.js';
 
 export { createMemoryProvider, SqliteMemoryProvider, PostgresMemoryProvider, InMemoryProvider } from './memory/providers/index.js';
+export { createConversationStore, PostgresConversationStore, SqliteConversationStore } from './memory/providers/index.js';
 export type { MemoryProvider, MemoryProviderConfig, MemorySearchOptions, MemorySearchResult } from './memory/providers/index.js';
 export type { MemoryEntry as ProviderMemoryEntry } from './memory/providers/types.js';
+export type { ConversationStore, ConversationStoreConfig, Thread as ConversationThread, ChatMessage } from './memory/providers/index.js';
 export { AgentRegistry } from './agents/agent-registry.js';
 export type { AgentExecutor, AgentTools } from './agents/agent-registry.js';
 export { AgentCoordinator } from './agents/coordinator.js';
