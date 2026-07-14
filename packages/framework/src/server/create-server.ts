@@ -183,8 +183,9 @@ export async function createServer(options: ServerOptions = {}) {
               log: (msg: string) => console.log(`  [tool:${tool.name}] ${msg}`),
             });
 
-            // Auto-persist: if tool is a save/note/memory tool, store to long-term memory
-            if (tool.name.includes('save') || tool.name.includes('note') || tool.name.includes('remember')) {
+            // Auto-persist tool results to memory (only if config.memory.autoSave is enabled)
+            const shouldPersistTool = config.memory && (config.memory as any).autoSave === true;
+            if (shouldPersistTool && (tool.name.includes('save') || tool.name.includes('note') || tool.name.includes('remember'))) {
               try {
                 const content = params.content as string || JSON.stringify(params);
                 const tags = params.tags ? (params.tags as string).split(',').map(t => t.trim()) : [];
