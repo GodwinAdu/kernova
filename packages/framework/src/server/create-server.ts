@@ -253,10 +253,7 @@ export async function createServer(options: ServerOptions = {}) {
     // No triggers — that's fine
   }
 
-  // Start autonomous scheduler for triggers
-  if (discoveredTriggers.length > 0) {
-    startTriggerScheduler(discoveredTriggers, kernel, agentRouteMap);
-  }
+  // (Triggers started after conversation store is initialized — see below)
 
   console.log(`\n  🧠 Kernova Framework Server`);
   console.log(`  ├─ Agents:  ${agents.length} discovered`);
@@ -292,6 +289,14 @@ export async function createServer(options: ServerOptions = {}) {
       async close() { inMemoryThreads.clear(); },
     };
     console.log('  ↳ Conversation store: in-memory (fallback)');
+  }
+
+  // Start autonomous scheduler for triggers (after conversation store is ready)
+  if (discoveredTriggers.length > 0) {
+    // Delay start so conversationStore is initialized first
+    setTimeout(() => {
+      startTriggerScheduler(discoveredTriggers, kernel, agentRouteMap, conversationStore);
+    }, 1000);
   }
 
   // Build route table
@@ -1154,6 +1159,7 @@ function startTriggerScheduler(
   triggers: Array<{ name: string; event: string; agent: string; goal: string; priority?: string; cooldown?: number }>,
   kernel: any,
   agentRouteMap: Map<string, string>,
+  conversationStore?: any,
 ): void {
   const lastFired = new Map<string, number>();
 
@@ -1184,7 +1190,7 @@ function startTriggerScheduler(
         }
 
         // Submit the goal to the agent
-        await kernel.submit({
+        const result = await kernel.submit({
           goal: trigger.goal,
           intentType: 'action',
           priority: trigger.priority || 'medium',
@@ -1198,6 +1204,23 @@ function startTriggerScheduler(
             agentRoute: trigger.agent,
           },
         });
+
+        // Save the trigger result to a "notifications" thread so user sees it in chat
+        const responseContent = result.result?.summary || result.result?.data || '';
+        if (responseContent && String(responseContent).length > 10) {
+          try {
+            // Save to conversation store (notifications thread)
+            if (conversationStore) {
+              await conversationStore.addMessage(
+                'aura-notifications',
+                'assistant',
+                `[${trigger.name}] ${String(responseContent)}`,
+              );
+            }
+          } catch {
+            // Non-critical
+          }
+        }
 
         console.log(`  [trigger] ✓ ${trigger.name} completed`);
       } catch (err) {
