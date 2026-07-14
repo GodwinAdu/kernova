@@ -1,47 +1,47 @@
 {
-    "name":  "@kernova/core",
-    "version": "1.4.1",
-    "description":  "Kernova Core - The AI Agent Runtime Engine",
-    "main":  "./dist/index.js",
-    "types":  "./dist/index.d.ts",
-    "type":  "module",
-    "license":  "MIT",
-    "repository":  {
-                       "type":  "git",
-                       "url":  "https://github.com/kernova/kernova",
-                       "directory":  "packages/core"
-                   },
-    "keywords":  [
-                     "kernova",
-                     "ai",
-                     "runtime",
-                     "kernel",
-                     "agents",
-                     "intelligent-systems",
-                     "llm"
-                 ],
-    "files":  [
-                  "dist",
-                  "README.md"
-              ],
-    "scripts":  {
-                    "build":  "tsc",
-                    "dev":  "tsc --watch",
-                    "clean":  "rimraf dist"
-                },
-    "dependencies":  {
-                         "@kernova/types": "^1.0.0",
-                         "better-sqlite3":  "^12.11.1",
-                         "cron-parser":  "^4.9.0",
-                         "ws":  "^8.18.0",
-                         "yaml":  "^2.7.0"
-                     },
-    "devDependencies":  {
-                            "@types/better-sqlite3":  "^7.6.13",
-                            "@types/node":  "^22.0.0",
-                            "@types/ws":  "^8.5.13",
-                            "fast-check":  "^3.22.0",
-                            "rimraf":  "^6.0.0",
-                            "typescript":  "^5.5.0"
-                        }
+    "name": "@kernova/core",
+    "version": "1.4.2",
+    "description": "Kernova Core - The AI Agent Runtime Engine",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "type": "module",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/kernova/kernova",
+        "directory": "packages/core"
+    },
+    "keywords": [
+        "kernova",
+        "ai",
+        "runtime",
+        "kernel",
+        "agents",
+        "intelligent-systems",
+        "llm"
+    ],
+    "files": [
+        "dist",
+        "README.md"
+    ],
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "clean": "rimraf dist"
+    },
+    "dependencies": {
+        "@kernova/types": "^1.0.0",
+        "better-sqlite3": "^12.11.1",
+        "cron-parser": "^4.9.0",
+        "ws": "^8.18.0",
+        "yaml": "^2.7.0"
+    },
+    "devDependencies": {
+        "@types/better-sqlite3": "^7.6.13",
+        "@types/node": "^22.0.0",
+        "@types/ws": "^8.5.13",
+        "fast-check": "^3.22.0",
+        "rimraf": "^6.0.0",
+        "typescript": "^5.5.0"
+    }
 }

@@ -1188,7 +1188,7 @@ function startTriggerScheduler(
           goal: trigger.goal,
           intentType: 'action',
           priority: trigger.priority || 'medium',
-          owner: 'trigger-scheduler',
+          owner: 'system',
           metadata: {
             triggerName: trigger.name,
             triggerEvent: trigger.event,

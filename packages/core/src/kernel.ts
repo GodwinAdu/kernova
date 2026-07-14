@@ -553,7 +553,27 @@ export class KernovaKernel {
     }
 
     // Phase 2: Agent Selection
-    const agent = await this.agents.selectAgent(intent, context);
+    let agent: any = null;
+
+    // If a specific agent is targeted (via metadata.targetAgent), find it directly
+    const targetAgentId = intent.metadata?.targetAgent as string | undefined;
+    if (targetAgentId) {
+      // Search registered agents by their definition ID
+      for (const [regId, registered] of (this.agents as any).agents) {
+        if (regId === targetAgentId || (registered.definition as any)?.id === targetAgentId) {
+          // Use selectAgentByName which creates an instance
+          agent = await this.agents.selectAgentByName(
+            (registered.definition as any).name, intent, context
+          );
+          break;
+        }
+      }
+    }
+
+    // Fallback to capability-based selection if no target or target not found
+    if (!agent) {
+      agent = await this.agents.selectAgent(intent, context);
+    }
 
     if (!agent) {
       if (trace) this._trajectory.endTrace(trace.id, { error: 'No agent found' });
