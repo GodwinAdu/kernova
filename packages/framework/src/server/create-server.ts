@@ -76,6 +76,27 @@ export async function createServer(options: ServerOptions = {}) {
 
   await kernel.start();
 
+  // Initialize pluggable memory provider (if configured)
+  let memoryProvider: any = null;
+  if (config.memory?.provider && config.memory.provider !== 'local' && config.memory.provider !== 'sqlite') {
+    try {
+      const { createMemoryProvider } = await import('@kernova/core') as any;
+      if (createMemoryProvider) {
+        memoryProvider = await createMemoryProvider({
+          provider: config.memory.provider as any,
+          url: config.memory.url || process.env.DATABASE_URL,
+          path: `${projectRoot}/kernova-data/memory.db`,
+          table: config.memory.table,
+          options: config.memory.options,
+        });
+        console.log(`  ✓ Memory provider: ${config.memory.provider} connected`);
+      }
+    } catch (err) {
+      console.error(`  ✗ Memory provider (${config.memory.provider}) failed:`, (err as Error).message);
+      console.log('  ↳ Falling back to kernel built-in memory (SQLite)');
+    }
+  }
+
   // Register discovered agents with the kernel
   const agentRouteMap = new Map<string, string>(); // route → definitionId
 
@@ -170,12 +191,28 @@ export async function createServer(options: ServerOptions = {}) {
                 tags.push(tool.name);
                 if (params.category) tags.push(params.category as string);
 
-                await kernel.memoryEngine.store({
+                const memEntry = {
+                  id: `mem_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
                   content,
-                  layer: 'longterm',
+                  layer: 'longterm' as const,
                   tags,
                   metadata: { tool: tool.name, category: params.category, timestamp: new Date().toISOString() },
-                });
+                  relevance: 1.0,
+                  confidence: 0.8,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                };
+
+                if (memoryProvider) {
+                  await memoryProvider.store(memEntry);
+                } else {
+                  await kernel.memoryEngine.store({
+                    content,
+                    layer: 'longterm',
+                    tags,
+                    metadata: { tool: tool.name, category: params.category, timestamp: new Date().toISOString() },
+                  });
+                }
               } catch {
                 // Non-critical — continue even if memory store fails
               }
@@ -216,7 +253,7 @@ export async function createServer(options: ServerOptions = {}) {
   console.log(`  └─ Config:  ${config.name} v${config.version}\n`);
 
   // Build route table
-  const routes: RouteHandler[] = buildRoutes(kernel, agents, tools, memories, config, agentRouteMap, apiKey, projectRoot);
+  const routes: RouteHandler[] = buildRoutes(kernel, agents, tools, memories, config, agentRouteMap, apiKey, projectRoot, memoryProvider);
 
   // Create HTTP server
   const server = createHttpServer(async (req, res) => {
@@ -303,6 +340,7 @@ function buildRoutes(
   agentRouteMap: Map<string, string>,
   apiKey: string | undefined,
   projectRoot: string,
+  memoryProvider: any,
 ): RouteHandler[] {
   const routes: RouteHandler[] = [];
 
@@ -354,30 +392,28 @@ function buildRoutes(
         // ─── MEMORY: Recall relevant facts about the user ─────────────────
         let memoryContext = '';
         try {
-          // First try semantic/FTS search
-          let memories = await kernel.memoryEngine.query({
-            query: input,
-            limit: 10,
-            layers: ['longterm'],
-          });
+          let memoryLines: string[] = [];
 
-          // If FTS returned nothing, get ALL long-term memories (for small memory stores)
-          if (!memories || memories.length === 0) {
-            memories = await kernel.memoryEngine.query({
-              limit: 20,
-              layers: ['longterm'],
-            });
+          if (memoryProvider) {
+            // Use pluggable provider (PostgreSQL, etc.)
+            let results = await memoryProvider.search({ query: input, layer: 'longterm', limit: 10 });
+            if (results.length === 0) {
+              results = await memoryProvider.getAll({ layer: 'longterm', limit: 20 });
+              results = results.map((e: any) => ({ entry: e, score: 1 }));
+            }
+            memoryLines = results.map((r: any) => r.entry?.content || r.content || '').filter(Boolean);
+          } else {
+            // Use kernel's built-in memory engine (SQLite)
+            let memories = await kernel.memoryEngine.query({ query: input, limit: 10, layers: ['longterm'] });
+            if (!memories || memories.length === 0) {
+              memories = await kernel.memoryEngine.query({ limit: 20, layers: ['longterm'] });
+            }
+            memoryLines = (memories || []).map((m: any) => m.content || '').filter(Boolean);
           }
 
-          if (memories && memories.length > 0) {
-            const memoryLines = memories.map((m: any) =>
-              m.content || m.text || ''
-            ).filter((s: string) => s.length > 0);
-
-            if (memoryLines.length > 0) {
-              memoryContext = '\n\nTHINGS I REMEMBER ABOUT YOU (facts from past conversations — use these!):\n' +
-                memoryLines.map((m: string) => `• ${m}`).join('\n') + '\n';
-            }
+          if (memoryLines.length > 0) {
+            memoryContext = '\n\nTHINGS I REMEMBER ABOUT YOU (facts from past conversations — use these!):\n' +
+              memoryLines.map((m: string) => `• ${m}`).join('\n') + '\n';
           }
         } catch (err) {
           console.error('[Memory] Failed to query memories:', (err as Error).message);
@@ -448,12 +484,28 @@ function buildRoutes(
 
         if (isPersonalInfo) {
           try {
-            await kernel.memoryEngine.store({
+            const memEntry = {
+              id: `mem_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
               content: input,
-              layer: 'longterm',
+              layer: 'longterm' as const,
               tags: ['user-fact', 'auto-saved'],
               metadata: { threadId: resolvedThreadId, timestamp: new Date().toISOString() },
-            });
+              relevance: 1.0,
+              confidence: 0.9,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+
+            if (memoryProvider) {
+              await memoryProvider.store(memEntry);
+            } else {
+              await kernel.memoryEngine.store({
+                content: input,
+                layer: 'longterm',
+                tags: ['user-fact', 'auto-saved'],
+                metadata: { threadId: resolvedThreadId, timestamp: new Date().toISOString() },
+              });
+            }
             console.log(`  [memory] Auto-saved: "${input.slice(0, 50)}..."`);
           } catch (err) {
             console.error('[Memory] Auto-save failed:', (err as Error).message);
