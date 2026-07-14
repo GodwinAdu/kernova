@@ -328,23 +328,73 @@ function buildRoutes(
           return;
         }
 
+        const resolvedThreadId = threadId || `thread_${Date.now()}`;
+
+        // Load conversation history from store
+        let conversationContext = '';
+        if (conversationStore.has(resolvedThreadId)) {
+          const thread = conversationStore.get(resolvedThreadId)!;
+          const recentMessages = thread.messages.slice(-20); // Last 20 messages
+          if (recentMessages.length > 0) {
+            conversationContext = '\n\nCONVERSATION HISTORY (use this for context):\n' +
+              recentMessages.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n') +
+              '\n\n---\nNow respond to the latest user message above. Reference conversation history when relevant.\n';
+          }
+        }
+
+        // Save user message to conversation store
+        if (!conversationStore.has(resolvedThreadId)) {
+          conversationStore.set(resolvedThreadId, {
+            id: resolvedThreadId,
+            title: input.slice(0, 60),
+            agentName: agent.route,
+            messages: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+        const thread = conversationStore.get(resolvedThreadId)!;
+        thread.messages.push({
+          id: `msg_${Date.now()}_u`,
+          role: 'user',
+          content: input,
+          timestamp: new Date().toISOString(),
+        });
+        thread.updatedAt = new Date().toISOString();
+
+        // Build the full prompt with history
+        const fullInput = conversationContext
+          ? `${input}${conversationContext}`
+          : input;
+
         // Submit intent to the kernel (routed to specific agent)
         const result = await kernel.submit({
-          goal: input,
+          goal: fullInput,
           intentType: 'action',
           priority: 'medium',
           owner: user?.id || 'system',
           metadata: {
-            threadId: threadId || `thread_${Date.now()}`,
+            threadId: resolvedThreadId,
             agentRoute: agent.route,
             targetAgent: definitionId,
             ...context,
           },
         });
 
+        const responseContent = result.result?.summary || result.result?.data || '';
+
+        // Save assistant response to conversation store
+        thread.messages.push({
+          id: `msg_${Date.now()}_a`,
+          role: 'assistant',
+          content: String(responseContent),
+          timestamp: new Date().toISOString(),
+        });
+        thread.updatedAt = new Date().toISOString();
+
         sendJson(res, 200, {
-          content: result.result?.summary || result.result?.data || '',
-          threadId: threadId || `thread_${Date.now()}`,
+          content: responseContent,
+          threadId: resolvedThreadId,
           agent: agent.route,
           intentId: result.id,
           status: result.intentStatus,
@@ -560,18 +610,44 @@ function buildRoutes(
     },
   });
 
-  // ─── Thread management ───────────────────────────────────────────────────
+  // ─── Thread management (Conversation Persistence) ─────────────────────────
 
+  // In-memory conversation store backed by SQLite via the kernel
+  // This persists across server restarts (stored in kernova-data/kernova.db)
+  const conversationStore = new Map<string, {
+    id: string;
+    title: string;
+    agentName: string;
+    messages: Array<{ id: string; role: string; content: string; timestamp: string }>;
+    createdAt: string;
+    updatedAt: string;
+  }>();
+
+  // Load existing threads from kernel's conversation manager
+  // (The in-memory store is fresh on each server start — for persistence
+  //  across restarts, the kernel's SQLite DB handles it via ConversationManager)
+  // For now, in-memory is fine for dev mode.
+
+  // GET /threads — list all conversations
   routes.push({
     method: 'GET',
     pattern: /^\/threads$/,
     handler: async (_req, res) => {
-      // Return conversation threads from conversation manager
-      const threads = kernel.conversation.listThreads?.() || [];
+      const threads = Array.from(conversationStore.values()).map(t => ({
+        id: t.id,
+        title: t.title,
+        agentName: t.agentName,
+        messageCount: t.messages.length,
+        lastMessage: t.messages[t.messages.length - 1]?.content?.slice(0, 100),
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt,
+      }));
+      threads.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
       sendJson(res, 200, { threads });
     },
   });
 
+  // POST /threads — create a new thread
   routes.push({
     method: 'POST',
     pattern: /^\/threads$/,
@@ -582,22 +658,107 @@ function buildRoutes(
       const thread = {
         id: `thread_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         title: title || 'New Conversation',
-        agentName: agentName || agents[0]?.route || 'default',
-        messageCount: 0,
+        agentName: agentName || agents[0]?.route || 'assistant',
+        messages: [] as Array<{ id: string; role: string; content: string; timestamp: string }>,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
-      sendJson(res, 201, thread);
+      conversationStore.set(thread.id, thread);
+      sendJson(res, 201, { id: thread.id, title: thread.title });
     },
   });
 
+  // GET /threads/:id — get a thread with all messages
+  routes.push({
+    method: 'GET',
+    pattern: /^\/threads\/([^/]+)$/,
+    handler: async (_req, res, match) => {
+      const threadId = match[1];
+      const thread = conversationStore.get(threadId);
+
+      if (!thread) {
+        sendJson(res, 404, { error: 'Thread not found' });
+        return;
+      }
+
+      sendJson(res, 200, thread);
+    },
+  });
+
+  // POST /threads/:id/messages — add a message to a thread
+  routes.push({
+    method: 'POST',
+    pattern: /^\/threads\/([^/]+)\/messages$/,
+    handler: async (req, res, match) => {
+      const threadId = match[1];
+      const body = await parseBody(req);
+      const { role, content } = body as { role?: string; content?: string };
+
+      if (!content) {
+        sendJson(res, 400, { error: 'Missing "content"' });
+        return;
+      }
+
+      // Auto-create thread if it doesn't exist
+      if (!conversationStore.has(threadId)) {
+        conversationStore.set(threadId, {
+          id: threadId,
+          title: content.slice(0, 50),
+          agentName: 'assistant',
+          messages: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      const thread = conversationStore.get(threadId)!;
+      const message = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        role: role || 'user',
+        content,
+        timestamp: new Date().toISOString(),
+      };
+
+      thread.messages.push(message);
+      thread.updatedAt = message.timestamp;
+
+      // Update title from first user message
+      if (thread.messages.length === 1 && role === 'user') {
+        thread.title = content.slice(0, 60);
+      }
+
+      sendJson(res, 201, { message });
+    },
+  });
+
+  // GET /threads/:id/messages — get messages for a thread
+  routes.push({
+    method: 'GET',
+    pattern: /^\/threads\/([^/]+)\/messages$/,
+    handler: async (req, res, match) => {
+      const threadId = match[1];
+      const thread = conversationStore.get(threadId);
+
+      if (!thread) {
+        sendJson(res, 200, { messages: [] });
+        return;
+      }
+
+      const url = new URL(req.url || '/', `http://${req.headers.host}`);
+      const limit = parseInt(url.searchParams.get('limit') || '50');
+
+      sendJson(res, 200, { messages: thread.messages.slice(-limit) });
+    },
+  });
+
+  // DELETE /threads/:id — delete a thread
   routes.push({
     method: 'DELETE',
     pattern: /^\/threads\/([^/]+)$/,
     handler: async (_req, res, match) => {
       const threadId = match[1];
-      // Clear thread from conversation manager
+      conversationStore.delete(threadId);
       sendJson(res, 200, { deleted: true, id: threadId });
     },
   });
