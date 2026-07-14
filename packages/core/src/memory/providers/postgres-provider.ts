@@ -34,13 +34,20 @@ export class PostgresMemoryProvider implements MemoryProvider {
     // Dynamic import — pg is an optional dependency
     let pg: any;
     try {
-      // @ts-ignore — pg is optional, only needed when using postgres provider
-      pg = await import(/* webpackIgnore: true */ 'pg');
+      // Use createRequire from project root to find pg in the project's node_modules
+      const { createRequire } = await import('node:module');
+      const require = createRequire(process.cwd() + '/package.json');
+      pg = require('pg');
     } catch {
-      throw new Error(
-        'PostgreSQL provider requires the "pg" package. Install it: npm install pg\n' +
-        'For vector search, also enable pgvector in your database: CREATE EXTENSION IF NOT EXISTS vector;'
-      );
+      try {
+        // @ts-ignore — pg might not be installed in core's node_modules
+        pg = await import('pg');
+      } catch {
+        throw new Error(
+          'PostgreSQL provider requires the "pg" package. Install it: npm install pg\n' +
+          'For vector search, also enable pgvector in your database: CREATE EXTENSION IF NOT EXISTS vector;'
+        );
+      }
     }
 
     const Pool = pg.default?.Pool || pg.Pool;

@@ -60,10 +60,16 @@ export class PostgresConversationStore implements ConversationStore {
   async initialize(): Promise<void> {
     let pg: any;
     try {
-      // @ts-ignore
-      pg = await import('pg');
+      const { createRequire } = await import('node:module');
+      const require = createRequire(process.cwd() + '/package.json');
+      pg = require('pg');
     } catch {
-      throw new Error('PostgreSQL conversation store requires "pg" package. Install: npm install pg');
+      try {
+        // @ts-ignore
+        pg = await import('pg');
+      } catch {
+        throw new Error('PostgreSQL conversation store requires "pg" package. Install: npm install pg');
+      }
     }
 
     const Pool = pg.default?.Pool || pg.Pool;
