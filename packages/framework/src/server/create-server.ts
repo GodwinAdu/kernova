@@ -354,22 +354,33 @@ function buildRoutes(
         // ─── MEMORY: Recall relevant facts about the user ─────────────────
         let memoryContext = '';
         try {
-          const memories = await kernel.memoryEngine.query({
+          // First try semantic/FTS search
+          let memories = await kernel.memoryEngine.query({
             query: input,
-            limit: 5,
+            limit: 10,
             layers: ['longterm'],
           });
+
+          // If FTS returned nothing, get ALL long-term memories (for small memory stores)
+          if (!memories || memories.length === 0) {
+            memories = await kernel.memoryEngine.query({
+              limit: 20,
+              layers: ['longterm'],
+            });
+          }
+
           if (memories && memories.length > 0) {
             const memoryLines = memories.map((m: any) =>
-              m.content || m.text || String(m)
-            ).filter(Boolean);
+              m.content || m.text || ''
+            ).filter((s: string) => s.length > 0);
+
             if (memoryLines.length > 0) {
-              memoryContext = '\n\nTHINGS I REMEMBER ABOUT YOU (from past conversations):\n' +
+              memoryContext = '\n\nTHINGS I REMEMBER ABOUT YOU (facts from past conversations — use these!):\n' +
                 memoryLines.map((m: string) => `• ${m}`).join('\n') + '\n';
             }
           }
-        } catch {
-          // Memory engine might not be ready — continue without
+        } catch (err) {
+          console.error('[Memory] Failed to query memories:', (err as Error).message);
         }
 
         // Load conversation history from store
@@ -424,25 +435,28 @@ function buildRoutes(
         const responseContent = result.result?.summary || result.result?.data || '';
 
         // ─── MEMORY: Auto-save important facts from this interaction ──────
-        // Save user messages that contain personal info to long-term memory
         const lowerInput = input.toLowerCase();
         const isPersonalInfo = lowerInput.includes('my name') || lowerInput.includes('i am') ||
           lowerInput.includes('i live') || lowerInput.includes('i work') ||
           lowerInput.includes('my birthday') || lowerInput.includes('my goal') ||
           lowerInput.includes('remember') || lowerInput.includes('i like') ||
           lowerInput.includes('i prefer') || lowerInput.includes('i spent') ||
-          lowerInput.includes('i slept') || lowerInput.includes('i exercised');
+          lowerInput.includes('i slept') || lowerInput.includes('i exercised') ||
+          lowerInput.includes('call me') || lowerInput.includes('my age') ||
+          lowerInput.includes('i have') || lowerInput.includes('my job') ||
+          lowerInput.includes('my email') || lowerInput.includes('my phone');
 
         if (isPersonalInfo) {
           try {
             await kernel.memoryEngine.store({
-              content: `User said: "${input}"`,
+              content: input,
               layer: 'longterm',
               tags: ['user-fact', 'auto-saved'],
               metadata: { threadId: resolvedThreadId, timestamp: new Date().toISOString() },
             });
-          } catch {
-            // Memory store might fail — non-critical
+            console.log(`  [memory] Auto-saved: "${input.slice(0, 50)}..."`);
+          } catch (err) {
+            console.error('[Memory] Auto-save failed:', (err as Error).message);
           }
         }
 
