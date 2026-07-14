@@ -441,15 +441,25 @@ function buildRoutes(
           try {
             let memoryLines: string[] = [];
 
+            console.log(`  [debug] Memory recall: provider=${memoryProvider ? 'postgres' : 'kernel'}, autoRecall=${autoRecall}`);
+
             if (memoryProvider) {
               // Always load ALL long-term memories (for personal AI with single user, this is fast)
               const allMemories = await memoryProvider.getAll({ layer: 'longterm', limit: 50 });
-              memoryLines = (Array.isArray(allMemories) ? allMemories : []).map((e: any) => e.content || '').filter(Boolean);
+              console.log(`  [debug] Memory provider returned: ${Array.isArray(allMemories) ? allMemories.length : 'not-array'} entries`);
+              memoryLines = (Array.isArray(allMemories) ? allMemories : [])
+                .map((e: any) => e.content || '')
+                .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
             } else {
               // Kernel memory — get all
               const memories = await kernel.memoryEngine.query({ limit: 50, layers: ['longterm'] });
-              memoryLines = (memories || []).map((m: any) => m.content || '').filter(Boolean);
+              console.log(`  [debug] Kernel memory returned: ${memories?.length || 0} entries`);
+              memoryLines = (memories || [])
+                .map((m: any) => m.content || '')
+                .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
             }
+
+            console.log(`  [debug] Memory lines for prompt: ${memoryLines.length} (first: "${memoryLines[0]?.slice(0, 40) || 'none'}")`);
 
             if (memoryLines.length > 0) {
               memoryContext = '\n\nTHINGS I REMEMBER ABOUT YOU (facts from past conversations — ALWAYS reference these!):\n' +
@@ -458,6 +468,8 @@ function buildRoutes(
           } catch (err) {
             console.error('[Memory] Recall failed:', (err as Error).message);
           }
+        } else {
+          console.log('  [debug] Memory recall DISABLED (autoRecall=false)');
         }
 
         // ─── CONVERSATION CONTEXT (configurable: how many messages to include) ───
