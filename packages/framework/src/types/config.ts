@@ -39,8 +39,22 @@ export interface KernovaFrameworkConfig {
   models?: Record<string, ModelConfig>;
   /** Memory defaults */
   memory?: {
-    provider?: 'local' | 'cloud';
+    /** Provider type: 'sqlite' (default), 'postgres', 'memory', 'redis', 'pinecone', 'custom' */
+    provider?: 'sqlite' | 'postgres' | 'memory' | 'redis' | 'pinecone' | 'supabase' | 'custom' | 'local' | 'cloud';
+    /** Connection URL (for postgres, redis, supabase) */
+    url?: string;
+    /** API key (for pinecone, external providers) */
+    apiKey?: string;
+    /** Embedding model for vector search */
     embeddingModel?: string;
+    /** Table/collection name (default: 'memories') */
+    table?: string;
+    /** Custom adapter path or import */
+    adapter?: string;
+    /** Enable vector search (requires embedding model + supported provider) */
+    vectorSearch?: boolean;
+    /** Additional provider-specific options */
+    options?: Record<string, unknown>;
   };
   /** Deploy configuration */
   deploy?: DeployConfig;
