@@ -53,6 +53,12 @@ export interface KernovaFrameworkConfig {
     adapter?: string;
     /** Enable vector search (requires embedding model + supported provider) */
     vectorSearch?: boolean;
+    /** Auto-recall memories and inject into prompt (default: true) */
+    autoRecall?: boolean;
+    /** Auto-save personal info to memory (default: false — opt-in) */
+    autoSave?: boolean;
+    /** Number of conversation messages to include as context (default: 20, 0 = none) */
+    contextMessages?: number;
     /** Additional provider-specific options */
     options?: Record<string, unknown>;
   };

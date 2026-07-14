@@ -432,49 +432,55 @@ function buildRoutes(
 
         const resolvedThreadId = threadId || `thread_${Date.now()}`;
 
-        // ─── MEMORY: Recall relevant facts about the user ─────────────────
+        // ─── MEMORY RECALL (configurable via kernova.config.ts memory settings) ───
         let memoryContext = '';
-        try {
-          let memoryLines: string[] = [];
+        const autoRecall = config.memory?.autoRecall !== false; // Default: ON
 
-          if (memoryProvider) {
-            // Use pluggable provider (PostgreSQL, etc.)
-            let results = await memoryProvider.search({ query: input, layer: 'longterm', limit: 10 });
-            if (results.length === 0) {
-              results = await memoryProvider.getAll({ layer: 'longterm', limit: 20 });
-              results = results.map((e: any) => ({ entry: e, score: 1 }));
-            }
-            memoryLines = results.map((r: any) => r.entry?.content || r.content || '').filter(Boolean);
-          } else {
-            // Use kernel's built-in memory engine (SQLite)
-            let memories = await kernel.memoryEngine.query({ query: input, limit: 10, layers: ['longterm'] });
-            if (!memories || memories.length === 0) {
-              memories = await kernel.memoryEngine.query({ limit: 20, layers: ['longterm'] });
-            }
-            memoryLines = (memories || []).map((m: any) => m.content || '').filter(Boolean);
-          }
+        if (autoRecall) {
+          try {
+            let memoryLines: string[] = [];
 
-          if (memoryLines.length > 0) {
-            memoryContext = '\n\nTHINGS I REMEMBER ABOUT YOU (facts from past conversations — use these!):\n' +
-              memoryLines.map((m: string) => `• ${m}`).join('\n') + '\n';
+            if (memoryProvider) {
+              let results = await memoryProvider.search({ query: input, layer: 'longterm', limit: 10 });
+              if (results.length === 0) {
+                results = await memoryProvider.getAll({ layer: 'longterm', limit: 20 });
+                results = results.map((e: any) => ({ entry: e, score: 1 }));
+              }
+              memoryLines = results.map((r: any) => r.entry?.content || r.content || '').filter(Boolean);
+            } else {
+              let memories = await kernel.memoryEngine.query({ query: input, limit: 10, layers: ['longterm'] });
+              if (!memories || memories.length === 0) {
+                memories = await kernel.memoryEngine.query({ limit: 20, layers: ['longterm'] });
+              }
+              memoryLines = (memories || []).map((m: any) => m.content || '').filter(Boolean);
+            }
+
+            if (memoryLines.length > 0) {
+              memoryContext = '\n\nTHINGS I REMEMBER ABOUT YOU (facts from past conversations — use these!):\n' +
+                memoryLines.map((m: string) => `• ${m}`).join('\n') + '\n';
+            }
+          } catch (err) {
+            console.error('[Memory] Recall failed:', (err as Error).message);
           }
-        } catch (err) {
-          console.error('[Memory] Failed to query memories:', (err as Error).message);
         }
 
-        // Load conversation history from store
+        // ─── CONVERSATION CONTEXT (configurable: how many messages to include) ───
         let conversationContext = '';
-        const recentMessages = await conversationStore.getMessages(resolvedThreadId, 20);
-        if (recentMessages.length > 0) {
-          conversationContext = '\n\nCONVERSATION HISTORY (use this for context):\n' +
-            recentMessages.map((m: any) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n') +
-            '\n\n---\nNow respond to the latest user message above. Reference conversation history and memories when relevant.\n';
+        const contextMessages = (config.memory as any)?.contextMessages ?? 20;
+
+        if (contextMessages > 0) {
+          const recentMessages = await conversationStore.getMessages(resolvedThreadId, contextMessages);
+          if (recentMessages.length > 0) {
+            conversationContext = '\n\nCONVERSATION HISTORY (use this for context):\n' +
+              recentMessages.map((m: any) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n') +
+              '\n\n---\nNow respond to the latest user message above. Reference conversation history and memories when relevant.\n';
+          }
         }
 
         // Save user message to conversation store
         await conversationStore.addMessage(resolvedThreadId, 'user', input);
 
-        // Build the full prompt with memory + history
+        // Build the full prompt with optional memory + history
         const fullInput = `${input}${memoryContext}${conversationContext}`;
 
         // Submit intent to the kernel (routed to specific agent)
@@ -493,45 +499,43 @@ function buildRoutes(
 
         const responseContent = result.result?.summary || result.result?.data || '';
 
-        // ─── MEMORY: Auto-save important facts from this interaction ──────
-        const lowerInput = input.toLowerCase();
-        const isPersonalInfo = lowerInput.includes('my name') || lowerInput.includes('i am') ||
-          lowerInput.includes('i live') || lowerInput.includes('i work') ||
-          lowerInput.includes('my birthday') || lowerInput.includes('my goal') ||
-          lowerInput.includes('remember') || lowerInput.includes('i like') ||
-          lowerInput.includes('i prefer') || lowerInput.includes('i spent') ||
-          lowerInput.includes('i slept') || lowerInput.includes('i exercised') ||
-          lowerInput.includes('call me') || lowerInput.includes('my age') ||
-          lowerInput.includes('i have') || lowerInput.includes('my job') ||
-          lowerInput.includes('my email') || lowerInput.includes('my phone');
+        // ─── MEMORY AUTO-SAVE (opt-in via config.memory.autoSave) ─────────
+        const autoSave = (config.memory as any)?.autoSave === true; // Default: OFF
 
-        if (isPersonalInfo) {
-          try {
-            const memEntry = {
-              id: `mem_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-              content: input,
-              layer: 'longterm' as const,
-              tags: ['user-fact', 'auto-saved'],
-              metadata: { threadId: resolvedThreadId, timestamp: new Date().toISOString() },
-              relevance: 1.0,
-              confidence: 0.9,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            };
+        if (autoSave) {
+          const lowerInput = input.toLowerCase();
+          const isPersonalInfo = lowerInput.includes('my name') || lowerInput.includes('i am') ||
+            lowerInput.includes('i live') || lowerInput.includes('i work') ||
+            lowerInput.includes('remember') || lowerInput.includes('i like') ||
+            lowerInput.includes('i prefer') || lowerInput.includes('i spent') ||
+            lowerInput.includes('i slept') || lowerInput.includes('call me') ||
+            lowerInput.includes('my email');
 
-            if (memoryProvider) {
-              await memoryProvider.store(memEntry);
-            } else {
-              await kernel.memoryEngine.store({
+          if (isPersonalInfo) {
+            try {
+              const memEntry = {
+                id: `mem_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
                 content: input,
-                layer: 'longterm',
+                layer: 'longterm' as const,
                 tags: ['user-fact', 'auto-saved'],
                 metadata: { threadId: resolvedThreadId, timestamp: new Date().toISOString() },
-              });
-            }
-            console.log(`  [memory] Auto-saved: "${input.slice(0, 50)}..."`);
-          } catch (err) {
-            console.error('[Memory] Auto-save failed:', (err as Error).message);
+                relevance: 1.0,
+                confidence: 0.9,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              };
+
+              if (memoryProvider) {
+                await memoryProvider.store(memEntry);
+              } else {
+                await kernel.memoryEngine.store({
+                  content: input,
+                  layer: 'longterm',
+                  tags: ['user-fact', 'auto-saved'],
+                  metadata: { threadId: resolvedThreadId, timestamp: new Date().toISOString() },
+                });
+              }
+            } catch { /* Non-critical */ }
           }
         }
 
