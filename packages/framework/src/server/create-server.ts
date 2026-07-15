@@ -2021,48 +2021,48 @@ function parseTtl(ttl: string): number {
 }
 
 /**
- * Detect if a message is a complex action task (needs the loop)
- * vs simple conversation (single-pass is fine).
+ * Detect if a message is a complex action task that REQUIRES multiple steps.
+ * Only returns true for explicit commands that need iterative execution.
  *
- * Complex tasks contain action verbs + targets:
- *   "reply to all emails" → complex (multi-step)
- *   "set up a project" → complex
- *   "research AI trends" → complex
+ * TRIGGERS LOOP (multi-step action commands):
+ *   "reply to all unread emails" — needs: search → read → reply × N
+ *   "set up a project on GitHub with 3 milestones" — needs: create repo → issues × N
+ *   "archive all newsletters from this week" — needs: search → archive × N
+ *   "clean up my inbox" — needs: scan → categorize → archive/delete × N
  *
- * Simple messages:
- *   "hi" → simple
- *   "what's my name?" → simple
- *   "how are you" → simple
- *   "thanks" → simple
+ * DOES NOT TRIGGER LOOP (single-pass is fine):
+ *   "what are my health goals" — just recall from memory
+ *   "help me plan my week" — delegate to productivity specialist
+ *   "what's the weather" — one tool call
+ *   "send an email to John" — one tool call
+ *   "hi / thanks / what's my name" — conversation
  */
 function isComplexTask(message: string): boolean {
   const lower = message.toLowerCase().trim();
 
-  // Short messages are never complex
-  if (lower.length < 15) return false;
+  // Short messages NEVER need a loop
+  if (lower.length < 20) return false;
+  if (lower.split(/\s+/).length <= 4) return false;
 
-  // Single-word messages are never complex
-  const words = lower.split(/\s+/);
-  if (words.length <= 3) return false;
+  // Questions are NOT action tasks (they're recall/delegation)
+  if (lower.startsWith('what') || lower.startsWith('how') || lower.startsWith('why') ||
+      lower.startsWith('when') || lower.startsWith('where') || lower.startsWith('who') ||
+      lower.startsWith('can you') || lower.startsWith('do you') || lower.startsWith('tell me')) {
+    return false;
+  }
 
-  // Action indicators — verbs that suggest multi-step work
-  const actionPatterns = [
-    /\b(reply|respond|send|forward|archive|delete|trash|mark)\b.*\b(all|every|each|emails?|messages?)\b/,
-    /\b(set up|setup|create|build|organize|plan|schedule)\b.*\b(project|meeting|events?|tasks?)\b/,
-    /\b(research|find|search|gather|collect|analyze)\b.*\b(about|for|on|information|data)\b/,
-    /\b(check|review|go through|process)\b.*\b(all|every|inbox|notifications?|issues?)\b/,
-    /\b(deploy|migrate|update|upgrade|install)\b/,
-    /\breply\s+(to\s+)?all\b/,
-    /\bdelete\s+(all|every)\b/,
-    /\barchive\s+(all|every)\b/,
-    /\bsend\s+\w+\s+to\s+\w+/,
-    /\bcreate\s+\w+\s+(issue|pr|page|event|task)/,
-    /\bforward\s+.*\s+to\b/,
-    /\bclean\s*(up)?\s*(my)?\s*(inbox|emails?|notifications?)/,
-    /\bdo\s+(all|everything)\b/,
-    /\bfor\s+each\b/,
-    /\bevery\s+(email|message|notification|issue)\b/,
+  // Batch/iterative action patterns — these genuinely need multiple steps
+  const batchPatterns = [
+    /\b(reply|respond)\s+(to\s+)?(all|every|each)\b/,
+    /\b(archive|delete|trash|remove)\s+(all|every|each)\b/,
+    /\b(check|process|go through)\s+(all|every|each|my)\s+(emails?|messages?|notifications?)\b/,
+    /\b(clean\s*(up)?|organize)\s+(my\s+)?(inbox|emails?)\b/,
+    /\bfor\s+each\s+(email|message|issue|notification)\b/,
+    /\b(set\s+up|create)\s+.{5,}\s+(with|including)\s+\d+/,  // "set up X with 3 milestones"
+    /\b(forward|send)\s+.+\s+to\s+(all|everyone|each)\b/,
+    /\bmark\s+all\s+(as\s+)?(read|unread|spam)\b/,
+    /\bbatch\s+(archive|delete|read)\b/,
   ];
 
-  return actionPatterns.some(pattern => pattern.test(lower));
+  return batchPatterns.some(pattern => pattern.test(lower));
 }
