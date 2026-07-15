@@ -33,11 +33,71 @@ export { agent } from './helpers/agent.js';
 export { tool } from './helpers/tool.js';
 export { workflow } from './helpers/workflow.js';
 
+// ─── Memory v2 (Three-layer architecture with 12 adapters) ───────────────────
+export {
+  createMemoryEngine,
+  KernovaMemoryEngine,
+  InProcessWorkingMemory,
+  scoreResults,
+  recencyScore,
+  frequencyScore,
+  normalizeWeights,
+  compact,
+  needsCompaction,
+  formatSummaryForPrompt,
+  // Adapters
+  PostgresMemoryAdapter,
+  SqliteMemoryAdapter,
+  InMemoryAdapter,
+  RedisMemoryAdapter,
+  MongoDBMemoryAdapter,
+  QdrantMemoryAdapter,
+  TursoMemoryAdapter,
+  SupabaseMemoryAdapter,
+  PineconeMemoryAdapter,
+  WeaviateMemoryAdapter,
+  DynamoDBMemoryAdapter,
+  FirestoreMemoryAdapter,
+  // Constants
+  DEFAULT_SCORING,
+  DEFAULT_COMPACTION,
+} from '@kernova/core';
+
+export type {
+  MemoryAdapter,
+  MemoryEntryV2,
+  MemoryQuery,
+  MemoryResult,
+  MemoryLayer,
+  MemoryFilter,
+  MemoryEngineConfigV2,
+  ScoringConfig,
+  WorkingMemory,
+  MemoryHooks,
+  CompactionConfig,
+  ConversationSummary,
+  PostgresAdapterConfig,
+  SqliteAdapterConfig,
+  InMemoryAdapterConfig,
+  RedisAdapterConfig,
+  MongoDBAdapterConfig,
+  QdrantAdapterConfig,
+  TursoAdapterConfig,
+  SupabaseAdapterConfig,
+  PineconeAdapterConfig,
+  WeaviateAdapterConfig,
+  DynamoDBAdapterConfig,
+  FirestoreAdapterConfig,
+} from '@kernova/core';
+
+// ─── Agent Loop (Goal-oriented iterative execution) ──────────────────────────
+export { executeLoop, DEFAULT_LOOP_CONFIG } from '@kernova/core';
+export type { LoopExecutorDeps, LoopConfig, LoopResult, LoopStep, LoopContext, LoopStatus } from '@kernova/core';
+
 // Re-export commonly used types
 export type {
   Intent,
   IntentResult,
-  MemoryLayer,
   MemoryEntry,
   AgentDefinition,
   KernovaEvent,
