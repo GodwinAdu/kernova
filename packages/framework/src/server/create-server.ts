@@ -344,6 +344,76 @@ export async function createServer(options: ServerOptions = {}) {
     // No triggers — that's fine
   }
 
+  // ─── Core Feature Initialization ──────────────────────────────────────────
+
+  // Model Fallback — auto-switch providers when primary fails
+  let modelFallback: any = null;
+  if (config.models && Object.keys(config.models).length > 1) {
+    try {
+      const { ModelFallbackManager } = await import('@kernova/core') as any;
+      if (ModelFallbackManager) {
+        modelFallback = new ModelFallbackManager({
+          providers: Object.entries(config.models).map(([key, val]: [string, any]) => ({
+            id: key,
+            provider: val.provider,
+            model: val.model,
+            priority: key === 'default' ? 1 : 2,
+          })),
+          maxRetries: 2,
+          retryDelayMs: 1000,
+        });
+        console.log(`  ✓ Model fallback: ${Object.keys(config.models).length} providers configured`);
+      }
+    } catch {}
+  }
+
+  // Rate Limiter — enforce request limits per agent/user
+  let rateLimiter: any = null;
+  if (config.gateway?.rateLimit) {
+    try {
+      const { RateLimiter } = await import('@kernova/core') as any;
+      if (RateLimiter) {
+        const { requests, window } = config.gateway.rateLimit;
+        const windowMs = window.endsWith('m') ? parseInt(window) * 60000
+          : window.endsWith('h') ? parseInt(window) * 3600000
+          : parseInt(window) * 1000;
+        rateLimiter = new RateLimiter({
+          rules: [{ id: 'global', maxRequests: requests, windowMs }],
+        });
+        console.log(`  ✓ Rate limiter: ${requests} requests per ${window}`);
+      }
+    } catch {}
+  }
+
+  // Budget Manager — track token usage and enforce limits
+  let budgetManager: any = null;
+  try {
+    const { BudgetManager } = await import('@kernova/core') as any;
+    if (BudgetManager) {
+      budgetManager = new BudgetManager({
+        defaultBudget: {
+          maxTokensPerDay: config.gateway?.rateLimit?.requests ? config.gateway.rateLimit.requests * 4000 : 1000000,
+          maxCostPerDay: 10.0, // $10/day default
+          warningThreshold: 0.8,
+        },
+      });
+      console.log(`  ✓ Budget manager: tracking token usage`);
+    }
+  } catch {}
+
+  // Trajectory Recorder — logs agent actions for auditability
+  let trajectoryRecorder: any = null;
+  try {
+    const { TrajectoryRecorder } = await import('@kernova/core') as any;
+    if (TrajectoryRecorder) {
+      trajectoryRecorder = new TrajectoryRecorder({
+        maxEntries: 1000,
+        persist: false, // We'll handle persistence via the activity API
+      });
+      console.log(`  ✓ Trajectory recorder: logging agent actions`);
+    }
+  } catch {}
+
   console.log(`\n  🧠 Kernova Framework Server`);
   console.log(`  ├─ Agents:  ${agents.length} discovered`);
   console.log(`  ├─ Tools:   ${tools.length} registered`);
@@ -386,7 +456,7 @@ export async function createServer(options: ServerOptions = {}) {
   }
 
   // Build route table
-  const routes: RouteHandler[] = buildRoutes(kernel, agents, tools, memories, config, agentRouteMap, apiKey, projectRoot, memoryProvider, conversationStore, memoryEngine, recallCache, generateEmbeddingCached);
+  const routes: RouteHandler[] = buildRoutes(kernel, agents, tools, memories, config, agentRouteMap, apiKey, projectRoot, memoryProvider, conversationStore, memoryEngine, recallCache, generateEmbeddingCached, modelFallback, rateLimiter, budgetManager, trajectoryRecorder);
 
   // Create HTTP server
   const server = createHttpServer(async (req, res) => {
@@ -487,6 +557,10 @@ function buildRoutes(
   memoryEngine: any,
   recallCache: RecallCache,
   generateEmbeddingCached: (text: string) => Promise<number[] | null>,
+  modelFallback: any,
+  rateLimiter: any,
+  budgetManager: any,
+  trajectoryRecorder: any,
 ): RouteHandler[] {
   const routes: RouteHandler[] = [];
 
@@ -531,6 +605,15 @@ function buildRoutes(
         if (!input) {
           sendJson(res, 400, { error: 'Missing "input" in request body' });
           return;
+        }
+
+        // Rate limit check
+        if (rateLimiter) {
+          const allowed = rateLimiter.check('global', user?.id || 'anonymous');
+          if (!allowed) {
+            sendJson(res, 429, { error: 'Rate limit exceeded. Try again shortly.' });
+            return;
+          }
         }
 
         const resolvedThreadId = threadId || `thread_${Date.now()}`;
@@ -732,6 +815,35 @@ function buildRoutes(
         console.log(`  [conversation] Saving assistant response to thread: ${resolvedThreadId}`);
         await conversationStore.addMessage(resolvedThreadId, 'assistant', String(responseContent));
 
+        // Track token usage
+        if (budgetManager && result.result?.durationMs) {
+          try {
+            budgetManager.recordUsage({
+              identity: user?.id || 'system',
+              tokens: Math.ceil((input.length + (String(responseContent).length || 0)) / 4), // Rough estimate
+              cost: 0, // Actual cost tracking requires model pricing
+              model: agent.definition.model || config.model?.model || 'gpt-4o',
+              timestamp: new Date().toISOString(),
+            });
+          } catch {}
+        }
+
+        // Record trajectory
+        if (trajectoryRecorder) {
+          try {
+            trajectoryRecorder.record({
+              intentId: result.id,
+              agent: agent.route,
+              goal: input,
+              response: String(responseContent).slice(0, 200),
+              toolsCalled: result.result?.evidence?.reasoning || '',
+              durationMs: result.result?.durationMs || 0,
+              success: true,
+              timestamp: new Date().toISOString(),
+            });
+          } catch {}
+        }
+
         sendJson(res, 200, {
           content: responseContent,
           threadId: resolvedThreadId,
@@ -762,6 +874,15 @@ function buildRoutes(
         if (!input) {
           sendJson(res, 400, { error: 'Missing "input" in request body' });
           return;
+        }
+
+        // Rate limit check
+        if (rateLimiter) {
+          const allowed = rateLimiter.check('global', user?.id || 'anonymous');
+          if (!allowed) {
+            sendJson(res, 429, { error: 'Rate limit exceeded. Try again shortly.' });
+            return;
+          }
         }
 
         const resolvedThreadId = threadId || `thread_${Date.now()}`;
@@ -947,6 +1068,35 @@ function buildRoutes(
                 recallCache.invalidate();
               } catch { /* non-critical */ }
             }
+          }
+
+          // Track token usage
+          if (budgetManager && result.result?.durationMs) {
+            try {
+              budgetManager.recordUsage({
+                identity: user?.id || 'system',
+                tokens: Math.ceil((input.length + (String(responseContent).length || 0)) / 4), // Rough estimate
+                cost: 0, // Actual cost tracking requires model pricing
+                model: agent.definition.model || config.model?.model || 'gpt-4o',
+                timestamp: new Date().toISOString(),
+              });
+            } catch {}
+          }
+
+          // Record trajectory
+          if (trajectoryRecorder) {
+            try {
+              trajectoryRecorder.record({
+                intentId: result.id,
+                agent: agent.route,
+                goal: input,
+                response: String(responseContent).slice(0, 200),
+                toolsCalled: result.result?.evidence?.reasoning || '',
+                durationMs: result.result?.durationMs || 0,
+                success: true,
+                timestamp: new Date().toISOString(),
+              });
+            } catch {}
           }
         } catch (err) {
           stream.write(JSON.stringify({ error: (err as Error).message }));
