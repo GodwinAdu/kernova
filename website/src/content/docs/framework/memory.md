@@ -152,7 +152,7 @@ memory: {
 
 ## Storage Adapters
 
-Kernova ships **8 built-in adapters**. You can also implement your own.
+Kernova ships **12 built-in adapters**. You can also implement your own.
 
 ### PostgreSQL + pgvector (Recommended for Production)
 
@@ -282,6 +282,98 @@ Features: pgvector via Supabase RPC, auto-creates match function, PostgreSQL ful
 Install: `npm install @supabase/supabase-js`
 
 ### Custom Adapter
+
+Implement the `MemoryAdapter` interface to use any database:
+
+```typescript
+import type { MemoryAdapter, MemoryEntry, MemoryLayer } from '@kernova/core';
+
+class MyCustomAdapter implements MemoryAdapter {
+  readonly name = 'my-adapter';
+  async initialize() { /* connect */ }
+  async store(entry: MemoryEntry) { /* save */ }
+  async searchByVector(embedding, options) { /* vector search */ }
+  async searchByText(query, options) { /* text search */ }
+  async get(id: string) { /* fetch */ }
+  async delete(id: string) { /* remove */ }
+  async update(id: string, updates) { /* modify */ }
+  async list(options) { /* browse */ }
+  async count(filter?) { /* count */ }
+  async close() { /* cleanup */ }
+}
+```
+
+### Pinecone (Managed Vector Database)
+
+```typescript
+import { PineconeMemoryAdapter } from '@kernova/core';
+
+const engine = await createMemoryEngine({
+  adapter: new PineconeMemoryAdapter({
+    apiKey: process.env.PINECONE_API_KEY!,
+    indexName: 'kernova-memories',
+    namespace: 'production',
+  }),
+});
+```
+
+Features: Managed serverless vector search, metadata filtering, namespace partitioning. Best for production AI with zero infrastructure management.
+
+Install: `npm install @pinecone-database/pinecone`
+
+### Weaviate (Hybrid Search)
+
+```typescript
+import { WeaviateMemoryAdapter } from '@kernova/core';
+
+const engine = await createMemoryEngine({
+  adapter: new WeaviateMemoryAdapter({
+    url: 'http://localhost:8080',
+    apiKey: process.env.WEAVIATE_API_KEY, // For Weaviate Cloud
+    className: 'KernovaMemory',
+  }),
+});
+```
+
+Features: Native nearVector (HNSW), BM25 keyword search, hybrid search, auto-schema creation. Best for combining vector + keyword search.
+
+Install: `npm install weaviate-client`
+
+### DynamoDB (AWS Native)
+
+```typescript
+import { DynamoDBMemoryAdapter } from '@kernova/core';
+
+const engine = await createMemoryEngine({
+  adapter: new DynamoDBMemoryAdapter({
+    region: 'us-east-1',
+    tableName: 'my-app-memories',
+    // endpoint: 'http://localhost:8000', // For DynamoDB Local
+  }),
+});
+```
+
+Features: Auto-creates table with GSI, native TTL, pay-per-request billing, DynamoDB Local support. Note: No native vector search — uses JS cosine similarity.
+
+Install: `npm install @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb`
+
+### Firestore (Google Cloud)
+
+```typescript
+import { FirestoreMemoryAdapter } from '@kernova/core';
+
+const engine = await createMemoryEngine({
+  adapter: new FirestoreMemoryAdapter({
+    projectId: 'my-project',
+    collectionName: 'memories',
+    // credentials: serviceAccountJSON, // Optional if on GCP
+  }),
+});
+```
+
+Features: Vector search via `findNearest()` (Firestore 2024+), array-contains queries for tags, automatic TTL, batch operations (500/batch). Note: No native full-text search.
+
+Install: `npm install @google-cloud/firestore`
 
 Implement the `MemoryAdapter` interface to use any database:
 

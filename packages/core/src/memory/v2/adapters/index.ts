@@ -37,3 +37,15 @@ export type { TursoAdapterConfig } from './turso.js';
 
 export { SupabaseMemoryAdapter } from './supabase.js';
 export type { SupabaseAdapterConfig } from './supabase.js';
+
+export { PineconeMemoryAdapter } from './pinecone.js';
+export type { PineconeAdapterConfig } from './pinecone.js';
+
+export { WeaviateMemoryAdapter } from './weaviate.js';
+export type { WeaviateAdapterConfig } from './weaviate.js';
+
+export { DynamoDBMemoryAdapter } from './dynamodb.js';
+export type { DynamoDBAdapterConfig } from './dynamodb.js';
+
+export { FirestoreMemoryAdapter } from './firestore.js';
+export type { FirestoreAdapterConfig } from './firestore.js';

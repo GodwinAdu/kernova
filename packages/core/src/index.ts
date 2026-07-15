@@ -38,8 +38,10 @@ export { scoreResults, recencyScore, frequencyScore, normalizeWeights } from './
 export { compact, needsCompaction, formatSummaryForPrompt } from './memory/v2/index.js';
 export { PostgresMemoryAdapter, SqliteMemoryAdapter, InMemoryAdapter } from './memory/v2/adapters/index.js';
 export { RedisMemoryAdapter, MongoDBMemoryAdapter, QdrantMemoryAdapter, TursoMemoryAdapter, SupabaseMemoryAdapter } from './memory/v2/adapters/index.js';
+export { PineconeMemoryAdapter, WeaviateMemoryAdapter, DynamoDBMemoryAdapter, FirestoreMemoryAdapter } from './memory/v2/adapters/index.js';
 export type { PostgresAdapterConfig, SqliteAdapterConfig, InMemoryAdapterConfig } from './memory/v2/adapters/index.js';
 export type { RedisAdapterConfig, MongoDBAdapterConfig, QdrantAdapterConfig, TursoAdapterConfig, SupabaseAdapterConfig } from './memory/v2/adapters/index.js';
+export type { PineconeAdapterConfig, WeaviateAdapterConfig, DynamoDBAdapterConfig, FirestoreAdapterConfig } from './memory/v2/adapters/index.js';
 export type {
   MemoryAdapter, MemoryEntry as MemoryEntryV2, MemoryQuery, MemoryResult,
   MemoryLayer, MemoryFilter, MemoryEngineConfig as MemoryEngineConfigV2,
