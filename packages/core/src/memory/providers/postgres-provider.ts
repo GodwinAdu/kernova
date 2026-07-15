@@ -54,40 +54,69 @@ export class PostgresMemoryProvider implements MemoryProvider {
     this.pool = new Pool({ connectionString: this.config.url });
 
     // Create table with vector support
+    // IMPORTANT: Neon (and some hosted PG) don't support multi-statement queries.
+    // Each DDL statement must be executed separately.
     const dims = this.config.vectorDimensions || 1536; // OpenAI text-embedding-3-small default
 
-    await this.pool.query(`
-      CREATE EXTENSION IF NOT EXISTS vector;
+    // Step 1: Enable pgvector extension
+    try {
+      await this.pool.query(`CREATE EXTENSION IF NOT EXISTS vector`);
+    } catch (err: any) {
+      console.warn(`[PostgresMemory] pgvector extension not available: ${err.message}`);
+      // Continue without vector support — text search will still work
+    }
 
-      CREATE TABLE IF NOT EXISTS ${this.table} (
-        id TEXT PRIMARY KEY,
-        content TEXT NOT NULL,
-        layer TEXT NOT NULL DEFAULT 'longterm',
-        tags JSONB DEFAULT '[]'::jsonb,
-        metadata JSONB DEFAULT '{}'::jsonb,
-        relevance REAL DEFAULT 1.0,
-        confidence REAL DEFAULT 0.8,
-        embedding vector(${dims}),
-        search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
+    // Step 2: Create table
+    try {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS ${this.table} (
+          id TEXT PRIMARY KEY,
+          content TEXT NOT NULL,
+          layer TEXT NOT NULL DEFAULT 'longterm',
+          tags JSONB DEFAULT '[]'::jsonb,
+          metadata JSONB DEFAULT '{}'::jsonb,
+          relevance REAL DEFAULT 1.0,
+          confidence REAL DEFAULT 0.8,
+          embedding vector(${dims}),
+          search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+    } catch (err: any) {
+      // Table might already exist with different schema — that's OK
+      if (!err.message?.includes('already exists')) {
+        console.error(`[PostgresMemory] Table creation failed:`, err.message);
+      }
+    }
 
-      CREATE INDEX IF NOT EXISTS idx_${this.table}_layer ON ${this.table}(layer);
-      CREATE INDEX IF NOT EXISTS idx_${this.table}_created ON ${this.table}(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_${this.table}_search ON ${this.table} USING GIN(search_vector);
-      CREATE INDEX IF NOT EXISTS idx_${this.table}_tags ON ${this.table} USING GIN(tags);
-    `);
+    // Step 3: Create indexes (each separate query)
+    const indexes = [
+      `CREATE INDEX IF NOT EXISTS idx_${this.table}_layer ON ${this.table}(layer)`,
+      `CREATE INDEX IF NOT EXISTS idx_${this.table}_created ON ${this.table}(created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_${this.table}_search ON ${this.table} USING GIN(search_vector)`,
+      `CREATE INDEX IF NOT EXISTS idx_${this.table}_tags ON ${this.table} USING GIN(tags)`,
+    ];
 
-    // Try to create vector index (might fail if no vectors stored yet)
+    for (const indexSql of indexes) {
+      try {
+        await this.pool.query(indexSql);
+      } catch {
+        // Index might already exist or column missing — non-critical
+      }
+    }
+
+    // Step 4: Try to create vector index (might fail if no vectors stored yet)
     try {
       await this.pool.query(`
         CREATE INDEX IF NOT EXISTS idx_${this.table}_embedding ON ${this.table}
-        USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+        USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)
       `);
     } catch {
       // IVFFlat needs data first — will create on first vector insert
     }
+
+    console.log(`[PostgresMemory] ✓ Initialized table "${this.table}" with vector support (${dims} dims)`);
   }
 
   async store(entry: MemoryEntry): Promise<void> {
@@ -95,30 +124,37 @@ export class PostgresMemoryProvider implements MemoryProvider {
       ? `[${entry.embedding.join(',')}]`
       : null;
 
-    await this.pool.query(
-      `INSERT INTO ${this.table} (id, content, layer, tags, metadata, relevance, confidence, embedding, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::vector, $9, $10)
-       ON CONFLICT (id) DO UPDATE SET
-         content = EXCLUDED.content,
-         tags = EXCLUDED.tags,
-         metadata = EXCLUDED.metadata,
-         relevance = EXCLUDED.relevance,
-         confidence = EXCLUDED.confidence,
-         embedding = EXCLUDED.embedding,
-         updated_at = EXCLUDED.updated_at`,
-      [
-        entry.id,
-        entry.content,
-        entry.layer,
-        JSON.stringify(entry.tags),
-        JSON.stringify(entry.metadata),
-        entry.relevance,
-        entry.confidence,
-        embeddingStr,
-        entry.createdAt,
-        entry.updatedAt,
-      ]
-    );
+    try {
+      await this.pool.query(
+        `INSERT INTO ${this.table} (id, content, layer, tags, metadata, relevance, confidence, embedding, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::vector, $9, $10)
+         ON CONFLICT (id) DO UPDATE SET
+           content = EXCLUDED.content,
+           tags = EXCLUDED.tags,
+           metadata = EXCLUDED.metadata,
+           relevance = EXCLUDED.relevance,
+           confidence = EXCLUDED.confidence,
+           embedding = EXCLUDED.embedding,
+           updated_at = EXCLUDED.updated_at`,
+        [
+          entry.id,
+          entry.content,
+          entry.layer || 'longterm',
+          JSON.stringify(entry.tags || []),
+          JSON.stringify(entry.metadata || {}),
+          entry.relevance ?? 1.0,
+          entry.confidence ?? 0.8,
+          embeddingStr,
+          entry.createdAt || new Date().toISOString(),
+          entry.updatedAt || new Date().toISOString(),
+        ]
+      );
+      console.log(`[PostgresMemory] ✓ Stored: "${entry.content?.slice(0, 50)}..." (id: ${entry.id})`);
+    } catch (err: any) {
+      console.error(`[PostgresMemory] ✗ Store failed:`, err.message);
+      console.error(`[PostgresMemory]   Entry ID: ${entry.id}, Content length: ${entry.content?.length}`);
+      throw err; // Re-throw so caller knows it failed
+    }
   }
 
   async search(options: MemorySearchOptions): Promise<MemorySearchResult[]> {

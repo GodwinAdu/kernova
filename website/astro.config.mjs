@@ -20,6 +20,7 @@ export default defineConfig({
             { label: 'Create a Project', slug: 'framework/create-project' },
             { label: 'Defining Agents', slug: 'framework/agents' },
             { label: 'Custom Tools', slug: 'framework/tools' },
+            { label: 'Memory System', slug: 'framework/memory' },
             { label: 'React Hooks', slug: 'framework/react-hooks' },
             { label: 'Middleware', slug: 'framework/middleware' },
             { label: 'Multi-Agent', slug: 'framework/multi-agent' },

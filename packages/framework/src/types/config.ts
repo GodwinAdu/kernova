@@ -39,6 +39,8 @@ export interface KernovaFrameworkConfig {
   models?: Record<string, ModelConfig>;
   /** Memory defaults */
   memory?: {
+    /** Memory system version: 1 (default/legacy) or 2 (new three-layer architecture) */
+    version?: 1 | 2;
     /** Provider type: 'sqlite' (default), 'postgres', 'memory', 'redis', 'pinecone', 'custom' */
     provider?: 'sqlite' | 'postgres' | 'memory' | 'redis' | 'pinecone' | 'supabase' | 'custom' | 'local' | 'cloud';
     /** Connection URL (for postgres, redis, supabase) */
@@ -49,8 +51,12 @@ export interface KernovaFrameworkConfig {
     embeddingModel?: string;
     /** Table/collection name (default: 'memories') */
     table?: string;
-    /** Custom adapter path or import */
+    /** Schema name (postgres only, default: 'public') */
+    schema?: string;
+    /** Custom adapter path, import, or adapter type for v2 ('postgres', 'sqlite', 'memory') */
     adapter?: string;
+    /** Vector dimensions for v2 (default: 1536) */
+    vectorDimensions?: number;
     /** Enable vector search (requires embedding model + supported provider) */
     vectorSearch?: boolean;
     /** Auto-recall memories and inject into prompt (default: true) */
@@ -59,6 +65,33 @@ export interface KernovaFrameworkConfig {
     autoSave?: boolean;
     /** Number of conversation messages to include as context (default: 20, 0 = none) */
     contextMessages?: number;
+    /** Path to SQLite database file (for sqlite adapter) */
+    path?: string;
+    /** Default namespace (v2, default: 'default') */
+    defaultNamespace?: string;
+    /** Retrieval scoring weights (v2) */
+    scoring?: {
+      similarityWeight?: number;
+      recencyWeight?: number;
+      frequencyWeight?: number;
+      relevanceWeight?: number;
+      recencyHalfLife?: number;
+    };
+    /** Auto-compaction settings (v2) */
+    compaction?: {
+      enabled?: boolean;
+      threshold?: number;
+      keepRecent?: number;
+    };
+    /** Embedding configuration (v2) */
+    embedding?: {
+      model?: string;
+      dimensions?: number;
+      baseUrl?: string;
+      apiKeyEnv?: string;
+    };
+    /** Lifecycle hooks (v2) */
+    hooks?: Record<string, (...args: any[]) => Promise<any>>;
     /** Additional provider-specific options */
     options?: Record<string, unknown>;
   };

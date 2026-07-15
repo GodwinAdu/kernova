@@ -30,6 +30,21 @@ export { createConversationStore, PostgresConversationStore, SqliteConversationS
 export type { MemoryProvider, MemoryProviderConfig, MemorySearchOptions, MemorySearchResult } from './memory/providers/index.js';
 export type { MemoryEntry as ProviderMemoryEntry } from './memory/providers/types.js';
 export type { ConversationStore, ConversationStoreConfig, Thread as ConversationThread, ChatMessage } from './memory/providers/index.js';
+
+// Memory System v2 — Three-layer architecture with scoring, compaction, and pluggable adapters
+export { KernovaMemoryEngine, createMemoryEngine } from './memory/v2/index.js';
+export { InProcessWorkingMemory } from './memory/v2/index.js';
+export { scoreResults, recencyScore, frequencyScore, normalizeWeights } from './memory/v2/index.js';
+export { compact, needsCompaction, formatSummaryForPrompt } from './memory/v2/index.js';
+export { PostgresMemoryAdapter, SqliteMemoryAdapter, InMemoryAdapter } from './memory/v2/adapters/index.js';
+export type { PostgresAdapterConfig, SqliteAdapterConfig, InMemoryAdapterConfig } from './memory/v2/adapters/index.js';
+export type {
+  MemoryAdapter, MemoryEntry as MemoryEntryV2, MemoryQuery, MemoryResult,
+  MemoryLayer, MemoryFilter, MemoryEngineConfig as MemoryEngineConfigV2,
+  ScoringConfig, WorkingMemory, MemoryHooks, CompactionConfig, ConversationSummary,
+} from './memory/v2/index.js';
+export { DEFAULT_SCORING, DEFAULT_COMPACTION } from './memory/v2/index.js';
+
 export { AgentRegistry } from './agents/agent-registry.js';
 export type { AgentExecutor, AgentTools } from './agents/agent-registry.js';
 export { AgentCoordinator } from './agents/coordinator.js';

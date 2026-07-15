@@ -12,6 +12,7 @@
 export { defineAgent } from './define-agent.js';
 export { defineTool } from './define-tool.js';
 export { defineMemory } from './define-memory.js';
+export { defineMemoryConfig } from './memory/index.js';
 export { defineConfig } from './config/index.js';
 export { defineMiddleware } from './define-middleware.js';
 export { defineSkill } from './skills/define-skill.js';
@@ -45,6 +46,12 @@ export type {
   MemoryField,
   MemorySchema,
 } from './types/memory.js';
+
+export type {
+  MemoryV2Config,
+  MemoryV2EmbeddingConfig,
+  ResolvedMemoryV2Config,
+} from './memory/index.js';
 
 export type {
   KernovaFrameworkConfig,

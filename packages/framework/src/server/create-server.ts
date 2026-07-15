@@ -89,11 +89,86 @@ export async function createServer(options: ServerOptions = {}) {
           table: config.memory.table,
           options: config.memory.options,
         });
-        console.log(`  ✓ Memory provider: ${config.memory.provider} connected`);
+
+        // Verify the provider works with a test query
+        try {
+          const count = await memoryProvider.count('longterm');
+          console.log(`  ✓ Memory provider: ${config.memory.provider} connected (${count} memories stored)`);
+        } catch (verifyErr: any) {
+          console.log(`  ✓ Memory provider: ${config.memory.provider} connected (verify query failed: ${verifyErr.message})`);
+        }
       }
     } catch (err) {
       console.error(`  ✗ Memory provider (${config.memory.provider}) failed:`, (err as Error).message);
+      console.error(`  ✗ Stack:`, (err as Error).stack?.split('\n').slice(0, 3).join('\n'));
       console.log('  ↳ Falling back to kernel built-in memory (SQLite)');
+    }
+  }
+
+  // ─── Memory v2 initialization (opt-in) ──────────────────────────────────────
+  // Activated when config.memory.version === 2 OR when a memory/ config directory exists.
+  // Keeps v1 memoryProvider as fallback — v2 is used preferentially when available.
+  let memoryEngine: any = null;
+  const memoryV2Enabled = (config.memory as any)?.version === 2 ||
+    (() => { try { const { existsSync } = require('node:fs'); const { join } = require('node:path'); return existsSync(join(projectRoot, 'memory', 'index.ts')) || existsSync(join(projectRoot, 'memory', 'index.js')); } catch { return false; } })();
+
+  if (memoryV2Enabled) {
+    try {
+      const { createMemoryEngine, PostgresMemoryAdapter, SqliteMemoryAdapter, InMemoryAdapter } = await import('@kernova/core') as any;
+
+      // Determine adapter
+      let adapter: any;
+      const memConfig = config.memory as any;
+      const dbUrl = memConfig?.url || process.env.DATABASE_URL;
+      const adapterType = memConfig?.adapter || memConfig?.provider || (dbUrl ? 'postgres' : 'sqlite');
+
+      if (typeof adapterType === 'object' && adapterType.name) {
+        // Custom adapter instance passed directly
+        adapter = adapterType;
+      } else if (adapterType === 'postgres' && dbUrl) {
+        adapter = new PostgresMemoryAdapter({
+          url: dbUrl,
+          table: memConfig?.table,
+          schema: memConfig?.schema,
+          vectorDimensions: memConfig?.vectorDimensions || memConfig?.embedding?.dimensions || 1536,
+        });
+      } else if (adapterType === 'sqlite') {
+        adapter = new SqliteMemoryAdapter({
+          path: memConfig?.path || `${projectRoot}/kernova-data/memory.db`,
+          table: memConfig?.table,
+        });
+      } else if (adapterType === 'memory') {
+        adapter = new InMemoryAdapter();
+      } else if (dbUrl) {
+        // Default: postgres if DATABASE_URL is set
+        adapter = new PostgresMemoryAdapter({ url: dbUrl, table: memConfig?.table });
+      } else {
+        // Default: SQLite for local dev
+        adapter = new SqliteMemoryAdapter({
+          path: `${projectRoot}/kernova-data/memory.db`,
+          table: memConfig?.table,
+        });
+      }
+
+      // Embedding function (reuses existing generateEmbedding)
+      const embed = async (text: string): Promise<number[] | null> => {
+        return await generateEmbedding(text);
+      };
+
+      memoryEngine = await createMemoryEngine({
+        adapter,
+        embed,
+        scoring: memConfig?.scoring,
+        compaction: memConfig?.compaction,
+        hooks: memConfig?.hooks,
+        defaultNamespace: memConfig?.defaultNamespace || 'default',
+        debug: process.env.NODE_ENV !== 'production',
+      });
+
+      console.log(`  ✓ Memory Engine v2: initialized (adapter: ${adapter.name})`);
+    } catch (err: any) {
+      console.error(`  ✗ Memory Engine v2 failed:`, err.message);
+      // Continue — v1 memoryProvider or kernel fallback still available
     }
   }
 
@@ -296,7 +371,7 @@ export async function createServer(options: ServerOptions = {}) {
   }
 
   // Build route table
-  const routes: RouteHandler[] = buildRoutes(kernel, agents, tools, memories, config, agentRouteMap, apiKey, projectRoot, memoryProvider, conversationStore);
+  const routes: RouteHandler[] = buildRoutes(kernel, agents, tools, memories, config, agentRouteMap, apiKey, projectRoot, memoryProvider, conversationStore, memoryEngine);
 
   // Create HTTP server
   const server = createHttpServer(async (req, res) => {
@@ -385,6 +460,7 @@ function buildRoutes(
   projectRoot: string,
   memoryProvider: any,
   conversationStore: any,
+  memoryEngine: any,
 ): RouteHandler[] {
   const routes: RouteHandler[] = [];
 
@@ -440,7 +516,20 @@ function buildRoutes(
         if (autoRecall) {
           try {
             let memoryLines: string[] = [];
+
+            // ─── Memory v2 recall (preferred when engine is available) ───
+            if (memoryEngine) {
+              const results = await memoryEngine.recall(input, { limit: 15, namespace: 'default' });
+              memoryLines = results
+                .map((r: any) => r.entry.content)
+                .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
+            }
+
+            // ─── Fallback: v1 memory provider ───
+            if (memoryLines.length === 0) {
             const useVectors = config.memory?.vectorSearch !== false; // Default: ON if provider supports it
+
+            console.log(`  [recall] Provider: ${memoryEngine ? 'v2-engine' : memoryProvider ? 'PostgreSQL' : 'kernel-sqlite'}, vectorSearch: ${useVectors}`);
 
             if (memoryProvider) {
               const totalCount = await memoryProvider.count('longterm').catch(() => 0);
@@ -486,6 +575,7 @@ function buildRoutes(
                 .map((m: any) => m.content || '')
                 .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
             }
+            } // end v1 fallback (memoryLines.length === 0)
 
             if (memoryLines.length > 0) {
               memoryContext = '\n\nTHINGS I REMEMBER ABOUT YOU (facts from past conversations — ALWAYS reference these!):\n' +
@@ -512,6 +602,7 @@ function buildRoutes(
         }
 
         // Save user message to conversation store
+        console.log(`  [conversation] Saving user message to thread: ${resolvedThreadId}`);
         await conversationStore.addMessage(resolvedThreadId, 'user', input);
 
         // Build the full prompt with optional memory + history
@@ -546,9 +637,22 @@ function buildRoutes(
             lowerInput.includes('my email');
 
           if (isPersonalInfo) {
+            console.log(`  [memory] Auto-saving personal info: "${input.slice(0, 60)}..."`);
             try {
+              // Prefer Memory Engine v2 when available
+              if (memoryEngine) {
+                await memoryEngine.store(input, {
+                  tags: ['user-fact', 'auto-saved'],
+                  namespace: 'default',
+                  metadata: { threadId: resolvedThreadId, timestamp: new Date().toISOString() },
+                  relevance: 1.0,
+                  confidence: 0.9,
+                });
+                console.log(`  [memory] ✓ Saved via Memory Engine v2`);
+              } else {
               // Generate embedding for vector search later
               const embedding = await generateEmbedding(input);
+              console.log(`  [memory] Embedding generated: ${embedding ? 'yes' : 'no'} (${embedding?.length || 0} dims)`);
 
               const memEntry = {
                 id: `mem_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -565,6 +669,7 @@ function buildRoutes(
 
               if (memoryProvider) {
                 await memoryProvider.store(memEntry);
+                console.log(`  [memory] ✓ Saved to PostgreSQL memory provider`);
               } else {
                 await kernel.memoryEngine.store({
                   content: input,
@@ -572,12 +677,19 @@ function buildRoutes(
                   tags: ['user-fact', 'auto-saved'],
                   metadata: { threadId: resolvedThreadId, timestamp: new Date().toISOString() },
                 });
+                console.log(`  [memory] ✓ Saved to kernel memory (SQLite fallback)`);
               }
-            } catch { /* Non-critical */ }
+              }
+            } catch (err: any) {
+              console.error(`  [memory] ✗ Auto-save failed:`, err.message);
+            }
           }
+        } else {
+          // Only log once per session, not every request
         }
 
         // Save assistant response to conversation store
+        console.log(`  [conversation] Saving assistant response to thread: ${resolvedThreadId}`);
         await conversationStore.addMessage(resolvedThreadId, 'assistant', String(responseContent));
 
         sendJson(res, 200, {
@@ -612,6 +724,92 @@ function buildRoutes(
           return;
         }
 
+        const resolvedThreadId = threadId || `thread_${Date.now()}`;
+
+        // ─── MEMORY RECALL (same as sync endpoint) ───
+        let memoryContext = '';
+        const autoRecall = config.memory?.autoRecall !== false;
+
+        if (autoRecall) {
+          try {
+            let memoryLines: string[] = [];
+
+            // ─── Memory v2 recall (preferred when engine is available) ───
+            if (memoryEngine) {
+              const results = await memoryEngine.recall(input, { limit: 15, namespace: 'default' });
+              memoryLines = results
+                .map((r: any) => r.entry.content)
+                .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
+            }
+
+            // ─── Fallback: v1 memory provider ───
+            if (memoryLines.length === 0) {
+            if (memoryProvider) {
+              const totalCount = await memoryProvider.count('longterm').catch(() => 0);
+              if (totalCount <= 30) {
+                const allMemories = await memoryProvider.getAll({ layer: 'longterm', limit: 50 });
+                memoryLines = (Array.isArray(allMemories) ? allMemories : [])
+                  .map((e: any) => {
+                    const content = e.content || '';
+                    const date = e.createdAt || '';
+                    const dateStr = date ? ` [${new Date(date).toLocaleDateString()}]` : '';
+                    return content + dateStr;
+                  })
+                  .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
+              } else {
+                // Vector or text search for large stores
+                const useVectors = config.memory?.vectorSearch !== false;
+                if (useVectors && memoryProvider.searchByVector) {
+                  const embedding = await generateEmbedding(input);
+                  if (embedding) {
+                    const results = await memoryProvider.searchByVector(embedding, { limit: 15, layer: 'longterm', minScore: 0.3 });
+                    memoryLines = results
+                      .map((r: any) => (r.entry?.content || r.content || ''))
+                      .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
+                  }
+                }
+                if (memoryLines.length === 0) {
+                  const textResults = await memoryProvider.search({ query: input, layer: 'longterm', limit: 15 });
+                  memoryLines = textResults
+                    .map((r: any) => (r.entry?.content || r.content || ''))
+                    .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
+                }
+              }
+            } else {
+              const memories = await kernel.memoryEngine.query({ limit: 50, layers: ['longterm'] });
+              memoryLines = (memories || [])
+                .map((m: any) => m.content || '')
+                .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
+            }
+            } // end v1 fallback
+
+            if (memoryLines.length > 0) {
+              memoryContext = '\n\nTHINGS I REMEMBER ABOUT YOU (facts from past conversations — ALWAYS reference these!):\n' +
+                memoryLines.map((m: string) => `• ${m}`).join('\n') + '\n';
+            }
+          } catch (err) {
+            console.error('[Stream Memory] Recall failed:', (err as Error).message);
+          }
+        }
+
+        // ─── CONVERSATION CONTEXT ───
+        let conversationContext = '';
+        const contextMessages = (config.memory as any)?.contextMessages ?? 20;
+        if (contextMessages > 0) {
+          const recentMessages = await conversationStore.getMessages(resolvedThreadId, contextMessages);
+          if (recentMessages.length > 0) {
+            conversationContext = '\n\nCONVERSATION HISTORY (use this for context):\n' +
+              recentMessages.map((m: any) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n') +
+              '\n\n---\nNow respond to the latest user message above. Reference conversation history and memories when relevant.\n';
+          }
+        }
+
+        // Save user message
+        await conversationStore.addMessage(resolvedThreadId, 'user', input);
+
+        // Build full input with memory + conversation
+        const fullInput = `${input}${memoryContext}${conversationContext}`;
+
         // Set up SSE
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
@@ -622,8 +820,6 @@ function buildRoutes(
         // Subscribe to kernel events for this intent
         const intentId = `intent_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-        // For streaming, we submit the intent and listen for token events
-        // The kernel's model router emits token events during completion
         const tokenHandler = (event: any) => {
           if (event.data?.intentId === intentId && event.data?.token) {
             res.write(`data: ${JSON.stringify({
@@ -637,24 +833,65 @@ function buildRoutes(
         try {
           const result = await kernel.submit({
             id: intentId,
-            goal: input,
+            goal: fullInput,
             intentType: 'action',
             priority: 'medium',
             owner: user?.id || 'system',
             metadata: {
-              threadId: threadId || `thread_${Date.now()}`,
+              threadId: resolvedThreadId,
               agentRoute: agent.route,
               targetAgent: definitionId,
               streaming: true,
             },
           });
 
+          const responseContent = result.result?.summary || result.result?.data || '';
+
           // Send the final result if the model didn't stream token-by-token
-          if (result.result?.summary) {
+          if (responseContent) {
             res.write(`data: ${JSON.stringify({
-              choices: [{ delta: { content: result.result.summary } }],
+              choices: [{ delta: { content: responseContent } }],
               done: true,
             })}\n\n`);
+          }
+
+          // Save assistant response
+          if (responseContent) {
+            await conversationStore.addMessage(resolvedThreadId, 'assistant', String(responseContent));
+          }
+
+          // Auto-save personal info (same logic as sync endpoint)
+          const autoSave = (config.memory as any)?.autoSave === true;
+          if (autoSave) {
+            const lowerInput = input.toLowerCase();
+            const isPersonalInfo = lowerInput.includes('my name') || lowerInput.includes('i am') ||
+              lowerInput.includes('i live') || lowerInput.includes('i work') ||
+              lowerInput.includes('remember') || lowerInput.includes('i like') ||
+              lowerInput.includes('i prefer') || lowerInput.includes('call me');
+            if (isPersonalInfo) {
+              try {
+                if (memoryEngine) {
+                  await memoryEngine.store(input, {
+                    tags: ['user-fact', 'auto-saved'],
+                    namespace: 'default',
+                    metadata: { threadId: resolvedThreadId, timestamp: new Date().toISOString() },
+                    relevance: 1.0,
+                    confidence: 0.9,
+                  });
+                } else {
+                const embedding = await generateEmbedding(input);
+                const memEntry = {
+                  id: `mem_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                  content: input, layer: 'longterm' as const, tags: ['user-fact', 'auto-saved'],
+                  metadata: { threadId: resolvedThreadId, timestamp: new Date().toISOString() },
+                  relevance: 1.0, confidence: 0.9, embedding: embedding || undefined,
+                  createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+                };
+                if (memoryProvider) { await memoryProvider.store(memEntry); }
+                else { await kernel.memoryEngine.store({ content: input, layer: 'longterm', tags: ['user-fact', 'auto-saved'], metadata: { threadId: resolvedThreadId } }); }
+                }
+              } catch { /* non-critical */ }
+            }
           }
         } catch (err) {
           res.write(`data: ${JSON.stringify({ error: (err as Error).message })}\n\n`);
@@ -729,21 +966,48 @@ function buildRoutes(
       const query = url.searchParams.get('q') || '';
       const limit = parseInt(url.searchParams.get('limit') || '10');
 
-      const results = await kernel.memoryEngine.query({
-        query,
-        limit,
-        layers: ['longterm'],
-      });
+      let results: any[] = [];
 
-      sendJson(res, 200, {
-        entries: results.map((r: any) => ({
+      // Use PostgreSQL memory provider when available (supports text search + vectors)
+      if (memoryProvider) {
+        try {
+          const searchResults = await memoryProvider.search({
+            query,
+            limit,
+            layer: 'longterm',
+          });
+          results = searchResults.map((r: any) => ({
+            id: r.entry?.id || r.id,
+            content: r.entry?.content || r.content || '',
+            score: r.score || 0.5,
+            tags: r.entry?.tags || r.tags || [],
+            metadata: r.entry?.metadata || r.metadata || {},
+            createdAt: r.entry?.createdAt || r.createdAt || '',
+          }));
+        } catch (err: any) {
+          console.error('[Memory Search] Provider search failed:', err.message);
+        }
+      }
+
+      // Fallback to kernel memory engine
+      if (results.length === 0) {
+        const kernelResults = await kernel.memoryEngine.query({
+          query,
+          limit,
+          layers: ['longterm'],
+        });
+        results = (kernelResults || []).map((r: any) => ({
           id: r.id,
           content: r.content,
           score: r.score,
           tags: r.tags || [],
           metadata: r.metadata,
           createdAt: r.createdAt,
-        })),
+        }));
+      }
+
+      sendJson(res, 200, {
+        entries: results,
         query,
         count: results.length,
       });
@@ -767,6 +1031,44 @@ function buildRoutes(
         return;
       }
 
+      const entryId = `mem_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const now = new Date().toISOString();
+
+      // Use PostgreSQL memory provider when available
+      if (memoryProvider) {
+        try {
+          // Generate embedding for vector search
+          const embedding = await generateEmbedding(content);
+
+          await memoryProvider.store({
+            id: entryId,
+            content,
+            layer: 'longterm',
+            tags: tags || [],
+            metadata: { namespace, ...metadata },
+            relevance: 1.0,
+            confidence: 0.9,
+            embedding: embedding || undefined,
+            createdAt: now,
+            updatedAt: now,
+          });
+
+          console.log(`  [memory] ✓ POST /memory stored: "${content.slice(0, 50)}..." (id: ${entryId})`);
+
+          sendJson(res, 201, {
+            id: entryId,
+            content,
+            tags: tags || [],
+            createdAt: now,
+          });
+          return;
+        } catch (err: any) {
+          console.error(`  [memory] ✗ POST /memory provider store failed:`, err.message);
+          // Fall through to kernel
+        }
+      }
+
+      // Fallback to kernel memory engine
       const entry = await kernel.memoryEngine.store({
         content,
         layer: 'longterm',
