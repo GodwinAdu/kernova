@@ -101,6 +101,21 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Tutorial: Build Aura (Personal AI)',
+          items: [
+            { label: '1. Introduction & Setup', slug: 'framework/tutorials/aura/01-intro' },
+            { label: '2. The Lead Agent', slug: 'framework/tutorials/aura/02-lead-agent' },
+            { label: '3. Memory & Persistence', slug: 'framework/tutorials/aura/03-memory' },
+            { label: '4. Core Tools', slug: 'framework/tutorials/aura/04-core-tools' },
+            { label: '5. External Integrations', slug: 'framework/tutorials/aura/05-integrations' },
+            { label: '6. Specialist Agents', slug: 'framework/tutorials/aura/06-specialists' },
+            { label: '7. Team & Delegation', slug: 'framework/tutorials/aura/07-team-delegation' },
+            { label: '8. Agent Loops', slug: 'framework/tutorials/aura/08-agent-loop' },
+            { label: '9. Autonomous Triggers', slug: 'framework/tutorials/aura/09-triggers' },
+            { label: '10. Chat UI & Deployment', slug: 'framework/tutorials/aura/10-frontend-deploy' },
+          ],
+        },
+        {
           label: 'Guides',
           items: [
 
