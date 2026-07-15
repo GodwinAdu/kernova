@@ -1,6 +1,6 @@
 {
     "name": "@kernova/core",
-    "version": "1.6.0",
+    "version": "1.6.1",
     "description": "Kernova Core - The AI Agent Runtime Engine",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",

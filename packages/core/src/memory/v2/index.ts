@@ -62,6 +62,8 @@ export type { CompactionContext } from './compaction.js';
 // Adapters
 export { PostgresMemoryAdapter, SqliteMemoryAdapter, InMemoryAdapter } from './adapters/index.js';
 export type { PostgresAdapterConfig, SqliteAdapterConfig, InMemoryAdapterConfig } from './adapters/index.js';
+export { RedisMemoryAdapter, MongoDBMemoryAdapter, QdrantMemoryAdapter, TursoMemoryAdapter, SupabaseMemoryAdapter } from './adapters/index.js';
+export type { RedisAdapterConfig, MongoDBAdapterConfig, QdrantAdapterConfig, TursoAdapterConfig, SupabaseAdapterConfig } from './adapters/index.js';
 
 // Types (everything developers need to implement custom adapters)
 export type {

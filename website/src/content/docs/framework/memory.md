@@ -152,7 +152,7 @@ memory: {
 
 ## Storage Adapters
 
-Kernova ships three built-in adapters. You can also implement your own.
+Kernova ships **8 built-in adapters**. You can also implement your own.
 
 ### PostgreSQL + pgvector (Recommended for Production)
 
@@ -190,6 +190,96 @@ memory: {
 ```
 
 Features: Zero dependencies, instant, lost on restart. Perfect for unit tests.
+
+### Redis (Cache / Ephemeral Layer)
+
+```typescript
+import { RedisMemoryAdapter } from '@kernova/core';
+
+const engine = await createMemoryEngine({
+  adapter: new RedisMemoryAdapter({
+    url: 'redis://localhost:6379',
+    prefix: 'myapp:memory',
+  }),
+});
+```
+
+Features: Native TTL via EXPIRE, sorted set indexes, RediSearch full-text when available. Best for working memory, cache layers.
+
+Install: `npm install ioredis`
+
+### MongoDB (Document-Based)
+
+```typescript
+import { MongoDBMemoryAdapter } from '@kernova/core';
+
+const engine = await createMemoryEngine({
+  adapter: new MongoDBMemoryAdapter({
+    url: 'mongodb+srv://user:pass@cluster.mongodb.net',
+    database: 'myapp',
+    collection: 'memories',
+    vectorIndex: 'vector_index', // Optional: Atlas Vector Search
+  }),
+});
+```
+
+Features: Atlas Vector Search (when configured), TTL index (auto-cleanup), text index, flexible BSON documents.
+
+Install: `npm install mongodb`
+
+### Qdrant (Vector-Native, Highest Performance)
+
+```typescript
+import { QdrantMemoryAdapter } from '@kernova/core';
+
+const engine = await createMemoryEngine({
+  adapter: new QdrantMemoryAdapter({
+    url: 'http://localhost:6333',
+    apiKey: process.env.QDRANT_API_KEY, // For Qdrant Cloud
+    collectionName: 'memories',
+    vectorSize: 1536,
+  }),
+});
+```
+
+Features: Native HNSW vector search (fastest semantic retrieval), payload filtering, automatic collection creation. Best for large-scale AI applications.
+
+Install: `npm install @qdrant/js-client-rest`
+
+### Turso / LibSQL (Edge-Compatible)
+
+```typescript
+import { TursoMemoryAdapter } from '@kernova/core';
+
+const engine = await createMemoryEngine({
+  adapter: new TursoMemoryAdapter({
+    url: 'libsql://your-db.turso.io',
+    authToken: process.env.TURSO_AUTH_TOKEN,
+  }),
+});
+```
+
+Features: Edge-compatible SQLite, globally replicated, FTS5 text search, works in Cloudflare Workers and Deno Deploy.
+
+Install: `npm install @libsql/client`
+
+### Supabase (Hosted PostgreSQL)
+
+```typescript
+import { SupabaseMemoryAdapter } from '@kernova/core';
+
+const engine = await createMemoryEngine({
+  adapter: new SupabaseMemoryAdapter({
+    url: process.env.SUPABASE_URL!,
+    anonKey: process.env.SUPABASE_ANON_KEY!,
+    serviceKey: process.env.SUPABASE_SERVICE_KEY, // For DDL operations
+  }),
+});
+```
+
+Features: pgvector via Supabase RPC, auto-creates match function, PostgreSQL full-text search, Row Level Security compatible.
+
+Install: `npm install @supabase/supabase-js`
 
 ### Custom Adapter
 
