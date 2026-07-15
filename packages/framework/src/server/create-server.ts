@@ -1519,8 +1519,11 @@ function createAgentExecutor(
     const userMessage = intent.goal;
 
     // ─── LOOP MODE: Iterative goal-oriented execution ────────────────
+    // Only activates for complex/action tasks. Simple conversation skips the loop.
     const loopConfig = (agentDef as any).loop;
-    if (loopConfig?.enabled) {
+    const isActionTask = loopConfig?.enabled && isComplexTask(userMessage);
+
+    if (isActionTask) {
       try {
         const { executeLoop } = await import('@kernova/core') as any;
 
@@ -2015,4 +2018,51 @@ function parseTtl(ttl: string): number {
     case 'd': return value * 86400;
     default: return 3600;
   }
+}
+
+/**
+ * Detect if a message is a complex action task (needs the loop)
+ * vs simple conversation (single-pass is fine).
+ *
+ * Complex tasks contain action verbs + targets:
+ *   "reply to all emails" → complex (multi-step)
+ *   "set up a project" → complex
+ *   "research AI trends" → complex
+ *
+ * Simple messages:
+ *   "hi" → simple
+ *   "what's my name?" → simple
+ *   "how are you" → simple
+ *   "thanks" → simple
+ */
+function isComplexTask(message: string): boolean {
+  const lower = message.toLowerCase().trim();
+
+  // Short messages are never complex
+  if (lower.length < 15) return false;
+
+  // Single-word messages are never complex
+  const words = lower.split(/\s+/);
+  if (words.length <= 3) return false;
+
+  // Action indicators — verbs that suggest multi-step work
+  const actionPatterns = [
+    /\b(reply|respond|send|forward|archive|delete|trash|mark)\b.*\b(all|every|each|emails?|messages?)\b/,
+    /\b(set up|setup|create|build|organize|plan|schedule)\b.*\b(project|meeting|events?|tasks?)\b/,
+    /\b(research|find|search|gather|collect|analyze)\b.*\b(about|for|on|information|data)\b/,
+    /\b(check|review|go through|process)\b.*\b(all|every|inbox|notifications?|issues?)\b/,
+    /\b(deploy|migrate|update|upgrade|install)\b/,
+    /\breply\s+(to\s+)?all\b/,
+    /\bdelete\s+(all|every)\b/,
+    /\barchive\s+(all|every)\b/,
+    /\bsend\s+\w+\s+to\s+\w+/,
+    /\bcreate\s+\w+\s+(issue|pr|page|event|task)/,
+    /\bforward\s+.*\s+to\b/,
+    /\bclean\s*(up)?\s*(my)?\s*(inbox|emails?|notifications?)/,
+    /\bdo\s+(all|everything)\b/,
+    /\bfor\s+each\b/,
+    /\bevery\s+(email|message|notification|issue)\b/,
+  ];
+
+  return actionPatterns.some(pattern => pattern.test(lower));
 }
