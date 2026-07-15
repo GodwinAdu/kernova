@@ -1608,8 +1608,10 @@ function createAgentExecutor(
 
     // ─── SINGLE-PASS MODE (default): One LLM call with tools ─────────
 
-    // Build prompt
-    const fullPrompt = `${systemPrompt}\n\nUser: ${userMessage}`;
+    // Build prompt — inject current date/time so the LLM knows what "today" means
+    const now = new Date();
+    const dateContext = `\n\n[SYSTEM CONTEXT]\nCurrent date: ${now.toISOString().split('T')[0]} (${now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })})\nCurrent time: ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}\nYear: ${now.getFullYear()}\n`;
+    const fullPrompt = `${systemPrompt}${dateContext}\nUser: ${userMessage}`;
 
     // If agent has tools configured, use tool-calling completion
     const agentToolNames = agentDef.tools || [];
@@ -1617,11 +1619,38 @@ function createAgentExecutor(
     let response: string;
 
     if (agentToolNames.length > 0) {
-      // Use tool-calling completion (LLM can invoke tools)
-      response = await agentTools.completeWithTools(fullPrompt, agentToolNames);
+      // Use tool-calling completion with error recovery
+      try {
+        response = await agentTools.completeWithTools(fullPrompt, agentToolNames);
+      } catch (err: any) {
+        console.error(`  [agent:${agentDef.name}] Tool-calling failed: ${err.message}. Retrying without tools...`);
+        // Retry 1: Try again (could be a transient error)
+        try {
+          response = await agentTools.completeWithTools(fullPrompt, agentToolNames);
+        } catch (retryErr: any) {
+          console.error(`  [agent:${agentDef.name}] Retry failed. Falling back to simple completion.`);
+          // Retry 2: Fall back to completion without tools
+          try {
+            const fallbackPrompt = `${fullPrompt}\n\n[NOTE: Tools are temporarily unavailable. Answer the user's question as best you can from your knowledge and the conversation context. If you needed to use a tool, explain what you would have done and ask the user to try again later.]`;
+            response = await agentTools.complete(fallbackPrompt);
+          } catch (finalErr: any) {
+            // Final fallback: return a helpful error message
+            response = `I'm having trouble processing your request right now (${err.message}). Could you try again in a moment? If the issue persists, check that the backend server is running properly.`;
+          }
+        }
+      }
     } else {
-      // Simple completion (no tools)
-      response = await agentTools.complete(fullPrompt);
+      // Simple completion (no tools) with retry
+      try {
+        response = await agentTools.complete(fullPrompt);
+      } catch (err: any) {
+        console.error(`  [agent:${agentDef.name}] Completion failed: ${err.message}. Retrying...`);
+        try {
+          response = await agentTools.complete(fullPrompt);
+        } catch {
+          response = `I'm having trouble connecting right now. Please try again in a moment.`;
+        }
+      }
     }
 
     return {
