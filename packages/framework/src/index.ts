@@ -24,6 +24,8 @@ export { defineTask } from './define-task.js';
 export { definePlan } from './define-plan.js';
 export { defineTeam } from './define-team.js';
 export { defineRemoteAgent } from './define-remote-agent.js';
+export { defineLoop } from './define-loop.js';
+export type { AgentLoopConfig } from './define-loop.js';
 
 // Types
 export type {

@@ -131,4 +131,19 @@ export interface AgentDefinition {
   channels?: string[];
   /** Remote agents this agent can communicate with (cross-organization) */
   remoteAgents?: string[];
+  /** Agent loop config — enables iterative goal-oriented execution */
+  loop?: {
+    /** Enable loop mode (agent keeps working until goal is achieved) */
+    enabled: boolean;
+    /** Maximum iterations per goal (default: 10) */
+    maxIterations?: number;
+    /** Maximum total execution time in ms (default: 120000) */
+    timeout?: number;
+    /** Confidence threshold to consider goal complete (default: 0.8) */
+    completionThreshold?: number;
+    /** Stream intermediate steps to client (default: true) */
+    streamSteps?: boolean;
+    /** Allow delegation to other agents (default: true) */
+    allowDelegation?: boolean;
+  };
 }

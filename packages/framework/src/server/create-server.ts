@@ -1518,6 +1518,93 @@ function createAgentExecutor(
     const systemPrompt = agentDef.instructions;
     const userMessage = intent.goal;
 
+    // ─── LOOP MODE: Iterative goal-oriented execution ────────────────
+    const loopConfig = (agentDef as any).loop;
+    if (loopConfig?.enabled) {
+      try {
+        const { executeLoop } = await import('@kernova/core') as any;
+
+        // Build tool descriptors for the loop context
+        const availableToolDescs = (agentDef.tools || []).map(toolName => {
+          const found = tools.find(t => t.name === toolName);
+          return { name: toolName, description: found?.definition?.description || toolName };
+        });
+
+        // Execute the loop
+        const loopResult = await executeLoop(
+          userMessage,
+          {
+            agentName: agentDef.name,
+            agentInstructions: systemPrompt || '',
+            availableTools: availableToolDescs,
+            maxIterations: loopConfig.maxIterations || 10,
+            goal: userMessage,
+          },
+          {
+            complete: async (prompt: string) => {
+              return await agentTools.complete(prompt);
+            },
+            executeTool: async (name: string, params: Record<string, unknown>) => {
+              const tool = tools.find(t => t.name === name);
+              if (!tool) return { error: `Tool "${name}" not found` };
+              return await tool.definition.execute(params as any, {
+                env: process.env as Record<string, string | undefined>,
+                log: (msg: string) => console.log(`  [loop:${agentDef.name}:${name}] ${msg}`),
+              });
+            },
+            delegate: async (agentName: string, input: string) => {
+              const result = await agentTools.delegate(agentName, input);
+              return result.output || '';
+            },
+          },
+          {
+            maxIterations: loopConfig.maxIterations || 10,
+            timeout: loopConfig.timeout || 120000,
+            completionThreshold: loopConfig.completionThreshold || 0.8,
+            streamSteps: loopConfig.streamSteps !== false,
+            allowTools: true,
+            allowDelegation: loopConfig.allowDelegation !== false,
+            onStep: (step: any) => {
+              // Emit step progress for streaming
+              if (intent.metadata?.streaming) {
+                agentTools.emit('model.token', {
+                  token: `\n[Step ${step.index}] ${step.thought.slice(0, 100)}...\n`,
+                  intentId: intent.id,
+                });
+              }
+              console.log(`  [loop:${agentDef.name}] Step ${step.index}: ${step.action.type}${step.action.tool ? ` → ${step.action.tool}` : ''} (${step.evaluation.goalComplete ? '✓' : '...'} ${Math.round(step.evaluation.confidence * 100)}%)`);
+            },
+          },
+        );
+
+        console.log(`  [loop:${agentDef.name}] ${loopResult.status} in ${loopResult.iterations} steps (${loopResult.totalDurationMs}ms)`);
+
+        return {
+          success: loopResult.goalAchieved,
+          summary: loopResult.result,
+          data: loopResult.result,
+          evidence: {
+            sources: [],
+            confidence: loopResult.confidence,
+            reasoning: `Loop execution: ${loopResult.iterations} steps, tools: [${loopResult.toolsUsed.join(', ')}]`,
+          },
+          durationMs: loopResult.totalDurationMs,
+          loopTrace: {
+            id: loopResult.id,
+            status: loopResult.status,
+            iterations: loopResult.iterations,
+            toolsUsed: loopResult.toolsUsed,
+            goalAchieved: loopResult.goalAchieved,
+          },
+        };
+      } catch (err: any) {
+        console.error(`  [loop:${agentDef.name}] Loop execution failed:`, err.message);
+        // Fall through to single-pass execution
+      }
+    }
+
+    // ─── SINGLE-PASS MODE (default): One LLM call with tools ─────────
+
     // Build prompt
     const fullPrompt = `${systemPrompt}\n\nUser: ${userMessage}`;
 

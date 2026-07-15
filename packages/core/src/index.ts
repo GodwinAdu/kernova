@@ -49,6 +49,13 @@ export { AgentRegistry } from './agents/agent-registry.js';
 export type { AgentExecutor, AgentTools } from './agents/agent-registry.js';
 export { AgentCoordinator } from './agents/coordinator.js';
 export type { DelegationResult, CoordinatorConfig } from './agents/coordinator.js';
+
+// Agent Loop — Goal-oriented iterative execution (Think → Act → Evaluate → Repeat)
+export { executeLoop } from './agent-loop/index.js';
+export type { LoopExecutorDeps } from './agent-loop/index.js';
+export type { LoopConfig, LoopResult, LoopStep, LoopContext, LoopStatus } from './agent-loop/index.js';
+export { DEFAULT_LOOP_CONFIG } from './agent-loop/index.js';
+
 export { ContextEngine } from './context/context-engine.js';
 
 export { ModelRouter } from './models/model-router.js';
