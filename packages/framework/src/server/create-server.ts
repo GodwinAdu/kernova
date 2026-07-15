@@ -1653,6 +1653,48 @@ function createAgentExecutor(
       }
     }
 
+    // ─── SELF-REFLECTION: Evaluate and improve response quality ──────
+    // Only reflects on non-trivial responses (skip errors, short answers, greetings)
+    const shouldReflect = response.length > 100 &&
+      !response.startsWith("I'm having trouble") &&
+      userMessage.length > 20;
+
+    if (shouldReflect) {
+      try {
+        const { SelfReflection } = await import('@kernova/core') as any;
+        if (SelfReflection) {
+          const reflection = new SelfReflection(
+            agentTools.eventBus || { publish: () => {} },
+            agentTools.modelRouter || { complete: agentTools.complete },
+            {
+              enabled: true,
+              threshold: 0.7,
+              maxAttempts: 1, // Only 1 revision attempt (keeps it fast)
+              criteria: ['relevance', 'helpfulness', 'accuracy', 'completeness'],
+            }
+          );
+
+          const reflectionResult = await reflection.reflect(
+            response,
+            userMessage,
+            undefined,
+            agentDef.name,
+          );
+
+          // Use revised output if reflection improved it
+          if (reflectionResult.revisedOutput && reflectionResult.evaluation?.score > 0.7) {
+            console.log(`  [reflection:${agentDef.name}] Revised response (${reflectionResult.evaluation.score.toFixed(2)} → improved)`);
+            response = reflectionResult.revisedOutput;
+          } else if (reflectionResult.evaluation) {
+            console.log(`  [reflection:${agentDef.name}] Score: ${reflectionResult.evaluation.score.toFixed(2)} (passed: ${reflectionResult.evaluation.passed})`);
+          }
+        }
+      } catch (reflErr: any) {
+        // Reflection is non-critical — if it fails, use original response
+        console.log(`  [reflection] Skipped: ${reflErr.message?.slice(0, 60)}`);
+      }
+    }
+
     return {
       success: true,
       summary: response,
