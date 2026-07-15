@@ -25,6 +25,7 @@ export default defineConfig({
             { label: 'Middleware', slug: 'framework/middleware' },
             { label: 'Multi-Agent', slug: 'framework/multi-agent' },
             { label: 'Teams & Delegation', slug: 'framework/teams' },
+            { label: 'Agent Loops', slug: 'framework/agent-loops' },
             { label: 'Agent Protocol (KAP)', slug: 'framework/agent-protocol' },
             { label: 'Skills', slug: 'framework/skills' },
             { label: 'MCP Integration', slug: 'framework/mcp-integration' },
