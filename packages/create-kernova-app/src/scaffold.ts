@@ -95,8 +95,28 @@ export default defineConfig({
     model: 'gpt-4o',
   },
   memory: {
-    provider: 'local',
-    embeddingModel: 'text-embedding-3-small',
+    version: 2,
+    provider: process.env.DATABASE_URL ? 'postgres' : 'sqlite',
+    url: process.env.DATABASE_URL,
+    embedding: {
+      model: 'text-embedding-3-small',
+      dimensions: 1536,
+    },
+    scoring: {
+      similarityWeight: 0.5,
+      recencyWeight: 0.25,
+      frequencyWeight: 0.1,
+      relevanceWeight: 0.15,
+      recencyHalfLife: 168, // 1 week
+    },
+    compaction: {
+      enabled: true,
+      threshold: 50,
+      keepRecent: 10,
+    },
+    autoRecall: true,
+    autoSave: false,
+    contextMessages: 20,
   },
   gateway: {
     openaiCompat: true,
@@ -116,6 +136,7 @@ function packageJsonTemplate(name: string, framework: string): string {
     '@kernova/framework': '^1.0.0',
     '@kernova/core': '^1.0.0',
     '@kernova/cli': '^1.0.0',
+    'pg': '^8.22.0',
   };
 
   const devDeps: Record<string, string> = {};
@@ -183,11 +204,12 @@ function envTemplate(): string {
   return `# AI Model Configuration
 OPENAI_API_KEY=your-openai-key-here
 
+# Database (Memory v2 — supports PostgreSQL + pgvector or SQLite)
+# Uncomment for PostgreSQL (recommended for production):
+# DATABASE_URL=postgresql://user:password@host:5432/dbname
+
 # Web Search (Tavily — get free key at https://tavily.com)
 TAVILY_API_KEY=your-tavily-key-here
-
-# Kernova
-# KERNOVA_URL=https://your-app.kernova.app  (set after deploying)
 `;
 }
 
@@ -419,18 +441,41 @@ export default defineTool({
 // ─── Memory Template ─────────────────────────────────────────────────────────
 
 function memoryTemplate(): string {
-  return `import { defineMemory } from '@kernova/framework';
+  return `import { defineMemoryConfig } from '@kernova/framework';
 
-export default defineMemory({
-  name: 'conversations',
-  schema: {
-    summary: { type: 'text', indexed: true },
-    userId: { type: 'text', indexed: true, required: true },
-    sentiment: { type: 'text' },
-    topics: { type: 'json' },
+/**
+ * Memory configuration for this project.
+ * 
+ * The Memory Engine v2 provides:
+ * - Working Memory: In-process cache (task state, tool outputs)
+ * - Session Memory: Conversation threads with auto-compaction
+ * - Long-term Memory: Vector-indexed facts with scored retrieval
+ *
+ * Adapters: 'postgres' (production), 'sqlite' (local), 'memory' (testing)
+ */
+export default defineMemoryConfig({
+  adapter: process.env.DATABASE_URL ? 'postgres' : 'sqlite',
+  url: process.env.DATABASE_URL,
+  path: './kernova-data/memory.db',
+  
+  embedding: {
+    model: 'text-embedding-3-small',
+    dimensions: 1536,
   },
-  ttl: '30d',
-  autoSummarize: true,
+
+  scoring: {
+    similarityWeight: 0.5,
+    recencyWeight: 0.25,
+    frequencyWeight: 0.1,
+    relevanceWeight: 0.15,
+    recencyHalfLife: 168,
+  },
+
+  compaction: {
+    enabled: true,
+    threshold: 50,
+    keepRecent: 10,
+  },
 });
 `;
 }

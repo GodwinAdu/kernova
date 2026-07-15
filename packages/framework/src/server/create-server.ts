@@ -15,6 +15,7 @@ import { discoverAgents } from './discover-agents.js';
 import { discoverTools } from './discover-tools.js';
 import { discoverMemory } from './discover-memory.js';
 import { TeamExecutorLocal } from './team-executor-local.js';
+import { ConnectionPool, RecallCache, EmbeddingCache, createSSEStream } from './performance.js';
 import type { KernovaFrameworkConfig } from '../types/config.js';
 import type { AgentDefinition as FrameworkAgentDef } from '../types/agent.js';
 import type { DiscoveredAgent } from './discover-agents.js';
@@ -52,6 +53,19 @@ export async function createServer(options: ServerOptions = {}) {
 
   // Load config
   const config = await loadConfig(projectRoot);
+
+  // Initialize performance caches
+  const recallCache = new RecallCache({ maxSize: 200, ttl: 60 });
+  const embeddingCache = new EmbeddingCache({ maxSize: 500, ttl: 3600 });
+
+  // Cached embedding generation (avoids redundant OpenAI calls)
+  async function generateEmbeddingCached(text: string): Promise<number[] | null> {
+    const cached = embeddingCache.get(text);
+    if (cached) return cached;
+    const embedding = await generateEmbedding(text);
+    if (embedding) embeddingCache.set(text, embedding);
+    return embedding;
+  }
 
   // Discover project structure
   const agents = await discoverAgents(projectRoot);
@@ -128,6 +142,7 @@ export async function createServer(options: ServerOptions = {}) {
       } else if (adapterType === 'postgres' && dbUrl) {
         adapter = new PostgresMemoryAdapter({
           url: dbUrl,
+          pool: await ConnectionPool.getPool(dbUrl),
           table: memConfig?.table,
           schema: memConfig?.schema,
           vectorDimensions: memConfig?.vectorDimensions || memConfig?.embedding?.dimensions || 1536,
@@ -141,7 +156,7 @@ export async function createServer(options: ServerOptions = {}) {
         adapter = new InMemoryAdapter();
       } else if (dbUrl) {
         // Default: postgres if DATABASE_URL is set
-        adapter = new PostgresMemoryAdapter({ url: dbUrl, table: memConfig?.table });
+        adapter = new PostgresMemoryAdapter({ url: dbUrl, pool: await ConnectionPool.getPool(dbUrl), table: memConfig?.table });
       } else {
         // Default: SQLite for local dev
         adapter = new SqliteMemoryAdapter({
@@ -150,9 +165,9 @@ export async function createServer(options: ServerOptions = {}) {
         });
       }
 
-      // Embedding function (reuses existing generateEmbedding)
+      // Embedding function (uses cached generateEmbedding)
       const embed = async (text: string): Promise<number[] | null> => {
-        return await generateEmbedding(text);
+        return await generateEmbeddingCached(text);
       };
 
       memoryEngine = await createMemoryEngine({
@@ -371,7 +386,7 @@ export async function createServer(options: ServerOptions = {}) {
   }
 
   // Build route table
-  const routes: RouteHandler[] = buildRoutes(kernel, agents, tools, memories, config, agentRouteMap, apiKey, projectRoot, memoryProvider, conversationStore, memoryEngine);
+  const routes: RouteHandler[] = buildRoutes(kernel, agents, tools, memories, config, agentRouteMap, apiKey, projectRoot, memoryProvider, conversationStore, memoryEngine, recallCache, generateEmbeddingCached);
 
   // Create HTTP server
   const server = createHttpServer(async (req, res) => {
@@ -444,6 +459,15 @@ export async function createServer(options: ServerOptions = {}) {
     console.log('');
   });
 
+  // Register graceful shutdown
+  const shutdown = async () => {
+    console.log('\n  ⏹ Shutting down...');
+    await ConnectionPool.closeAll();
+    server.close();
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+
   return { server, kernel, config, agents, tools, memories, teams: discoveredTeams };
 }
 
@@ -461,6 +485,8 @@ function buildRoutes(
   memoryProvider: any,
   conversationStore: any,
   memoryEngine: any,
+  recallCache: RecallCache,
+  generateEmbeddingCached: (text: string) => Promise<number[] | null>,
 ): RouteHandler[] {
   const routes: RouteHandler[] = [];
 
@@ -517,12 +543,20 @@ function buildRoutes(
           try {
             let memoryLines: string[] = [];
 
+            // ─── Check recall cache first ───
+            const cacheKey = `${input}:${resolvedThreadId}`;
+            const cachedRecall = recallCache.get(cacheKey);
+            if (cachedRecall) {
+              memoryLines = cachedRecall.map(r => r.entry?.content || r.content || '').filter((s: string) => s.length > 0 && s.length < 500);
+            } else {
+
             // ─── Memory v2 recall (preferred when engine is available) ───
             if (memoryEngine) {
               const results = await memoryEngine.recall(input, { limit: 15, namespace: 'default' });
               memoryLines = results
                 .map((r: any) => r.entry.content)
                 .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
+              if (memoryLines.length > 0) recallCache.set(cacheKey, results);
             }
 
             // ─── Fallback: v1 memory provider ───
@@ -536,7 +570,7 @@ function buildRoutes(
 
               if (totalCount > 30 && useVectors && memoryProvider.searchByVector) {
                 // VECTOR SEARCH — generate embedding of user input, find relevant memories
-                const embedding = await generateEmbedding(input);
+                const embedding = await generateEmbeddingCached(input);
                 if (embedding) {
                   const results = await memoryProvider.searchByVector(embedding, { limit: 15, layer: 'longterm', minScore: 0.3 });
                   memoryLines = results
@@ -547,6 +581,7 @@ function buildRoutes(
                       return content + dateStr;
                     })
                     .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
+                  if (memoryLines.length > 0) recallCache.set(cacheKey, results);
                 }
 
                 // If vector search returned nothing, fallback to text search
@@ -555,6 +590,7 @@ function buildRoutes(
                   memoryLines = textResults
                     .map((r: any) => (r.entry?.content || r.content || ''))
                     .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
+                  if (memoryLines.length > 0) recallCache.set(cacheKey, textResults);
                 }
               } else {
                 // Small store (< 30) — load all
@@ -576,6 +612,8 @@ function buildRoutes(
                 .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
             }
             } // end v1 fallback (memoryLines.length === 0)
+
+            } // end cache miss
 
             if (memoryLines.length > 0) {
               memoryContext = '\n\nTHINGS I REMEMBER ABOUT YOU (facts from past conversations — ALWAYS reference these!):\n' +
@@ -651,7 +689,7 @@ function buildRoutes(
                 console.log(`  [memory] ✓ Saved via Memory Engine v2`);
               } else {
               // Generate embedding for vector search later
-              const embedding = await generateEmbedding(input);
+              const embedding = await generateEmbeddingCached(input);
               console.log(`  [memory] Embedding generated: ${embedding ? 'yes' : 'no'} (${embedding?.length || 0} dims)`);
 
               const memEntry = {
@@ -680,6 +718,8 @@ function buildRoutes(
                 console.log(`  [memory] ✓ Saved to kernel memory (SQLite fallback)`);
               }
               }
+              // Invalidate recall cache after storing new memory
+              recallCache.invalidate();
             } catch (err: any) {
               console.error(`  [memory] ✗ Auto-save failed:`, err.message);
             }
@@ -734,12 +774,20 @@ function buildRoutes(
           try {
             let memoryLines: string[] = [];
 
+            // ─── Check recall cache first ───
+            const cacheKey = `${input}:${resolvedThreadId}`;
+            const cachedRecall = recallCache.get(cacheKey);
+            if (cachedRecall) {
+              memoryLines = cachedRecall.map(r => r.entry?.content || r.content || '').filter((s: string) => s.length > 0 && s.length < 500);
+            } else {
+
             // ─── Memory v2 recall (preferred when engine is available) ───
             if (memoryEngine) {
               const results = await memoryEngine.recall(input, { limit: 15, namespace: 'default' });
               memoryLines = results
                 .map((r: any) => r.entry.content)
                 .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
+              if (memoryLines.length > 0) recallCache.set(cacheKey, results);
             }
 
             // ─── Fallback: v1 memory provider ───
@@ -760,12 +808,13 @@ function buildRoutes(
                 // Vector or text search for large stores
                 const useVectors = config.memory?.vectorSearch !== false;
                 if (useVectors && memoryProvider.searchByVector) {
-                  const embedding = await generateEmbedding(input);
+                  const embedding = await generateEmbeddingCached(input);
                   if (embedding) {
                     const results = await memoryProvider.searchByVector(embedding, { limit: 15, layer: 'longterm', minScore: 0.3 });
                     memoryLines = results
                       .map((r: any) => (r.entry?.content || r.content || ''))
                       .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
+                    if (memoryLines.length > 0) recallCache.set(cacheKey, results);
                   }
                 }
                 if (memoryLines.length === 0) {
@@ -773,6 +822,7 @@ function buildRoutes(
                   memoryLines = textResults
                     .map((r: any) => (r.entry?.content || r.content || ''))
                     .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
+                  if (memoryLines.length > 0) recallCache.set(cacheKey, textResults);
                 }
               }
             } else {
@@ -782,6 +832,8 @@ function buildRoutes(
                 .filter((s: string) => s.length > 0 && !s.startsWith('{') && !s.startsWith('[') && s.length < 500);
             }
             } // end v1 fallback
+
+            } // end cache miss
 
             if (memoryLines.length > 0) {
               memoryContext = '\n\nTHINGS I REMEMBER ABOUT YOU (facts from past conversations — ALWAYS reference these!):\n' +
@@ -810,25 +862,26 @@ function buildRoutes(
         // Build full input with memory + conversation
         const fullInput = `${input}${memoryContext}${conversationContext}`;
 
-        // Set up SSE
-        res.writeHead(200, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        });
+        // Set up SSE with optimized stream helper
+        const stream = createSSEStream(res);
 
         // Subscribe to kernel events for this intent
         const intentId = `intent_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
         const tokenHandler = (event: any) => {
           if (event.data?.intentId === intentId && event.data?.token) {
-            res.write(`data: ${JSON.stringify({
+            stream.write(JSON.stringify({
               choices: [{ delta: { content: event.data.token } }],
-            })}\n\n`);
+            }));
           }
         };
 
         const subscriptionId = kernel.events.subscribe(['model.token'], tokenHandler);
+
+        // Clean up subscription on client disconnect
+        stream.onClose(() => {
+          kernel.events.unsubscribe(subscriptionId);
+        });
 
         try {
           const result = await kernel.submit({
@@ -849,10 +902,10 @@ function buildRoutes(
 
           // Send the final result if the model didn't stream token-by-token
           if (responseContent) {
-            res.write(`data: ${JSON.stringify({
+            stream.write(JSON.stringify({
               choices: [{ delta: { content: responseContent } }],
               done: true,
-            })}\n\n`);
+            }));
           }
 
           // Save assistant response
@@ -879,7 +932,7 @@ function buildRoutes(
                     confidence: 0.9,
                   });
                 } else {
-                const embedding = await generateEmbedding(input);
+                const embedding = await generateEmbeddingCached(input);
                 const memEntry = {
                   id: `mem_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
                   content: input, layer: 'longterm' as const, tags: ['user-fact', 'auto-saved'],
@@ -890,15 +943,16 @@ function buildRoutes(
                 if (memoryProvider) { await memoryProvider.store(memEntry); }
                 else { await kernel.memoryEngine.store({ content: input, layer: 'longterm', tags: ['user-fact', 'auto-saved'], metadata: { threadId: resolvedThreadId } }); }
                 }
+                // Invalidate recall cache after storing new memory
+                recallCache.invalidate();
               } catch { /* non-critical */ }
             }
           }
         } catch (err) {
-          res.write(`data: ${JSON.stringify({ error: (err as Error).message })}\n\n`);
+          stream.write(JSON.stringify({ error: (err as Error).message }));
         } finally {
           kernel.events.unsubscribe(subscriptionId);
-          res.write('data: [DONE]\n\n');
-          res.end();
+          stream.end();
         }
       },
     });
@@ -1038,7 +1092,7 @@ function buildRoutes(
       if (memoryProvider) {
         try {
           // Generate embedding for vector search
-          const embedding = await generateEmbedding(content);
+          const embedding = await generateEmbeddingCached(content);
 
           await memoryProvider.store({
             id: entryId,
@@ -1052,6 +1106,9 @@ function buildRoutes(
             createdAt: now,
             updatedAt: now,
           });
+
+          // Invalidate recall cache after storing new memory
+          recallCache.invalidate();
 
           console.log(`  [memory] ✓ POST /memory stored: "${content.slice(0, 50)}..." (id: ${entryId})`);
 
@@ -1075,6 +1132,9 @@ function buildRoutes(
         tags: tags || [],
         metadata: { namespace, ...metadata },
       });
+
+      // Invalidate recall cache after storing new memory
+      recallCache.invalidate();
 
       sendJson(res, 201, {
         id: entry.id,

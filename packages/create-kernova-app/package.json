@@ -1,6 +1,6 @@
 {
   "name": "create-kernova-app",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Create a full-stack Kernova AI agent app",
   "type": "module",
   "bin": {
