@@ -16,6 +16,7 @@ import { discoverTools } from './discover-tools.js';
 import { discoverMemory } from './discover-memory.js';
 import { TeamExecutorLocal } from './team-executor-local.js';
 import { ConnectionPool, RecallCache, EmbeddingCache, createSSEStream } from './performance.js';
+import { parseInstructions, selectInstructions } from './dynamic-instructions.js';
 import { createWebSocketServer } from './websocket.js';
 import { cronMatches, getNextCronTime } from './cron.js';
 import type { KernovaFrameworkConfig } from '../types/config.js';
@@ -1755,8 +1756,14 @@ function createAgentExecutor(
     }
 
     // Default: Use LLM completion with the agent's instructions + tools
-    const systemPrompt = agentDef.instructions;
+    const fullInstructions = agentDef.instructions;
     const userMessage = intent.goal;
+
+    // ─── DYNAMIC INSTRUCTIONS: Select relevant sections based on user message ───
+    const sections = parseInstructions(fullInstructions || '');
+    const systemPrompt = sections.length > 1
+      ? selectInstructions(sections, userMessage, { maxSections: 5, fallbackToFull: true })
+      : fullInstructions;
     // ─── EXECUTION ─────────────────────────────────────────────────────
     const now = new Date();
     const dateContext = `\n\n[SYSTEM CONTEXT]\nCurrent date: ${now.toISOString().split('T')[0]} (${now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })})\nCurrent time: ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}\nYear: ${now.getFullYear()}\n`;
