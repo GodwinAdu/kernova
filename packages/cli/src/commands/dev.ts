@@ -92,7 +92,7 @@ async function runFullStackDev(
   // 1. Start agent backend (port 4555)
   if (!appOnly) {
     info('Starting agent backend...');
-    const agentProcess = spawn('npx', ['tsx', '--watch', resolveAgentEntry(projectRoot)], {
+    const agentProcess = spawn('npx', ['tsx', '--watch', '--ignore', 'kernova-data/**', '--ignore', '.next/**', '--ignore', 'node_modules/**', resolveAgentEntry(projectRoot)], {
       cwd: projectRoot,
       stdio: 'pipe',
       shell: true,
@@ -189,7 +189,7 @@ async function runAgentsDev(projectRoot: string, port: number): Promise<void> {
 
   const entryFile = resolveAgentEntry(projectRoot);
 
-  const agentProcess = spawn('npx', ['tsx', '--watch', entryFile], {
+  const agentProcess = spawn('npx', ['tsx', '--watch', '--ignore', 'kernova-data/**', '--ignore', '.next/**', '--ignore', 'node_modules/**', entryFile], {
     cwd: projectRoot,
     stdio: 'inherit',
     shell: true,
