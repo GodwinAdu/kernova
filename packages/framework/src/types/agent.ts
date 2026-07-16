@@ -146,4 +146,6 @@ export interface AgentDefinition {
     /** Allow delegation to other agents (default: true) */
     allowDelegation?: boolean;
   };
+  /** Enable dynamic instructions — only sends relevant instruction sections per message (opt-in) */
+  dynamicInstructions?: boolean;
 }

@@ -1759,11 +1759,18 @@ function createAgentExecutor(
     const fullInstructions = agentDef.instructions;
     const userMessage = intent.goal;
 
-    // ─── DYNAMIC INSTRUCTIONS: Select relevant sections based on user message ───
-    const sections = parseInstructions(fullInstructions || '');
-    const systemPrompt = sections.length > 1
-      ? selectInstructions(sections, userMessage, { maxSections: 5, fallbackToFull: true })
-      : fullInstructions;
+    // ─── DYNAMIC INSTRUCTIONS (opt-in via agent config) ─────────────────
+    // Only activates when the agent has dynamicInstructions: true
+    // This is Aura-specific optimization — other developers may not want it
+    let systemPrompt: string;
+    if ((agentDef as any).dynamicInstructions) {
+      const sections = parseInstructions(fullInstructions || '');
+      systemPrompt = sections.length > 1
+        ? selectInstructions(sections, userMessage, { maxSections: 5, fallbackToFull: true })
+        : (fullInstructions || '');
+    } else {
+      systemPrompt = fullInstructions || '';
+    }
     // ─── EXECUTION ─────────────────────────────────────────────────────
     const now = new Date();
     const dateContext = `\n\n[SYSTEM CONTEXT]\nCurrent date: ${now.toISOString().split('T')[0]} (${now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })})\nCurrent time: ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}\nYear: ${now.getFullYear()}\n`;
