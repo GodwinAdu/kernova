@@ -1746,9 +1746,37 @@ User: ${userMessage}`;
       try {
         const { SelfReflection } = await import('@kernova/core') as any;
         if (SelfReflection) {
+          // Create a simple model router for reflection that does NOT include tools
+          const reflectionRouter = {
+            complete: async (options: any) => {
+              // Simple completion without tools for evaluation
+              const messages = options.messages || [{ role: 'user', content: options.prompt || '' }];
+              const apiKey = process.env.OPENAI_API_KEY;
+              if (!apiKey) throw new Error('No API key');
+
+              const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  model: 'gpt-4o-mini', // Use cheaper model for reflection
+                  messages,
+                  temperature: options.temperature || 0.2,
+                  max_tokens: 500,
+                }),
+              });
+
+              if (!res.ok) throw new Error(`OpenAI API error (${res.status})`);
+              const data = await res.json() as any;
+              return {
+                content: data.choices?.[0]?.message?.content || '',
+                usage: { totalTokens: data.usage?.total_tokens || 0 },
+              };
+            },
+          };
+
           const reflection = new SelfReflection(
-            agentTools.eventBus || { publish: () => {} },
-            agentTools.modelRouter || { complete: agentTools.complete },
+            { publish: () => {} }, // Minimal event bus
+            reflectionRouter,
             {
               enabled: true,
               threshold: 0.7,
