@@ -1667,107 +1667,39 @@ function createAgentExecutor(
     // Default: Use LLM completion with the agent's instructions + tools
     const systemPrompt = agentDef.instructions;
     const userMessage = intent.goal;
+    // ─── EXECUTION ─────────────────────────────────────────────────────
+    const now = new Date();
+    const dateContext = `\n\n[SYSTEM CONTEXT]\nCurrent date: ${now.toISOString().split('T')[0]} (${now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })})\nCurrent time: ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}\nYear: ${now.getFullYear()}\n`;
+    const agentToolNames = agentDef.tools || [];
+    let response: string = '';
 
-    // ─── LOOP MODE: Iterative goal-oriented execution ────────────────
-    // Only activates for complex/action tasks. Simple conversation skips the loop.
+    // ─── BATCH MODE: For multi-step action tasks ─────────────────────
     const loopConfig = (agentDef as any).loop;
     const isActionTask = loopConfig?.enabled && isComplexTask(userMessage);
 
     if (isActionTask) {
+      const batchPrompt = `${systemPrompt}${dateContext}
+
+[BATCH TASK MODE]
+The user wants you to perform a multi-step batch operation.
+IMPORTANT: Call tools MULTIPLE TIMES in sequence to complete ALL items.
+Do NOT stop after one tool call. Keep calling tools until the ENTIRE task is done.
+After processing all items, provide a final summary of what was done.
+
+User: ${userMessage}`;
+
       try {
-        const { executeLoop } = await import('@kernova/core') as any;
-
-        // Build tool descriptors for the loop context
-        const availableToolDescs = (agentDef.tools || []).map(toolName => {
-          const found = tools.find(t => t.name === toolName);
-          return { name: toolName, description: found?.definition?.description || toolName };
-        });
-
-        // Execute the loop
-        const loopResult = await executeLoop(
-          userMessage,
-          {
-            agentName: agentDef.name,
-            agentInstructions: systemPrompt || '',
-            availableTools: availableToolDescs,
-            maxIterations: loopConfig.maxIterations || 10,
-            goal: userMessage,
-          },
-          {
-            complete: async (prompt: string) => {
-              return await agentTools.complete(prompt);
-            },
-            executeTool: async (name: string, params: Record<string, unknown>) => {
-              const tool = tools.find(t => t.name === name);
-              if (!tool) return { error: `Tool "${name}" not found` };
-              return await tool.definition.execute(params as any, {
-                env: process.env as Record<string, string | undefined>,
-                log: (msg: string) => console.log(`  [loop:${agentDef.name}:${name}] ${msg}`),
-              });
-            },
-            delegate: async (agentName: string, input: string) => {
-              const result = await agentTools.delegate(agentName, input);
-              return result.output || '';
-            },
-          },
-          {
-            maxIterations: loopConfig.maxIterations || 10,
-            timeout: loopConfig.timeout || 120000,
-            completionThreshold: loopConfig.completionThreshold || 0.8,
-            streamSteps: loopConfig.streamSteps !== false,
-            allowTools: true,
-            allowDelegation: loopConfig.allowDelegation !== false,
-            onStep: (step: any) => {
-              // Emit step progress for streaming
-              if (intent.metadata?.streaming) {
-                agentTools.emit('model.token', {
-                  token: `\n[Step ${step.index}] ${step.thought.slice(0, 100)}...\n`,
-                  intentId: intent.id,
-                });
-              }
-              console.log(`  [loop:${agentDef.name}] Step ${step.index}: ${step.action.type}${step.action.tool ? ` → ${step.action.tool}` : ''} (${step.evaluation.goalComplete ? '✓' : '...'} ${Math.round(step.evaluation.confidence * 100)}%)`);
-            },
-          },
-        );
-
-        console.log(`  [loop:${agentDef.name}] ${loopResult.status} in ${loopResult.iterations} steps (${loopResult.totalDurationMs}ms)`);
-
-        return {
-          success: loopResult.goalAchieved,
-          summary: loopResult.result,
-          data: loopResult.result,
-          evidence: {
-            sources: [],
-            confidence: loopResult.confidence,
-            reasoning: `Loop execution: ${loopResult.iterations} steps, tools: [${loopResult.toolsUsed.join(', ')}]`,
-          },
-          durationMs: loopResult.totalDurationMs,
-          loopTrace: {
-            id: loopResult.id,
-            status: loopResult.status,
-            iterations: loopResult.iterations,
-            toolsUsed: loopResult.toolsUsed,
-            goalAchieved: loopResult.goalAchieved,
-          },
-        };
+        response = await agentTools.completeWithTools(batchPrompt, agentToolNames);
+        console.log(`  [batch:${agentDef.name}] Batch task completed`);
       } catch (err: any) {
-        console.error(`  [loop:${agentDef.name}] Loop execution failed:`, err.message);
-        // Fall through to single-pass execution
+        console.error(`  [batch:${agentDef.name}] Batch execution failed: ${err.message}`);
+        response = '';
       }
     }
 
     // ─── SINGLE-PASS MODE (default): One LLM call with tools ─────────
-
-    // Build prompt — inject current date/time so the LLM knows what "today" means
-    const now = new Date();
-    const dateContext = `\n\n[SYSTEM CONTEXT]\nCurrent date: ${now.toISOString().split('T')[0]} (${now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })})\nCurrent time: ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}\nYear: ${now.getFullYear()}\n`;
+    if (!response) {
     const fullPrompt = `${systemPrompt}${dateContext}\nUser: ${userMessage}`;
-
-    // If agent has tools configured, use tool-calling completion
-    const agentToolNames = agentDef.tools || [];
-
-    let response: string;
-
     if (agentToolNames.length > 0) {
       // Use tool-calling completion with error recovery
       try {
@@ -1802,6 +1734,7 @@ function createAgentExecutor(
         }
       }
     }
+    } // end if (!response) — single-pass mode
 
     // ─── SELF-REFLECTION: Evaluate and improve response quality ──────
     // Only reflects on non-trivial responses (skip errors, short answers, greetings)
