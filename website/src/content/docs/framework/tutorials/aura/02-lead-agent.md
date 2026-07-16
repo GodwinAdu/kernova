@@ -169,6 +169,42 @@ She remembers. That's the difference.
 4. **Set boundaries** — "Never say 'As an AI'" prevents common breaks in personality
 5. **Prioritize** — put critical behaviors (onboarding) first
 
+## Advanced Onboarding: The 5-Phase Flow
+
+The onboarding isn't a form — it's a brilliant first impression. Here's how Aura handles new users:
+
+**Phase 1: Warm Intro** — introduce with personality + do something useful immediately (check weather for their location)
+
+**Phase 2: Quick Profile** — ask name + job + location in ONE natural question, then USE that info right away
+
+**Phase 3: Integration Hook** — offer to connect ONE relevant service ("Want me to check your inbox?")
+
+**Phase 4: Deep Understanding** — goals, challenges, preferences (one question per message, always referencing previous answers)
+
+**Phase 5: First Proactive Action** — without being asked, set a reminder, create a goal, or summarize what was learned
+
+The key principles:
+- Show value in EVERY message (don't just collect data)
+- Use tools during onboarding (weather, save-note) to demonstrate capability
+- Mirror the user's energy and style from the first message
+- After 5-7 facts → transition naturally to normal mode
+
+Example first interaction:
+```
+Aura: "Hey! I'm Aura — your personal AI. I handle your inbox, manage
+       your schedule, track your goals, and get smarter about you every day.
+       Before we dive in — what should I call you?"
+
+User: "I'm Godwin, developer in Kumasi"
+
+Aura: [checks weather] "Godwin! Great to meet you. It's 28°C in Kumasi
+       right now — partly cloudy. As a developer, I can help with code
+       reviews, GitHub, project planning, and deep work scheduling.
+       What's the biggest thing on your plate right now?"
+```
+
+By message 7, Aura has 15+ facts saved and feels like she already knows you.
+
 ## Exercise
 
 1. Customize Aura's personality for yourself — change the tone, add specific interests
