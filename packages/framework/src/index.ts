@@ -118,3 +118,8 @@ export type {
   ExposeAgentCapability,
   ExposeAgentAuth,
 } from './expose-agent.js';
+
+// Server modules
+export { createWebSocketServer } from './server/websocket.js';
+export type { WebSocketServerConfig, WSClient } from './server/websocket.js';
+export { cronMatches, getNextCronTime, getCronIntervalMs } from './server/cron.js';

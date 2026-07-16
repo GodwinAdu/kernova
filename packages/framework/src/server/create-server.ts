@@ -16,6 +16,8 @@ import { discoverTools } from './discover-tools.js';
 import { discoverMemory } from './discover-memory.js';
 import { TeamExecutorLocal } from './team-executor-local.js';
 import { ConnectionPool, RecallCache, EmbeddingCache, createSSEStream } from './performance.js';
+import { createWebSocketServer } from './websocket.js';
+import { cronMatches, getNextCronTime } from './cron.js';
 import type { KernovaFrameworkConfig } from '../types/config.js';
 import type { AgentDefinition as FrameworkAgentDef } from '../types/agent.js';
 import type { DiscoveredAgent } from './discover-agents.js';
@@ -529,9 +531,56 @@ export async function createServer(options: ServerOptions = {}) {
     console.log('');
   });
 
+  // ─── WebSocket Server (opt-in via config) ────────────────────────────────
+  let wsServer: any = null;
+  const wsConfig = (config.gateway as any)?.websocket;
+  if (wsConfig === true || (typeof wsConfig === 'object' && wsConfig.enabled)) {
+    const wsOptions = typeof wsConfig === 'object' ? wsConfig : { enabled: true };
+
+    wsServer = await createWebSocketServer(
+      server,
+      {
+        enabled: true,
+        port: wsOptions.port,
+        path: wsOptions.path || '/ws',
+        heartbeatInterval: wsOptions.heartbeatInterval || 30000,
+      },
+      {
+        onMessage: async (clientId, message, threadId) => {
+          // Route message through the first agent (assistant)
+          const defaultAgent = agents[0];
+          if (!defaultAgent) return 'No agents configured.';
+
+          const defId = agentRouteMap.get(defaultAgent.route)!;
+          const result = await kernel.submit({
+            goal: message,
+            intentType: 'action',
+            priority: 'medium',
+            owner: clientId,
+            metadata: {
+              threadId,
+              agentRoute: defaultAgent.route,
+              targetAgent: defId,
+              source: 'websocket',
+            },
+          });
+
+          return String(result.result?.summary || result.result?.data || '');
+        },
+        onConnect: (clientId) => {
+          console.log(`  [ws] Client connected: ${clientId}`);
+        },
+        onDisconnect: (clientId) => {
+          console.log(`  [ws] Client disconnected: ${clientId}`);
+        },
+      },
+    );
+  }
+
   // Register graceful shutdown
   const shutdown = async () => {
     console.log('\n  ⏹ Shutting down...');
+    if (wsServer) wsServer.close();
     await ConnectionPool.closeAll();
     server.close();
   };
@@ -1865,6 +1914,56 @@ function startTriggerScheduler(
   const lastFired = new Map<string, number>();
 
   for (const trigger of triggers) {
+    // Check if event is a cron expression (contains spaces = 5 fields, or starts with @ or cron:)
+    if (trigger.event.includes(' ') || trigger.event.startsWith('@') || trigger.event.startsWith('cron:')) {
+      const cronExpr = trigger.event.startsWith('cron:') ? trigger.event.slice(5).trim() : trigger.event;
+
+      // Use cron-based scheduling
+      console.log(`  ⏰ Trigger: "${trigger.name}" → cron: ${cronExpr}`);
+
+      // Check every minute if the cron expression matches
+      setInterval(async () => {
+        if (!cronMatches(cronExpr)) return;
+
+        // Check cooldown
+        const last = lastFired.get(trigger.name) || 0;
+        const cooldown = trigger.cooldown || 60000;
+        if (Date.now() - last < cooldown) return;
+
+        lastFired.set(trigger.name, Date.now());
+        console.log(`  [trigger:cron] Firing: ${trigger.name}`);
+
+        try {
+          const defId = agentRouteMap.get(trigger.agent);
+          if (!defId) {
+            console.warn(`  [trigger] Agent "${trigger.agent}" not found for trigger "${trigger.name}"`);
+            return;
+          }
+
+          await kernel.submit({
+            goal: trigger.goal,
+            intentType: 'action',
+            priority: trigger.priority || 'medium',
+            owner: 'system',
+            metadata: {
+              triggerName: trigger.name,
+              triggerEvent: trigger.event,
+              autonomous: true,
+              threadId: `trigger_${trigger.name}`,
+              targetAgent: defId,
+              agentRoute: trigger.agent,
+            },
+          });
+
+          console.log(`  [trigger:cron] ✓ ${trigger.name} completed`);
+        } catch (err) {
+          console.error(`  [trigger:cron] ✗ ${trigger.name} failed:`, (err as Error).message);
+        }
+      }, 60000); // Check every minute
+
+      continue; // Skip the interval-based logic below
+    }
+
     // Parse interval from event pattern
     const intervalMs = parseEventInterval(trigger.event);
     if (intervalMs <= 0) continue;

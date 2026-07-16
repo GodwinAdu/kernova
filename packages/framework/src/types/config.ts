@@ -108,6 +108,13 @@ export interface KernovaFrameworkConfig {
       requests: number;
       window: string;
     };
+    /** Enable WebSocket server alongside HTTP */
+    websocket?: boolean | {
+      enabled: boolean;
+      port?: number;
+      path?: string;
+      heartbeatInterval?: number;
+    };
   };
   /** Plugins to load */
   plugins?: string[];
