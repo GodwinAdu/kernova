@@ -290,6 +290,70 @@ Update Aura's tools array:
 tools: [...existing, 'temporal-intelligence', 'adaptive-style', 'smart-summary'],
 ```
 
+Update `kernova.config.ts` to enable WebSocket:
+
+```typescript
+gateway: {
+  openaiCompat: true,
+  cors: ['*'],
+  rateLimit: { requests: 100, window: '1m' },
+  websocket: true, // Real-time bidirectional communication
+},
+```
+
+Update triggers to use proper cron syntax:
+
+```typescript
+// agents/triggers/morning-briefing.ts
+export default defineTrigger({
+  name: 'morning-briefing',
+  event: '0 7 * * *',  // 7:00 AM every day
+  agent: 'assistant',
+  goal: 'Generate a morning briefing...',
+});
+
+// agents/triggers/weekly-summary.ts
+export default defineTrigger({
+  name: 'weekly-summary',
+  event: '0 18 * * 0',  // 6:00 PM every Sunday
+  agent: 'assistant',
+  goal: 'Generate weekly review...',
+});
+
+// agents/triggers/evening-habit-check.ts
+export default defineTrigger({
+  name: 'evening-habit-check',
+  event: '0 21 * * *',  // 9:00 PM every day
+  agent: 'assistant',
+  goal: 'Evening check-in for habits...',
+});
+```
+
+Cron syntax: `minute hour day-of-month month day-of-week`
+- `0 7 * * *` = 7:00 AM daily
+- `0 18 * * 0` = 6:00 PM Sundays
+- `*/5 * * * *` = every 5 minutes
+- `0 9 * * 1-5` = 9:00 AM weekdays
+
+## WebSocket: Real-Time Communication
+
+With WebSocket enabled, clients can connect for real-time interaction:
+
+```javascript
+const ws = new WebSocket('ws://localhost:4555/ws?threadId=my-chat');
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  if (data.type === 'response') console.log('Aura:', data.content);
+  if (data.type === 'thinking') console.log('Aura is thinking...');
+};
+
+// Send a message
+ws.send(JSON.stringify({ type: 'message', content: 'Good morning!' }));
+```
+
+This enables: mobile apps, browser extensions, desktop apps, IoT devices — anything that can open a WebSocket connection talks to Aura in real-time.
+
 Add instructions:
 
 ```
