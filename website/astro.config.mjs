@@ -114,6 +114,7 @@ export default defineConfig({
             { label: '9. Autonomous Triggers', slug: 'framework/tutorials/aura/09-triggers' },
             { label: '10. Chat UI & Deployment', slug: 'framework/tutorials/aura/10-frontend-deploy' },
             { label: '11. Advanced Intelligence', slug: 'framework/tutorials/aura/11-intelligence' },
+            { label: '12. Temporal & Adaptive AI', slug: 'framework/tutorials/aura/12-temporal-adaptive' },
           ],
         },
         {
