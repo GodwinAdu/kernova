@@ -267,3 +267,27 @@ The second response uses:
 5. Ask "Why have I been feeling tired?" — see if pattern detection finds correlations
 
 These two systems — corrections + cross-context — are what make Aura feel like a genuine intelligence rather than a tool-calling chatbot.
+
+## Settings Control via Chat
+
+Aura can also manage her own settings through conversation — no need to open the Settings page:
+
+```
+"Enable autonomous mode"           → ✅ Autonomous Mode is now enabled ✓
+"Set my timezone to Africa/Accra"  → ✅ Timezone is now Africa/Accra
+"Keep responses short"             → ✅ Max Response Length is now short
+"Disable the morning briefing"     → ✅ Daily Briefing Enabled is now disabled ✗
+"My email is godwin@example.com"   → ✅ User Email is now godwin@example.com
+"What are my settings?"            → Shows grouped summary of all settings
+```
+
+For integrations (connecting Google, GitHub, etc.), Aura can't do it — she politely redirects:
+
+```
+"Connect my Gmail"
+→ "I'd love to help with that! You'll need to connect Google in Settings →
+   Integrations. Once connected, I'll be able to read your inbox, send replies,
+   and manage your calendar. Want me to guide you there?"
+```
+
+The `manage-settings` tool handles all controllable settings while protecting integration security (OAuth/API keys must be user-initiated).
