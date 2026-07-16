@@ -983,55 +983,97 @@ function buildRoutes(
         // Build full input with memory + conversation
         const fullInput = `${input}${memoryContext}${conversationContext}`;
 
-        // Set up SSE with optimized stream helper
+        // Build the system prompt with date context
+        const agentInstructions = agent.definition.instructions || '';
+        const nowDate = new Date();
+        const dateContext = `\n\n[SYSTEM CONTEXT]\nCurrent date: ${nowDate.toISOString().split('T')[0]} (${nowDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })})\nCurrent time: ${nowDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}\nYear: ${nowDate.getFullYear()}\n`;
+        const systemPrompt = `${agentInstructions}${dateContext}`;
+
+        // Set up SSE
         const stream = createSSEStream(res);
-
-        // Subscribe to kernel events for this intent
-        const intentId = `intent_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-
-        const tokenHandler = (event: any) => {
-          if (event.data?.intentId === intentId && event.data?.token) {
-            stream.write(JSON.stringify({
-              choices: [{ delta: { content: event.data.token } }],
-            }));
-          }
-        };
-
-        const subscriptionId = kernel.events.subscribe(['model.token'], tokenHandler);
-
-        // Clean up subscription on client disconnect
-        stream.onClose(() => {
-          kernel.events.unsubscribe(subscriptionId);
-        });
+        let fullContent = '';
 
         try {
-          const result = await kernel.submit({
-            id: intentId,
-            goal: fullInput,
-            intentType: 'action',
-            priority: 'medium',
-            owner: user?.id || 'system',
-            metadata: {
-              threadId: resolvedThreadId,
-              agentRoute: agent.route,
-              targetAgent: definitionId,
-              streaming: true,
-            },
+          // ─── DIRECT STREAMING via ModelRouter ─────────────────────────
+          // This gives real-time token-by-token streaming to the client.
+          // For tool-calling, we fall back to the kernel (non-streaming).
+
+          const modelRouter = kernel.models;
+          const agentToolNames = agent.definition.tools || [];
+
+          // Build tool specs for the model (same as AgentRegistry does)
+          let toolSpecs: any[] | undefined;
+          if (agentToolNames.length > 0 && kernel.plugins) {
+            const availableTools = kernel.plugins.listTools();
+            const filtered = availableTools.filter((t: any) =>
+              agentToolNames.some((name: string) => t.id.includes(name) || t.name === name)
+            );
+            if (filtered.length > 0) {
+              toolSpecs = filtered.map((t: any) => ({
+                name: t.id.replace(/:/g, '_'),
+                description: t.description,
+                parameters: t.parameters,
+              }));
+            }
+          }
+
+          // First call: might return text (streamable) or tool calls (need to execute)
+          const messages: any[] = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: fullInput },
+          ];
+
+          // Try streaming completion
+          const firstResponse = await modelRouter.complete({
+            messages,
+            model: '',
+            tools: toolSpecs,
           });
 
-          const responseContent = result.result?.summary || result.result?.data || '';
+          // If the response has tool calls → handle them (non-streaming part)
+          if (firstResponse.toolCalls && firstResponse.toolCalls.length > 0) {
+            // Execute tools and get final response via kernel
+            const result = await kernel.submit({
+              goal: fullInput,
+              intentType: 'action',
+              priority: 'medium',
+              owner: user?.id || 'system',
+              metadata: {
+                threadId: resolvedThreadId,
+                agentRoute: agent.route,
+                targetAgent: definitionId,
+              },
+            });
 
-          // Send the final result if the model didn't stream token-by-token
-          if (responseContent) {
-            stream.write(JSON.stringify({
-              choices: [{ delta: { content: responseContent } }],
-              done: true,
-            }));
+            fullContent = String(result.result?.summary || result.result?.data || '');
+
+            // Stream the complete response as a single chunk (tool results can't stream)
+            if (fullContent) {
+              stream.write(JSON.stringify({
+                choices: [{ delta: { content: fullContent } }],
+                done: true,
+              }));
+            }
+          } else {
+            // No tool calls → we can stream the response token-by-token!
+            // Re-do the call with streaming enabled
+            for await (const chunk of modelRouter.stream({
+              messages,
+              model: '',
+            })) {
+              if (chunk.content) {
+                fullContent += chunk.content;
+                stream.write(JSON.stringify({
+                  choices: [{ delta: { content: chunk.content } }],
+                }));
+              }
+              if (chunk.done) break;
+            }
           }
 
           // Save assistant response
-          if (responseContent) {
-            await conversationStore.addMessage(resolvedThreadId, 'assistant', String(responseContent));
+          if (fullContent) {
+            await conversationStore.addMessage(resolvedThreadId, 'assistant', fullContent);
           }
 
           // Auto-save personal info (same logic as sync endpoint)
@@ -1071,12 +1113,12 @@ function buildRoutes(
           }
 
           // Track token usage
-          if (budgetManager && result.result?.durationMs) {
+          if (budgetManager && fullContent) {
             try {
               budgetManager.recordUsage({
                 identity: user?.id || 'system',
-                tokens: Math.ceil((input.length + (String(responseContent).length || 0)) / 4), // Rough estimate
-                cost: 0, // Actual cost tracking requires model pricing
+                tokens: Math.ceil((input.length + fullContent.length) / 4),
+                cost: 0,
                 model: agent.definition.model || config.model?.model || 'gpt-4o',
                 timestamp: new Date().toISOString(),
               });
@@ -1087,12 +1129,12 @@ function buildRoutes(
           if (trajectoryRecorder) {
             try {
               trajectoryRecorder.record({
-                intentId: result.id,
+                intentId: `stream_${Date.now()}`,
                 agent: agent.route,
                 goal: input,
-                response: String(responseContent).slice(0, 200),
-                toolsCalled: result.result?.evidence?.reasoning || '',
-                durationMs: result.result?.durationMs || 0,
+                response: fullContent.slice(0, 200),
+                toolsCalled: '',
+                durationMs: 0,
                 success: true,
                 timestamp: new Date().toISOString(),
               });
@@ -1101,7 +1143,6 @@ function buildRoutes(
         } catch (err) {
           stream.write(JSON.stringify({ error: (err as Error).message }));
         } finally {
-          kernel.events.unsubscribe(subscriptionId);
           stream.end();
         }
       },
