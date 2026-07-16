@@ -77,7 +77,7 @@ export function parseInstructions(instructions: string): InstructionSection[] {
     const section: InstructionSection = {
       id: header.replace(/[^a-z0-9]+/g, '-'),
       content,
-      keywords: getKeywordsForSection(header),
+      keywords: getKeywordsForSection(header, content),
       alwaysInclude: isAlwaysIncluded(header),
     };
 
@@ -138,40 +138,62 @@ export function estimateTokens(text: string): number {
 
 // ─── Internal: Keyword Mapping ───────────────────────────────────────────────
 
-function getKeywordsForSection(header: string): string[] {
-  const h = header.toLowerCase();
+/**
+ * Extract keywords from a section's content automatically.
+ * Looks at the header + first few lines to find meaningful words.
+ * No hardcoded domain knowledge — works for any agent's instructions.
+ */
+function getKeywordsForSection(header: string, content?: string): string[] {
+  const keywords: string[] = [];
 
-  if (h.includes('onboarding')) return ['name', 'who are you', 'introduce', 'hello', 'hi', 'hey', 'first time'];
-  if (h.includes('normal mode')) return ['remember', 'you know', 'my name', 'last time'];
-  if (h.includes('personality')) return []; // Always included via alwaysInclude
-  if (h.includes('always learning')) return ['remember', 'save', 'note', 'learn', 'my name', 'i am', 'i work', 'i live', 'i like'];
-  if (h.includes('learning from corrections')) return ['don\'t', 'never', 'stop', 'always', 'from now on', 'rule', 'correct'];
-  if (h.includes('cross-context')) return ['pattern', 'connect', 'relation', 'impact', 'brief', 'morning', 'good morning'];
-  if (h.includes('temporal')) return ['when', 'time', 'schedule', 'productive', 'energy', 'tired', 'best time', 'overload'];
-  if (h.includes('capabilities')) return []; // Always included
-  if (h.includes('email')) return ['email', 'inbox', 'gmail', 'send', 'reply', 'archive', 'delete', 'forward', 'newsletter'];
-  if (h.includes('calendar')) return ['calendar', 'schedule', 'meeting', 'event', 'free', 'book', 'tomorrow', 'today'];
-  if (h.includes('github')) return ['github', 'repo', 'issue', 'pr', 'pull request', 'code', 'commit', 'notification'];
-  if (h.includes('notion')) return ['notion', 'page', 'database', 'notes', 'document'];
-  if (h.includes('slack')) return ['slack', 'channel', 'message', 'status', 'dm'];
-  if (h.includes('whatsapp')) return ['whatsapp', 'wa', 'phone', 'text'];
-  if (h.includes('delegation')) return ['plan', 'budget', 'workout', 'research', 'write', 'blog', 'interview', 'career', 'bible', 'spiritual'];
-  if (h.includes('rules')) return ['rule', 'don\'t', 'never', 'always', 'stop', 'correct'];
-  if (h.includes('settings')) return ['setting', 'enable', 'disable', 'change', 'timezone', 'mode', 'theme', 'language', 'turn on', 'turn off'];
-  if (h.includes('batch')) return ['all', 'every', 'each', 'archive all', 'reply all', 'delete all', 'mark all'];
-  if (h.includes('cross-context')) return ['connect', 'relate', 'impact', 'brief', 'pattern'];
+  // Extract words from the header itself (most important signal)
+  const headerWords = header.toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .split(/\s+/)
+    .filter(w => w.length > 3 && !STOP_WORDS.has(w));
+  keywords.push(...headerWords);
 
-  return [];
+  // If we have content, extract key nouns/verbs from first 200 chars
+  if (content) {
+    const firstChunk = content.slice(0, 500).toLowerCase();
+    const contentWords = firstChunk
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 4 && !STOP_WORDS.has(w));
+
+    // Count word frequency in the section — top frequent words are keywords
+    const freq = new Map<string, number>();
+    for (const w of contentWords) {
+      freq.set(w, (freq.get(w) || 0) + 1);
+    }
+
+    // Take top 8 most frequent words from the section
+    const topWords = Array.from(freq.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([word]) => word);
+
+    keywords.push(...topWords);
+  }
+
+  // Deduplicate
+  return [...new Set(keywords)];
 }
 
 function isAlwaysIncluded(header: string): boolean {
   const h = header.toLowerCase();
-  // These sections define core behavior and should always be present
-  return (
-    h.includes('personality') ||
-    h.includes('capabilities') ||
-    h.includes('onboarding') || // Needed to detect if user is new
-    h.includes('normal mode') ||
-    h.includes('always learning')
-  );
+  // Sections with these words in the header are always included (core behavior)
+  const alwaysKeywords = ['personality', 'capabilities', 'onboarding', 'normal mode', 'always learning', 'core', 'identity', 'behavior'];
+  return alwaysKeywords.some(k => h.includes(k));
 }
+
+/** Common words that don't help with intent matching */
+const STOP_WORDS = new Set([
+  'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her',
+  'was', 'one', 'our', 'out', 'has', 'have', 'been', 'will', 'this', 'that',
+  'with', 'they', 'from', 'what', 'when', 'make', 'like', 'just', 'over',
+  'such', 'take', 'than', 'them', 'very', 'after', 'also', 'most', 'into',
+  'other', 'about', 'which', 'their', 'there', 'should', 'each', 'those',
+  'being', 'would', 'could', 'does', 'doing', 'done', 'these', 'more',
+  'some', 'then', 'only', 'your', 'use', 'using', 'used',
+]);
