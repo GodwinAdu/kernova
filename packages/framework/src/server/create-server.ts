@@ -61,11 +61,11 @@ export async function createServer(options: ServerOptions = {}) {
   const recallCache = new RecallCache({ maxSize: 200, ttl: 60 });
   const embeddingCache = new EmbeddingCache({ maxSize: 500, ttl: 3600 });
 
-  // Cached embedding generation (avoids redundant OpenAI calls)
+  // Cached embedding generation (avoids redundant API calls)
   async function generateEmbeddingCached(text: string): Promise<number[] | null> {
     const cached = embeddingCache.get(text);
     if (cached) return cached;
-    const embedding = await generateEmbedding(text);
+    const embedding = await generateEmbedding(text, kernel);
     if (embedding) embeddingCache.set(text, embedding);
     return embedding;
   }
@@ -2028,23 +2028,38 @@ function startTriggerScheduler(
 }
 
 /**
- * Generate an embedding vector using OpenAI's embedding API.
- * Returns null if no API key or request fails.
+ * Generate an embedding vector using the kernel's model router.
+ * Routes to whatever provider supports embeddings (OpenAI, Gemini, Ollama).
+ * Falls back to OpenAI API directly if kernel not available.
+ * Returns null if no provider is available or request fails.
  */
-async function generateEmbedding(text: string): Promise<number[] | null> {
+async function generateEmbedding(text: string, kernelRef?: any): Promise<number[] | null> {
+  // Try kernel's model router first (provider-agnostic)
+  if (kernelRef?.models?.embed) {
+    try {
+      const embedding = await kernelRef.models.embed(text.slice(0, 8000));
+      if (embedding?.length > 0) return embedding;
+    } catch {
+      // Fall through to direct API call
+    }
+  }
+
+  // Fallback: direct OpenAI API call (works with OPENAI_BASE_URL override too)
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
+  const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+
   try {
-    const res = await fetch('https://api.openai.com/v1/embeddings', {
+    const res = await fetch(`${baseUrl}/embeddings`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'text-embedding-3-small',
-        input: text.slice(0, 8000), // Max input for embedding
+        model: process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
+        input: text.slice(0, 8000),
       }),
       signal: AbortSignal.timeout(10000),
     });
