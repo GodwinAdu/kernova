@@ -164,6 +164,129 @@ export class AnthropicProvider implements ModelProvider {
       clearTimeout(timeout);
     }
   }
+
+  async *stream(request: CompletionRequest): AsyncGenerator<StreamChunk> {
+    if (!this.isAvailable()) {
+      throw new Error('Anthropic provider not available. Set ANTHROPIC_API_KEY environment variable.');
+    }
+
+    const model = request.model || this.defaultModel;
+
+    // Build the same body as complete() but with stream: true
+    const systemMessage = request.messages.find(m => m.role === 'system');
+    const nonSystemMessages = request.messages.filter(m => m.role !== 'system');
+
+    const body: Record<string, unknown> = {
+      model,
+      max_tokens: request.maxTokens ?? 4096,
+      stream: true,
+      messages: nonSystemMessages.map(m => ({
+        role: m.role === 'tool' ? 'user' : m.role,
+        content: m.toolCallId
+          ? [{ type: 'tool_result', tool_use_id: m.toolCallId, content: m.content }]
+          : m.content,
+      })),
+    };
+
+    if (systemMessage) {
+      body.system = systemMessage.content;
+    }
+
+    if (request.temperature !== undefined) {
+      body.temperature = request.temperature;
+    }
+
+    if (request.stopSequences?.length) {
+      body.stop_sequences = request.stopSequences;
+    }
+
+    if (request.tools?.length) {
+      body.tools = request.tools.map(t => ({
+        name: t.name,
+        description: t.description,
+        input_schema: t.parameters,
+      }));
+    }
+
+    const response = await fetch(`${this.baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': this.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Anthropic streaming error (${response.status}): ${error}`);
+    }
+
+    if (!response.body) {
+      // Fallback: call complete() and yield the result as a single chunk
+      const result = await this.complete(request);
+      yield { content: result.content, done: false, provider: 'anthropic', model };
+      yield { content: '', done: true, provider: 'anthropic', model, finishReason: 'stop', usage: result.usage };
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data: ')) continue;
+          const data = trimmed.slice(6);
+          if (data === '[DONE]') {
+            yield { content: '', done: true, provider: 'anthropic', model, finishReason: 'stop' };
+            return;
+          }
+
+          try {
+            const parsed = JSON.parse(data);
+
+            if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') {
+              yield { content: parsed.delta.text, done: false, provider: 'anthropic', model };
+            }
+
+            if (parsed.type === 'message_delta') {
+              const finishReason = mapStopReason(parsed.delta?.stop_reason);
+              const usage = parsed.usage ? {
+                promptTokens: parsed.usage.input_tokens || 0,
+                completionTokens: parsed.usage.output_tokens || 0,
+                totalTokens: (parsed.usage.input_tokens || 0) + (parsed.usage.output_tokens || 0),
+              } : undefined;
+              yield { content: '', done: true, provider: 'anthropic', model, finishReason, usage };
+              return;
+            }
+
+            if (parsed.type === 'message_stop') {
+              yield { content: '', done: true, provider: 'anthropic', model, finishReason: 'stop' };
+              return;
+            }
+          } catch {
+            // Skip malformed JSON lines
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    // Final chunk if not already sent
+    yield { content: '', done: true, provider: 'anthropic', model, finishReason: 'stop' };
+  }
 }
 
 /** Map Anthropic stop reason to our standard */
