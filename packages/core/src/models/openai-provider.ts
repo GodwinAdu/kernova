@@ -43,8 +43,8 @@ export class OpenAIProvider implements ModelProvider {
 
   constructor(config: OpenAIConfig = {}) {
     this.apiKey = config.apiKey || process.env.OPENAI_API_KEY || '';
-    this.baseUrl = config.baseUrl || 'https://api.openai.com/v1';
-    this.defaultModel = config.defaultModel || 'gpt-4o';
+    this.baseUrl = config.baseUrl || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+    this.defaultModel = config.defaultModel || process.env.OPENAI_MODEL || 'gpt-4o';
     this.timeoutMs = config.timeoutMs || 60000;
   }
 
