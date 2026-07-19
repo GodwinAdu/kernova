@@ -20,6 +20,7 @@ import { handleSchedule } from './commands/schedule.js';
 import { handleQueue } from './commands/queue.js';
 import { handleTriggers } from './commands/triggers.js';
 import { handleStudio } from './commands/studio.js';
+import { handleDoctor } from './commands/doctor.js';
 import { printHelp, printVersion, printBanner } from './ui.js';
 
 const commands: Record<string, (args: string[]) => Promise<void>> = {
@@ -38,6 +39,7 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   queue: handleQueue,
   triggers: handleTriggers,
   studio: handleStudio,
+  doctor: handleDoctor,
 };
 
 async function main() {
