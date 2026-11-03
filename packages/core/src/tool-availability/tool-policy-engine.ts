@@ -32,6 +32,19 @@ export class ToolPolicyEngine {
   }
 
   /**
+   * Check a tool that has several names (e.g. "shell-exec" and its registered ID).
+   * In each layer the tool is denied if any name matches `deny`, and must have
+   * some name that matches `allow` when an allow list is given.
+   */
+  isToolAllowed(names: string[], layers: ToolPolicyLayer[]): boolean {
+    return layers.every(({ policy }) => {
+      if (policy.deny?.length && names.some(n => this.matchesAny(n, policy.deny!))) return false;
+      if (policy.allow?.length && !names.some(n => this.matchesAny(n, policy.allow!))) return false;
+      return true;
+    });
+  }
+
+  /**
    * Apply a single policy layer.
    */
   private applyLayer(tools: string[], policy: ToolPolicy): string[] {

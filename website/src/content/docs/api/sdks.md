@@ -11,7 +11,7 @@ Kernova provides official SDKs for **7 languages** plus a raw REST API. Each SDK
 |----------|---------|---------|
 | TypeScript | `@kernova/sdk` | `npm install @kernova/sdk` |
 | Python | `kernova` | `pip install kernova` |
-| Go | `github.com/kernova/kernova-go` | `go get github.com/kernova/kernova-go` |
+| Go | `github.com/GodwinAdu/kernova/sdks/go` | `go get github.com/GodwinAdu/kernova/sdks/go` |
 | Rust | `kernova` | `cargo add kernova` |
 | Java | `dev.kernova:kernova-sdk` | Maven / Gradle |
 | C# | `Kernova.SDK` | `dotnet add package Kernova.SDK` |
@@ -122,7 +122,7 @@ asyncio.run(main())
 ### Installation
 
 ```bash
-go get github.com/kernova/kernova-go
+go get github.com/GodwinAdu/kernova/sdks/go
 ```
 
 ### Quick Usage
@@ -135,7 +135,7 @@ import (
     "fmt"
     "log"
 
-    kernova "github.com/kernova/kernova-go"
+    kernova "github.com/GodwinAdu/kernova/sdks/go"
 )
 
 func main() {
@@ -344,7 +344,7 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/kernova/kernova-swift.git", from: "1.0.0")
+    .package(url: "https://github.com/GodwinAdu/kernova-swift.git", from: "1.0.0")
 ]
 ```
 

@@ -17,7 +17,7 @@ import type {
   WorkflowInstance,
   WorkflowStep,
   StepResult,
-  NexusId,
+  KernovaId,
   Intent,
   ComputedContext,
 } from '@kernova/types';
@@ -36,14 +36,14 @@ export interface WorkflowEngineConfig {
 
 /** Approval callback for human-in-the-loop */
 export type ApprovalHandler = (
-  workflowId: NexusId,
+  workflowId: KernovaId,
   stepId: string,
   description: string,
 ) => Promise<{ approved: boolean; reason?: string }>;
 
 export class WorkflowEngine {
-  private definitions: Map<NexusId, WorkflowDefinition> = new Map();
-  private instances: Map<NexusId, WorkflowInstance> = new Map();
+  private definitions: Map<KernovaId, WorkflowDefinition> = new Map();
+  private instances: Map<KernovaId, WorkflowInstance> = new Map();
   private pendingApprovals: Map<string, (result: { approved: boolean; reason?: string }) => void> = new Map();
   private eventBus: EventBus;
   private agents: AgentRegistry;
@@ -83,9 +83,9 @@ export class WorkflowEngine {
    * Start a workflow execution
    */
   async execute(
-    definitionId: NexusId,
+    definitionId: KernovaId,
     input: Record<string, unknown> = {},
-    intentId?: NexusId,
+    intentId?: KernovaId,
   ): Promise<WorkflowInstance> {
     const definition = this.definitions.get(definitionId);
     if (!definition) {
@@ -173,7 +173,7 @@ export class WorkflowEngine {
    * Approve or reject a pending workflow step externally.
    * Use this when the approval comes from a UI, API, or external system.
    */
-  resolveApproval(workflowId: NexusId, stepId: string, approved: boolean, reason?: string): void {
+  resolveApproval(workflowId: KernovaId, stepId: string, approved: boolean, reason?: string): void {
     const key = `${workflowId}:${stepId}`;
     const resolver = this.pendingApprovals.get(key);
     if (resolver) {
@@ -185,7 +185,7 @@ export class WorkflowEngine {
   /**
    * Get all workflows waiting for approval
    */
-  getPendingApprovals(): Array<{ workflowId: NexusId; stepId: string; stepName: string }> {
+  getPendingApprovals(): Array<{ workflowId: KernovaId; stepId: string; stepName: string }> {
     return Array.from(this.instances.values())
       .filter(i => i.workflowStatus === 'waiting_approval')
       .map(i => {
@@ -198,7 +198,7 @@ export class WorkflowEngine {
   /**
    * Get a workflow instance
    */
-  getInstance(id: NexusId): WorkflowInstance | undefined {
+  getInstance(id: KernovaId): WorkflowInstance | undefined {
     return this.instances.get(id);
   }
 

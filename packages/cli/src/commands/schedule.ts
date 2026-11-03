@@ -5,14 +5,14 @@
  *
  * Commands:
  *   kernova schedule list [--data-dir <path>]
- *   kernova schedule enable <id> [--data-dir <path>]
- *   kernova schedule disable <id> [--data-dir <path>]
+ *   kernova schedule enable <id|name> [--data-dir <path>]
+ *   kernova schedule disable <id|name> [--data-dir <path>]
  */
 
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import Database from 'better-sqlite3';
-import { info, warn, success, error } from '../ui.js';
+import { info, warn, success, error, defaultDataDir } from '../ui.js';
 
 /** Shape of a scheduled_jobs row in the database */
 interface ScheduledJobRow {
@@ -37,7 +37,7 @@ interface ScheduledJobRow {
  */
 function parseArgs(args: string[]): { dataDir: string; subcommand: string; rest: string[] } {
   const positional: string[] = [];
-  let dataDir = resolve(process.cwd(), 'kernova-data');
+  let dataDir = defaultDataDir();
 
   for (let i = 0; i < args.length; i++) {
     if ((args[i] === '--data-dir' || args[i] === '-d') && i + 1 < args.length) {
@@ -227,13 +227,14 @@ async function handleToggle(id: string | undefined, enabled: boolean, dataDir: s
       return;
     }
 
-    // Verify the job exists
-    const job = db.prepare('SELECT id, name FROM scheduled_jobs WHERE id = ?').get(id) as
-      | { id: string; name: string }
-      | undefined;
+    // Accept the full ID, the job name, or an unambiguous ID prefix (list output shortens IDs)
+    const matches = db.prepare(
+      `SELECT id, name FROM scheduled_jobs WHERE id = ? OR name = ? OR id LIKE ? || '%'`
+    ).all(id, id, id) as Array<{ id: string; name: string }>;
+    const job = matches.find(j => j.id === id || j.name === id) ?? (matches.length === 1 ? matches[0] : undefined);
 
     if (!job) {
-      error(`Job not found: ${id}`);
+      error(matches.length > 1 ? `"${id}" matches ${matches.length} jobs. Use more of the ID.` : `Job not found: ${id}`);
       process.exit(1);
       return;
     }
@@ -242,10 +243,10 @@ async function handleToggle(id: string | undefined, enabled: boolean, dataDir: s
     db.prepare('UPDATE scheduled_jobs SET enabled = ?, updated_at = ? WHERE id = ?').run(
       enabled ? 1 : 0,
       new Date().toISOString(),
-      id
+      job.id
     );
 
-    success(`Job "${job.name}" (${id}) ${action}d.`);
+    success(`Job "${job.name}" (${job.id}) ${action}d.`);
   } finally {
     db.close();
   }
@@ -257,11 +258,11 @@ function printScheduleHelp(): void {
 
   Commands:
     list              List all scheduled jobs
-    enable <id>       Enable a scheduled job
-    disable <id>      Disable a scheduled job
+    enable <id|name>  Enable a scheduled job (ID, ID prefix, or name)
+    disable <id|name> Disable a scheduled job (ID, ID prefix, or name)
 
   Options:
-    --data-dir, -d <path>  Path to the kernova data directory (default: ./kernova-data)
+    --data-dir, -d <path>  Path to the kernova data directory (default: $KERNOVA_DATA_DIR or ./kernova-data)
     -h, --help             Show this help message
 
   Examples:

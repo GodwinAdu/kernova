@@ -166,7 +166,7 @@ Environment variables are mapped to config paths using a prefix and double-under
 ```bash
 # Shell
 export KERNOVA_MODELS__DEFAULT__PROVIDER=anthropic
-export KERNOVA_MODELS__DEFAULT__MODEL=claude-sonnet-4-20250514
+export KERNOVA_MODELS__DEFAULT__MODEL=claude-sonnet-5-5
 export KERNOVA_GATEWAY__PORT=8080
 ```
 
@@ -549,7 +549,7 @@ When running in development with `kernova serve --watch`, agent config files are
 
 ```bash
 # Terminal 1: Start with hot-reload
-kernova serve --watch
+kernova serve --config ./agents --watch
 
 # Terminal 2: Edit an agent
 vim agents/researcher.agent.yaml
@@ -557,8 +557,30 @@ vim agents/researcher.agent.yaml
 ```
 
 ```typescript
-// Programmatic equivalent
-import { watchAgentConfigFiles, discoverAgentConfigFiles, loadAgentConfigWithExtends } from '@kernova/core';
+// Programmatic equivalent (DaemonRunner with { configPath, watch: true } does all of this for you)
+import {
+  watchAgentConfigFiles,
+  discoverAgentConfigFiles,
+  loadAgentConfigWithExtends,
+  defineAgent,
+  AgentConfigError,
+} from '@kernova/core';
+import type { AgentConfigFile } from '@kernova/types';
+
+/** Register an agent from a config file, replacing the previous version (same stable ID) */
+function registerFromConfig(config: AgentConfigFile) {
+  const agent = defineAgent({
+    name: config.name,
+    description: config.description ?? config.name,
+    capabilities: [{ id: config.name, name: config.name, description: config.description ?? config.name, confidence: 0.8 }],
+    tools: [],
+    instructions: config.instructions,
+    ...(config.model && { model: { model: config.model } }),
+  });
+  agent.definition.id = `config-agent-${config.name}`;
+  kernel.agentRegistry.unregister(agent.definition.id);
+  kernel.agentRegistry.register(agent.definition, agent.executor);
+}
 
 const configDir = './agents/';
 const files = discoverAgentConfigFiles(configDir);
@@ -571,7 +593,7 @@ const stop = watchAgentConfigFiles(files, (filePath, event) => {
   debounceTimer = setTimeout(() => {
     try {
       const config = loadAgentConfigWithExtends(filePath);
-      kernel.agentRegistry.reregister(config);
+      registerFromConfig(config);
       console.log(`Agent '${config.name}' reloaded`);
     } catch (err) {
       if (err instanceof AgentConfigError) {
@@ -896,7 +918,7 @@ for (const file of files) {
   try {
     const config = loadAgentConfigWithExtends(file);
     if (config.name === 'base') continue; // Skip abstract base
-    kernel.registerAgentFromConfig(config);
+    registerFromConfig(config); // defined in the hot-reload example above
     console.log(`Registered agent: ${config.name}`);
   } catch (err) {
     if (err instanceof AgentConfigError) {

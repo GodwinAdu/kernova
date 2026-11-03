@@ -4,10 +4,10 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { EventBus } from '../events/event-bus.js';
-import type { NexusEvent } from '@kernova/types';
+import type { KernovaEvent } from '@kernova/types';
 import { generateId, now } from '../utils.js';
 
-function createEvent(overrides: Partial<NexusEvent> = {}): NexusEvent {
+function createEvent(overrides: Partial<KernovaEvent> = {}): KernovaEvent {
   return {
     id: generateId('evt'),
     eventType: 'test.created',
@@ -37,7 +37,7 @@ describe('EventBus', () => {
   });
 
   it('should publish and receive events via subscription', () => {
-    const received: NexusEvent[] = [];
+    const received: KernovaEvent[] = [];
     bus.subscribe(['test.*'], (event) => { received.push(event); });
 
     bus.publish(createEvent({ eventType: 'test.created' }));
@@ -50,7 +50,7 @@ describe('EventBus', () => {
   });
 
   it('should support wildcard * matching all events', () => {
-    const received: NexusEvent[] = [];
+    const received: KernovaEvent[] = [];
     bus.subscribe(['*'], (event) => { received.push(event); });
 
     bus.publish(createEvent({ eventType: 'a.b' }));
@@ -60,7 +60,7 @@ describe('EventBus', () => {
   });
 
   it('should support unsubscribe', () => {
-    const received: NexusEvent[] = [];
+    const received: KernovaEvent[] = [];
     const id = bus.subscribe(['test.*'], (event) => { received.push(event); });
 
     bus.publish(createEvent());

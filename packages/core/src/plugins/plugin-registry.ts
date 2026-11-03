@@ -13,7 +13,7 @@
  * - kernova.config.json plugin list
  */
 
-import type { NexusId } from '@kernova/types';
+import type { KernovaId } from '@kernova/types';
 import { EventBus } from '../events/event-bus.js';
 import { generateId, now } from '../utils.js';
 
@@ -51,9 +51,9 @@ export interface MiddlewareHook {
 }
 
 export interface MiddlewareContext {
-  intentId: NexusId;
+  intentId: KernovaId;
   goal: string;
-  agentId?: NexusId;
+  agentId?: KernovaId;
   result?: unknown;
   metadata: Record<string, unknown>;
   /** Set to true to halt the pipeline */
@@ -105,9 +105,21 @@ export interface PluginContext {
   emit: (eventType: string, data: Record<string, unknown>) => void;
 }
 
+/**
+ * Make a tool ID compatible with OpenAI's function name pattern: ^[a-zA-Z0-9_-]+$
+ * (e.g. "math:add" → "math_add").
+ */
+function sanitizeToolId(toolId: string): string {
+  return toolId.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
 export class PluginRegistry {
-  private plugins: Map<string, NexusPlugin> = new Map();
+  private plugins: Map<string, KernovaPlugin> = new Map();
   private tools: Map<string, ToolDefinition> = new Map();
+  /** Sanitized tool ID → ID of the plugin that registered it */
+  private toolOwners: Map<string, string> = new Map();
+  /** Sanitized tool ID → the ID the tool was registered with ("math:add" or "add") */
+  private toolOriginalIds: Map<string, string> = new Map();
   private middleware: MiddlewareHook[] = [];
   private eventBus: EventBus;
 
@@ -118,7 +130,7 @@ export class PluginRegistry {
   /**
    * Register a plugin
    */
-  async register(plugin: NexusPlugin): Promise<void> {
+  async register(plugin: KernovaPlugin): Promise<void> {
     if (this.plugins.has(plugin.id)) {
       throw new Error(`Plugin "${plugin.id}" is already registered.`);
     }
@@ -197,9 +209,11 @@ export class PluginRegistry {
     }
 
     // Remove tools from this plugin
-    for (const [toolId, tool] of this.tools.entries()) {
-      if (toolId.startsWith(`${pluginId}:`)) {
+    for (const [toolId, ownerId] of this.toolOwners.entries()) {
+      if (ownerId === pluginId) {
         this.tools.delete(toolId);
+        this.toolOwners.delete(toolId);
+        this.toolOriginalIds.delete(toolId);
       }
     }
 
@@ -207,10 +221,25 @@ export class PluginRegistry {
   }
 
   /**
-   * Get a tool by ID
+   * Get a tool by ID. Accepts the original ID ("math:add") or the sanitized one ("math_add").
    */
   getTool(toolId: string): ToolDefinition | undefined {
-    return this.tools.get(toolId);
+    return this.tools.get(toolId) ?? this.tools.get(sanitizeToolId(toolId));
+  }
+
+  /**
+   * Every name a tool can be referred to by, for matching tool policies:
+   * the registered ID ("_kernova_built-in-tools_shell-exec"), the plugin-qualified
+   * ID ("@kernova/built-in-tools:shell-exec"), and the tool's own ID ("shell-exec").
+   */
+  getToolAliases(toolId: string): string[] {
+    const tool = this.getTool(toolId);
+    if (!tool) return [toolId];
+    const owner = this.toolOwners.get(tool.id);
+    const original = this.toolOriginalIds.get(tool.id) ?? tool.id;
+    const local = original.includes(':') ? original.slice(original.lastIndexOf(':') + 1) : original;
+    const qualified = original.includes(':') || !owner ? original : `${owner}:${original}`;
+    return [...new Set([tool.id, qualified, local])];
   }
 
   /**
@@ -224,7 +253,7 @@ export class PluginRegistry {
    * Execute a tool
    */
   async executeTool(toolId: string, params: Record<string, unknown>): Promise<unknown> {
-    const tool = this.tools.get(toolId);
+    const tool = this.getTool(toolId);
     if (!tool) {
       throw new Error(`Tool "${toolId}" not found. Available: ${Array.from(this.tools.keys()).join(', ')}`);
     }
@@ -295,15 +324,16 @@ export class PluginRegistry {
   /**
    * List registered plugins
    */
-  list(): NexusPlugin[] {
+  list(): KernovaPlugin[] {
     return Array.from(this.plugins.values());
   }
 
   private registerTool(tool: ToolDefinition, pluginId: string): void {
     const fullId = tool.id.includes(':') ? tool.id : `${pluginId}:${tool.id}`;
-    // Sanitize the ID to be compatible with OpenAI's function name pattern: ^[a-zA-Z0-9_-]+$
-    const sanitizedId = fullId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const sanitizedId = sanitizeToolId(fullId);
     this.tools.set(sanitizedId, { ...tool, id: sanitizedId });
+    this.toolOwners.set(sanitizedId, pluginId);
+    this.toolOriginalIds.set(sanitizedId, tool.id);
   }
 
   private registerMiddleware(hook: MiddlewareHook): void {

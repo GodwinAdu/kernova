@@ -5,12 +5,32 @@
  * Falls back gracefully when Gateway is unavailable.
  */
 
-const API_URL = process.env.NEXT_PUBLIC_KERNOVA_URL || 'http://localhost:3000';
+declare global {
+  interface Window {
+    /** Set by `kernova studio` when it serves the static export: the path of its gateway proxy */
+    __KERNOVA_GATEWAY__?: string;
+  }
+}
+
+const API_URL =
+  (typeof window !== 'undefined' && window.__KERNOVA_GATEWAY__) ||
+  process.env.NEXT_PUBLIC_KERNOVA_URL ||
+  'http://localhost:3000';
+
+/** Through `kernova studio`'s proxy (a relative path), which adds the gateway token itself */
+const VIA_PROXY = API_URL.startsWith('/');
+
+/** For `npm run dev` against a gateway directly (exposes the token to the browser: local use only) */
+const DEV_TOKEN = process.env.NEXT_PUBLIC_KERNOVA_TOKEN;
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
     ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(VIA_PROXY ? { 'X-Kernova-Studio': '1' } : DEV_TOKEN ? { Authorization: `Bearer ${DEV_TOKEN}` } : {}),
+      ...options?.headers,
+    },
   });
   if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
   return res.json();

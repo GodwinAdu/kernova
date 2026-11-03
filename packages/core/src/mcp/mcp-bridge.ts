@@ -15,8 +15,8 @@
  */
 
 import type {
-  NexusId,
-  NexusEvent,
+  KernovaId,
+  KernovaEvent,
   MCPServerConfig,
   MCPTool,
   MCPToolCallResult,
@@ -49,7 +49,7 @@ interface MCPConnection {
 export class MCPBridge {
   private readonly eventBus: EventBus;
   private readonly config: MCPBridgeConfig;
-  private connections: Map<NexusId, MCPConnection> = new Map();
+  private connections: Map<KernovaId, MCPConnection> = new Map();
 
   constructor(eventBus: EventBus, config?: MCPBridgeConfig) {
     this.eventBus = eventBus;
@@ -80,7 +80,7 @@ export class MCPBridge {
   /**
    * Connect to an MCP server and discover its tools.
    */
-  async connect(serverId: NexusId): Promise<MCPTool[]> {
+  async connect(serverId: KernovaId): Promise<MCPTool[]> {
     const conn = this.connections.get(serverId);
     if (!conn) throw new ValidationError('serverId', 'MCP server not registered');
     if (!conn.config.enabled) {
@@ -113,7 +113,7 @@ export class MCPBridge {
   /**
    * Disconnect from an MCP server.
    */
-  async disconnect(serverId: NexusId): Promise<void> {
+  async disconnect(serverId: KernovaId): Promise<void> {
     const conn = this.connections.get(serverId);
     if (!conn) return;
 
@@ -133,7 +133,7 @@ export class MCPBridge {
    * Call a tool on an MCP server.
    */
   async callTool(
-    serverId: NexusId,
+    serverId: KernovaId,
     toolName: string,
     args: Record<string, unknown> = {},
   ): Promise<MCPToolCallResult> {
@@ -180,9 +180,16 @@ export class MCPBridge {
   }
 
   /**
+   * Get a registered server's configuration.
+   */
+  getServer(serverId: KernovaId): MCPServerConfig | undefined {
+    return this.connections.get(serverId)?.config;
+  }
+
+  /**
    * Get tools from a specific server.
    */
-  getServerTools(serverId: NexusId): MCPTool[] {
+  getServerTools(serverId: KernovaId): MCPTool[] {
     const conn = this.connections.get(serverId);
     return conn?.tools ?? [];
   }
@@ -190,7 +197,7 @@ export class MCPBridge {
   /**
    * List all registered servers and their status.
    */
-  listServers(): Array<{ id: NexusId; name: string; connected: boolean; toolCount: number }> {
+  listServers(): Array<{ id: KernovaId; name: string; connected: boolean; toolCount: number }> {
     return Array.from(this.connections.values()).map(conn => ({
       id: conn.config.id,
       name: conn.config.name,
@@ -324,7 +331,7 @@ export class MCPBridge {
     }
   }
 
-  private emitEvent(eventType: string, subjectId: NexusId, data: Record<string, unknown>): void {
+  private emitEvent(eventType: string, subjectId: KernovaId, data: Record<string, unknown>): void {
     this.eventBus.publish({
       id: generateId('evt'),
       eventType,

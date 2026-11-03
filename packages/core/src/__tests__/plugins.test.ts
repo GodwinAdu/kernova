@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { PluginRegistry } from '../plugins/plugin-registry.js';
-import type { NexusPlugin } from '../plugins/plugin-registry.js';
+import type { KernovaPlugin } from '../plugins/plugin-registry.js';
 import { EventBus } from '../events/event-bus.js';
 
 describe('PluginRegistry', () => {
@@ -22,7 +22,7 @@ describe('PluginRegistry', () => {
   });
 
   it('should register a plugin', async () => {
-    const plugin: NexusPlugin = {
+    const plugin: KernovaPlugin = {
       id: 'test-plugin',
       name: 'Test Plugin',
       version: '1.0.0',
@@ -41,7 +41,7 @@ describe('PluginRegistry', () => {
   });
 
   it('should prevent duplicate plugin registration', async () => {
-    const plugin: NexusPlugin = {
+    const plugin: KernovaPlugin = {
       id: 'dupe', name: 'Dupe', version: '1.0.0', type: 'tool',
     };
 
@@ -50,7 +50,7 @@ describe('PluginRegistry', () => {
   });
 
   it('should execute tools', async () => {
-    const plugin: NexusPlugin = {
+    const plugin: KernovaPlugin = {
       id: 'math',
       name: 'Math',
       version: '1.0.0',
@@ -67,6 +67,23 @@ describe('PluginRegistry', () => {
     await registry.register(plugin);
     const result = await registry.executeTool('math:add', { a: 2, b: 3 });
     expect(result).toBe(5);
+    expect(await registry.executeTool('math_add', { a: 1, b: 1 })).toBe(2);
+  });
+
+  it('should remove a plugin\'s tools when it is unregistered', async () => {
+    const plugin: KernovaPlugin = {
+      id: 'temp',
+      name: 'Temp',
+      version: '1.0.0',
+      type: 'tool',
+      tools: [{ id: 'echo', name: 'echo', description: 'Echo', parameters: {}, execute: async (p) => p }],
+    };
+
+    await registry.register(plugin);
+    expect(registry.getTool('temp:echo')).toBeDefined();
+
+    await registry.unregister('temp');
+    expect(registry.getTool('temp:echo')).toBeUndefined();
   });
 
   it('should throw on unknown tool', async () => {
@@ -75,7 +92,7 @@ describe('PluginRegistry', () => {
   });
 
   it('should list tools', async () => {
-    const plugin: NexusPlugin = {
+    const plugin: KernovaPlugin = {
       id: 'multi',
       name: 'Multi',
       version: '1.0.0',
@@ -94,7 +111,7 @@ describe('PluginRegistry', () => {
   });
 
   it('should run middleware hooks', async () => {
-    const plugin: NexusPlugin = {
+    const plugin: KernovaPlugin = {
       id: 'middleware-test',
       name: 'Middleware',
       version: '1.0.0',
@@ -121,7 +138,7 @@ describe('PluginRegistry', () => {
   });
 
   it('should support middleware halt', async () => {
-    const plugin: NexusPlugin = {
+    const plugin: KernovaPlugin = {
       id: 'halt-test',
       name: 'Halt',
       version: '1.0.0',
@@ -140,7 +157,7 @@ describe('PluginRegistry', () => {
   });
 
   it('should unregister plugins', async () => {
-    const plugin: NexusPlugin = {
+    const plugin: KernovaPlugin = {
       id: 'removable', name: 'R', version: '1.0.0', type: 'tool',
       tools: [{ id: 'x', name: 'X', description: 'X', parameters: {}, execute: async () => null }],
     };

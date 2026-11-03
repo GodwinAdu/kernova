@@ -3,7 +3,12 @@ node_modules/
 
 # Build outputs
 dist/
+out/
+.next/
 *.tsbuildinfo
+.kernova-deploy/
+# Studio export bundled into the CLI at build time
+packages/cli/studio/
 
 # Environment
 .env
@@ -22,13 +27,25 @@ Thumbs.db
 # Turbo
 .turbo/
 
+# Vitest reports
+.vitest/
+
 # Logs
 *.log
 npm-debug.log*
 
-# Nexus data
-nexus-data/
+# Runtime data (SQLite databases created by Kernova)
+kernova-data/
 examples/data/
+*.db
+*.db-shm
+*.db-wal
+
+# Astro generated files
+.astro/
 
 # Coverage
 coverage/
+
+# Local package tarballs
+*.tgz

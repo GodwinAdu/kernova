@@ -37,7 +37,7 @@ const kernova_CONFIG_TEMPLATE = `{
 const AGENT_TEMPLATE = `import { defineAgent } from '@kernova/core';
 
 /**
- * My first kernova agent
+ * My first Kernova agent
  */
 export default defineAgent({
   name: 'assistant',
@@ -47,8 +47,8 @@ export default defineAgent({
   ],
   tools: [],
   instructions: \`
-    You are a helpful assistant powered by the kernova runtime.
-    You have access to memory and tools through the kernova kernel.
+    You are a helpful assistant powered by the Kernova runtime.
+    You have access to memory and tools through the Kernova kernel.
   \`,
   
   async execute(intent, context, tools) {
@@ -68,23 +68,25 @@ export default defineAgent({
 });
 `;
 
-const MAIN_TEMPLATE = `import { kernovaKernel } from '@kernova/core';
+const MAIN_TEMPLATE = `import { KernovaKernel } from '@kernova/core';
+import assistant from './agents/assistant.js';
 
 /**
- * kernova Application Entry Point
+ * Kernova Application Entry Point
  */
 async function main() {
-  const kernel = new kernovaKernel({
+  const kernel = new KernovaKernel({
     environment: 'development',
     debug: true,
   });
 
+  kernel.agentRegistry.register(assistant.definition, assistant.executor);
   await kernel.start();
-  console.log('kernova runtime started.');
+  console.log('Kernova runtime started.');
 
   // Submit your first intent
   const result = await kernel.submit({
-    goal: 'Hello, kernova!',
+    goal: 'Hello, Kernova!',
     intentType: 'query',
     priority: 'medium',
   });
@@ -108,11 +110,11 @@ const PACKAGE_JSON_TEMPLATE = `{
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@kernova/core": "^0.1.0",
-    "@kernova/types": "^0.1.0"
+    "@kernova/core": "^2.0.0",
+    "@kernova/types": "^1.1.0"
   },
   "devDependencies": {
-    "typescript": "^5.5.0",
+    "typescript": "^6.0.0",
     "@types/node": "^22.0.0",
     "tsx": "^4.0.0"
   }
@@ -125,6 +127,7 @@ const TSCONFIG_TEMPLATE = `{
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "lib": ["ES2022"],
+    "types": ["node"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -141,7 +144,7 @@ const AGENT_YAML_TEMPLATE = `name: my-assistant
 instructions: |
   You are a helpful assistant powered by Kernova.
   Help users with their tasks and answer questions clearly.
-model: gpt-4o
+# model: gpt-4o   # optional; default: the model of the first provider with an API key
 tools:
   - http-fetch
   - date-time
@@ -162,7 +165,7 @@ export async function handleInit(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  info(`Creating kernova project: ${projectName}`);
+  info(`Creating Kernova project: ${projectName}`);
 
   // Create directory structure
   const dirs = [

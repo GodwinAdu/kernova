@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as fc from 'fast-check';
 import { EventBus } from '../events/event-bus.js';
-import type { NexusEvent } from '@kernova/types';
+import type { KernovaEvent } from '@kernova/types';
 
 /**
  * Create an in-memory EventBus for testing (no SQLite persistence).
@@ -42,8 +42,8 @@ export function createTestDataDir(): { path: string; cleanup: () => void } {
  * Subscribe to all events on a bus and collect them into an array.
  * Returns the mutable array that will be populated as events arrive.
  */
-export function collectEvents(bus: EventBus): NexusEvent[] {
-  const events: NexusEvent[] = [];
+export function collectEvents(bus: EventBus): KernovaEvent[] {
+  const events: KernovaEvent[] = [];
   bus.subscribe(['*'], (event) => {
     events.push(event);
   });

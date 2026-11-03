@@ -7,7 +7,7 @@
 export { PluginRegistry } from './plugin-registry.js';
 export type {
   KernovaPlugin,
-  NexusPlugin,
+  NexusPlugin, // deprecated alias of KernovaPlugin
   ToolDefinition,
   MiddlewareHook,
   MiddlewareContext,

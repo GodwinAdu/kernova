@@ -1,12 +1,12 @@
 /**
  * kernova serve
- * 
+ *
  * Starts the kernova daemon in persistent mode.
- * Loads agent configs, starts scheduler, task queue, and triggers.
+ * Loads agent configs, starts the scheduler, task queue, and triggers, and
+ * (with --port) serves the HTTP gateway.
  */
 
-import { resolve } from 'node:path';
-import { info, error, success } from '../ui.js';
+import { info, error, success, defaultDataDir } from '../ui.js';
 
 export async function handleServe(args: string[]): Promise<void> {
   const options = parseServeArgs(args);
@@ -19,13 +19,12 @@ export async function handleServe(args: string[]): Promise<void> {
   info('Starting kernova daemon...');
   if (options.config) info(`Config: ${options.config}`);
   if (options.watch) info('Watch mode: enabled');
-  if (options.port) info(`Port: ${options.port}`);
   if (options.dataDir) info(`Data dir: ${options.dataDir}`);
 
   try {
     const { KernovaKernel, DaemonRunner } = await import('@kernova/core');
 
-    const dataDir = options.dataDir || resolve(process.cwd(), 'kernova-data');
+    const dataDir = options.dataDir || defaultDataDir();
 
     const kernel = new KernovaKernel({
       environment: 'development',
@@ -36,13 +35,27 @@ export async function handleServe(args: string[]): Promise<void> {
       configPath: options.config,
       watch: options.watch,
       port: options.port,
+      host: options.host,
       dataDir,
+      shutdownTimeoutMs: options.shutdownTimeoutMs,
+      heartbeatIntervalMs: options.heartbeatIntervalMs,
+    });
+
+    // start() resolves when the daemon stops, so report readiness from its started event
+    kernel.events.subscribe('daemon.started', () => {
+      if (options.port !== undefined) {
+        success(`Gateway listening on http://${options.host ?? '127.0.0.1'}:${options.port}`);
+      }
+      success('Daemon is running. Press Ctrl+C to stop.');
     });
 
     await daemon.start();
-    success('Daemon is running. Press Ctrl+C to stop.');
   } catch (err) {
-    error(`Failed to start daemon: ${(err as Error).message}`);
+    const message = (err as Error).message;
+    error(`Failed to start daemon: ${message}`);
+    if (/no authentication configured/.test(message)) {
+      info('Set KERNOVA_API_KEY to the token clients must send (Authorization: Bearer <token>).');
+    }
     process.exit(1);
   }
 }
@@ -51,7 +64,10 @@ interface ServeOptions {
   config?: string;
   watch?: boolean;
   port?: number;
+  host?: string;
   dataDir?: string;
+  shutdownTimeoutMs?: number;
+  heartbeatIntervalMs?: number;
   help?: boolean;
 }
 
@@ -72,9 +88,18 @@ function parseServeArgs(args: string[]): ServeOptions {
       case '-p':
         options.port = parseInt(args[++i], 10);
         break;
+      case '--host':
+        options.host = args[++i];
+        break;
       case '--data-dir':
       case '-d':
         options.dataDir = args[++i];
+        break;
+      case '--shutdown-timeout':
+        options.shutdownTimeoutMs = parseInt(args[++i], 10);
+        break;
+      case '--heartbeat':
+        options.heartbeatIntervalMs = parseInt(args[++i], 10);
         break;
       case '--help':
       case '-h':
@@ -93,15 +118,18 @@ function printServeHelp(): void {
   Start the kernova daemon in persistent mode.
 
   Options:
-    -c, --config <path>    Path to agent config file or directory
-    -w, --watch            Enable hot-reload of config files
-    -p, --port <number>    Port for webhook/gateway listeners
-    -d, --data-dir <path>  Data directory for persistence
-    -h, --help             Show this help message
+    -c, --config <path>         Path to agent config file or directory
+    -w, --watch                 Enable hot-reload of config files
+    -p, --port <number>         Serve the HTTP gateway on this port (needs KERNOVA_API_KEY)
+        --host <address>        Interface for the gateway (default: 127.0.0.1)
+    -d, --data-dir <path>       Data directory (default: $KERNOVA_DATA_DIR or ./kernova-data)
+        --shutdown-timeout <ms> How long to wait for active intents on shutdown (default: 30000)
+        --heartbeat <ms>        Heartbeat event interval (default: 60000)
+    -h, --help                  Show this help message
 
   Examples:
     kernova serve
     kernova serve --config ./agents/ --watch
-    kernova serve --port 3000 --data-dir ./data
+    KERNOVA_API_KEY=secret kernova serve --port 3000 --data-dir ./data
   `);
 }

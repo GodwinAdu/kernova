@@ -1,16 +1,7 @@
 {
   "name": "@kernova/types",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Kernova Type Definitions - The Universal Object Model",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "type": "module",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/kernova/kernova",
-    "directory": "packages/types"
-  },
   "keywords": [
     "kernova",
     "ai",
@@ -18,18 +9,36 @@
     "types",
     "intelligent-systems"
   ],
+  "homepage": "https://kernova2026.vercel.app",
+  "bugs": {
+    "url": "https://github.com/GodwinAdu/kernova/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GodwinAdu/kernova.git",
+    "directory": "packages/types"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "files": [
     "dist",
     "README.md"
   ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "tsc",
+    "build": "node ../../scripts/clean.mjs dist && tsc",
     "dev": "tsc --watch",
-    "clean": "rimraf dist",
+    "clean": "node ../../scripts/clean.mjs dist",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
-    "typescript": "^5.5.0",
-    "rimraf": "^6.0.0"
+    "typescript": "^6.0.3"
   }
 }

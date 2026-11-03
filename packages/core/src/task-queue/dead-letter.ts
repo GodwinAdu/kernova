@@ -11,7 +11,7 @@ import type {
   DeadLetterItem,
   DeadLetterAttempt,
   DeadLetterFilter,
-  NexusId,
+  KernovaId,
 } from '@kernova/types';
 import { generateId, now } from '../utils.js';
 import type { QueueStore } from './queue-store.js';
@@ -35,7 +35,7 @@ export interface DeadLetterManager {
    * Creates a new pending task item with reset attempt count and
    * marks the dead-letter record as "replayed".
    */
-  replayFromDeadLetter(deadLetterId: NexusId, store: QueueStore): TaskItem;
+  replayFromDeadLetter(deadLetterId: KernovaId, store: QueueStore): TaskItem;
 
   /**
    * Query dead-letter items with optional filters.
@@ -70,7 +70,7 @@ export function createDeadLetterManager(): DeadLetterManager {
       return deadLetterItem;
     },
 
-    replayFromDeadLetter(deadLetterId: NexusId, store: QueueStore): TaskItem {
+    replayFromDeadLetter(deadLetterId: KernovaId, store: QueueStore): TaskItem {
       const deadLetterItem = store.getDeadLetterById(deadLetterId);
 
       if (!deadLetterItem) {

@@ -226,47 +226,57 @@ function deployDocker(
   info(`Generating Docker deployment for "${name}"...`);
   console.log('');
 
-  const deployDir = join(projectRoot, 'deploy');
-  if (!existsSync(deployDir)) mkdirSync(deployDir, { recursive: true });
+  // Framework projects (kernova.config.ts) run with `kernova start`; others use their own scripts
+  const isFramework = existsSync(join(projectRoot, 'kernova.config.ts'));
+  const withApp = isFramework && hasApp && !options.agentsOnly;
+  const port = withApp ? 3000 : 4555;
 
-  // Generate multi-stage Dockerfile for full-stack
-  const dockerfile = hasApp
+  // The whole project is copied (minus .dockerignore) so agents, tools, middleware, skills,
+  // triggers, and memory folders are all included. Node 24 runs the .ts agent files directly.
+  const dockerfile = !isFramework
+    ? `# Core project: built with its own scripts, started with \`npm start\`
+FROM node:24-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build --if-present && npm prune --omit=dev
+
+ENV NODE_ENV=production
+CMD ["npm", "start"]
+`
+    : withApp
     ? `# Multi-stage: build frontend + run agents
-FROM node:20-alpine AS frontend-build
+FROM node:24-alpine AS frontend-build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npx next build
 
-FROM node:20-alpine AS production
+FROM node:24-alpine AS production
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --production
+RUN npm ci --omit=dev
+COPY . .
 COPY --from=frontend-build /app/.next ./.next
-COPY --from=frontend-build /app/public ./public
-COPY agents/ ./agents/
-COPY memory/ ./memory/
-COPY kernova.config.ts ./
 
 ENV NODE_ENV=production
-ENV PORT=3000
-EXPOSE 3000
+ENV PORT=${port}
+EXPOSE ${port}
 
 CMD ["node", "node_modules/.bin/kernova", "start"]
 `
     : `# Agents-only container
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --production
-COPY agents/ ./agents/
-COPY memory/ ./memory/
-COPY kernova.config.ts ./
+RUN npm ci --omit=dev
+COPY . .
 
 ENV NODE_ENV=production
-ENV PORT=4555
-EXPOSE 4555
+ENV PORT=${port}
+EXPOSE ${port}
 
 CMD ["node", "node_modules/.bin/kernova", "start", "--agents-only"]
 `;
@@ -286,7 +296,14 @@ kernova-data
   console.log('');
   info('Build and run:');
   console.log(`    docker build -t ${name} .`);
-  console.log(`    docker run -p 3000:3000 --env-file .env.local ${name}`);
+  console.log(isFramework
+    ? `    docker run -p ${port}:${port} --env-file .env.local ${name}`
+    : `    docker run --env-file .env ${name}`);
+  if (!isFramework && hasAgents) {
+    console.log('');
+    info('Your start script decides what runs. To serve agent config files, add @kernova/cli and use:');
+    console.log('    "start": "kernova serve --config ./agents --port 3000 --host 0.0.0.0"');
+  }
   console.log('');
 }
 

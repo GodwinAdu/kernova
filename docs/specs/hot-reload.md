@@ -4,7 +4,7 @@
 
 ## Summary
 
-When running `nexus dev`, watch agent/workflow files for changes and reload them without restarting the kernel. This gives developers instant feedback.
+When running `kernova dev`, watch agent/workflow files for changes and reload them without restarting the kernel. This gives developers instant feedback.
 
 ## Problem
 
@@ -15,7 +15,7 @@ Currently, any change to an agent file requires stopping and restarting the enti
 ### Architecture
 
 ```
-nexus dev
+kernova dev
    ↓
 Kernel starts
    ↓
@@ -48,7 +48,7 @@ Console: "✓ Agent 'assistant' reloaded"
 ```
   ◆ N E X U S  — Development Runtime
   
-  ✓ Nexus runtime is running
+  ✓ Kernova runtime is running
   ✓ Watching: src/agents/, src/workflows/
   
   [8:15:22] ✓ Agent 'assistant' reloaded (50ms)

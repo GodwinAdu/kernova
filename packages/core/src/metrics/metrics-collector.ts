@@ -12,7 +12,7 @@
  * Subscribes to EventBus for automatic collection.
  */
 
-import type { NexusId, NexusEvent } from '@kernova/types';
+import type { KernovaId, KernovaEvent } from '@kernova/types';
 import type { EventBus } from '../events/event-bus.js';
 import { generateId, now } from '../utils.js';
 
@@ -88,7 +88,7 @@ export class MetricsCollector {
    * Start collecting metrics from the EventBus.
    */
   start(): void {
-    this.subscriptionId = this.eventBus.subscribe(['*'], (event: NexusEvent) => {
+    this.subscriptionId = this.eventBus.subscribe(['*'], (event: KernovaEvent) => {
       this.processEvent(event);
     });
   }
@@ -176,7 +176,7 @@ export class MetricsCollector {
 
   // ─── Private ───────────────────────────────────────────────
 
-  private processEvent(event: NexusEvent): void {
+  private processEvent(event: KernovaEvent): void {
     switch (event.eventType) {
       case 'intent.created':
         this.counters.intentsTotal++;

@@ -22,7 +22,7 @@ export default defineAgent({
 });
 ```
 
-The runtime automatically starts and manages the MCP server connections.
+The server starts the MCP servers your agents (and their skills) list when it boots, in the background, and connects them to the kernel. Each server's tools are registered as `<server>_<tool>` (for example `github_create_issue`), and an agent can call every tool of the servers it lists. A server that fails to start is logged and skipped; the rest of the app keeps running.
 
 ## Well-Known Servers
 
@@ -79,7 +79,7 @@ export default defineSkill({
 });
 ```
 
-When an agent loads this skill, the required MCP servers are automatically started.
+When an agent loads this skill, the required MCP servers are started too. Names that aren't well-known (like `docker` here) need a config in `mcp/` or `.kernova/mcp.json`.
 
 ## JSON Configuration
 
@@ -118,14 +118,14 @@ MCPManager resolves each name → MCPServerConfig
   ↓
 Starts MCP server processes (uvx mcp-server-github, etc.)
   ↓
-Authenticates + establishes connection
+Connects over stdio and lists each server's tools
   ↓
-Tools from MCP servers are registered with the agent
+Tools are registered with the kernel as github_<tool>, filesystem_<tool>, …
   ↓
 Agent can now use GitHub tools, filesystem tools, etc.
-  ↓
-On crash → auto-reconnect
 ```
+
+A server that exits isn't restarted automatically: restart the app to reconnect it.
 
 ## Environment Variables
 
@@ -137,20 +137,13 @@ DATABASE_URL=postgresql://...
 SLACK_TOKEN=xoxb-xxxxx
 ```
 
-The MCP configs reference these via `process.env` or `${VAR_NAME}` syntax.
+The MCP configs reference these via `process.env` (in `mcp/*.ts`) or `${VAR_NAME}` (in `.kernova/mcp.json`). MCP server processes also inherit the app's environment.
+
+Set `"disabled": true` in `.kernova/mcp.json` (or `autoStart: false` in `defineMCP`) to keep a server from starting.
 
 ## Auto-Approve
 
-By default, every MCP tool call requires the agent to "decide" to use it. For trusted tools, auto-approve skips the confirmation:
-
-```typescript
-defineMCP({
-  name: 'filesystem',
-  command: 'uvx',
-  args: ['mcp-server-filesystem'],
-  autoApprove: ['read_file', 'list_directory'],  // ← these run without confirmation
-});
-```
+There's no confirmation step for MCP tool calls: an agent calls any tool of the servers it lists, like its other tools. `autoApprove` is accepted for compatibility with other MCP clients' config files and currently has no effect. To block a tool for every agent, add it to `toolPolicy.deny` in [`kernova.config.ts`](/framework/config-reference#toolpolicy); otherwise list only the servers an agent needs.
 
 ## Multiple Agents, Shared MCP
 

@@ -7,7 +7,7 @@
  */
 
 import type {
-  NexusId,
+  KernovaId,
   TestMessage,
   Intent,
 } from '@kernova/types';
@@ -15,7 +15,7 @@ import type { KernovaKernel } from '../kernel.js';
 import { generateId, now, sleep } from '../utils.js';
 
 export interface SimulationResult {
-  id: NexusId;
+  id: KernovaId;
   turns: SimulationTurn[];
   totalDurationMs: number;
   messageCount: number;

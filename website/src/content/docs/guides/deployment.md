@@ -29,7 +29,7 @@ docker run -p 4200:4200 \
   my-app
 ```
 
-The generated Dockerfile uses Node.js 20 Alpine, installs only production dependencies, and exposes port 4200.
+The generated Dockerfile uses Node.js 24 Alpine, installs only production dependencies, and exposes port 4200.
 
 ## Environment Variables
 

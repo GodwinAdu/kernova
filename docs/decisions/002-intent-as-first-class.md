@@ -19,7 +19,7 @@ None of these capture the full picture of what a user wants to achieve, with con
 
 ## Decision
 
-Intent is a first-class object in Nexus with the following structure:
+Intent is a first-class object in Kernova with the following structure:
 - Goal (natural language)
 - Type (query, action, workflow, creation, etc.)
 - Priority

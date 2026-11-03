@@ -26,6 +26,9 @@ import type {
   IntentResult,
   ComputedContext,
   Capability,
+  ReasoningOptions,
+  ResponseFormat,
+  ToolPolicy,
   ToolReference,
 } from '@kernova/types';
 import type { AgentExecutor, AgentTools } from './agents/agent-registry.js';
@@ -67,6 +70,33 @@ export interface AgentSpec {
     /** Maximum regeneration attempts (overrides global, default: 2) */
     maxAttempts?: number;
   };
+
+  /**
+   * Which tools this agent may use, on top of the kernel-wide `toolPolicy`.
+   * Patterns match a tool's own ID (e.g. "shell-exec") or its registered ID; `*` globs are supported.
+   */
+  toolPolicy?: ToolPolicy;
+
+  /**
+   * Model for this agent's calls (default: the kernel's routing). Give a model ID
+   * (sent to the default provider), a provider ID (its default model), or both.
+   */
+  model?: { provider?: string; model?: string };
+
+  /** Sampling temperature for this agent's calls (default: the provider's) */
+  temperature?: number;
+
+  /** Maximum tokens per response for this agent's calls (default: the provider's) */
+  maxTokens?: number;
+
+  /** Reasoning controls for this agent's calls: `{ effort: 'high' }`, `{ budgetTokens: 8000 }`, ... */
+  reasoning?: ReasoningOptions;
+
+  /** Answer shape for this agent's calls: `{ type: 'json' }` or `{ type: 'json_schema', schema }` */
+  responseFormat?: ResponseFormat;
+
+  /** Prompt caching: mark the stable start of this agent's prompts as cacheable (Claude, Bedrock) */
+  promptCache?: boolean;
 }
 
 export interface DefinedAgent {
@@ -86,12 +116,17 @@ export function defineAgent(spec: AgentSpec): DefinedAgent {
     status: 'active',
     createdAt: now(),
     updatedAt: now(),
-    metadata: {},
+    metadata: {
+      ...(spec.reflection && { reflection: spec.reflection }),
+      ...(spec.toolPolicy && { toolPolicy: spec.toolPolicy }),
+    },
     name: spec.name,
     description: spec.description,
     capabilities: spec.capabilities,
     tools: spec.tools,
-    models: [],
+    models: spec.model
+      ? [{ provider: spec.model.provider ?? '', model: spec.model.model ?? '', purpose: 'reasoning' }]
+      : [],
     instructions: spec.instructions,
     memoryConfig: {
       workingMemory: true,
@@ -105,6 +140,11 @@ export function defineAgent(spec: AgentSpec): DefinedAgent {
     config: {
       retries: { maxAttempts: 3, backoffMs: 1000 },
       timeoutMs: 30000,
+      ...(spec.temperature !== undefined && { temperature: spec.temperature }),
+      ...(spec.maxTokens !== undefined && { maxTokens: spec.maxTokens }),
+      ...(spec.reasoning && { reasoning: spec.reasoning }),
+      ...(spec.responseFormat && { responseFormat: spec.responseFormat }),
+      ...(spec.promptCache !== undefined && { promptCache: spec.promptCache }),
     },
   };
 
@@ -129,11 +169,14 @@ const defaultLLMExecutor: AgentExecutor = async (intent, context, tools) => {
 
   tools.log(`Processing intent: ${intent.goal}`);
 
-  // Build prompt from context memories
+  // Build prompt from context memories and retrieved documents
   let contextBlock = '';
   if (context.memories.length > 0) {
     contextBlock = '\n\nRelevant context:\n' +
       context.memories.map(m => `- ${m.content}`).join('\n');
+  }
+  if (context.documents) {
+    contextBlock += `\n\nRelevant documents:\n${context.documents}`;
   }
 
   const prompt = `${intent.goal}${contextBlock}`;
@@ -142,7 +185,6 @@ const defaultLLMExecutor: AgentExecutor = async (intent, context, tools) => {
     // If tools are available, use tool-calling mode (LLM decides which tools to use)
     // Otherwise fall back to plain text completion
     const availableTools = tools.listTools();
-    tools.log(`Available tools: ${availableTools.length} [${availableTools.map(t => t.id).join(', ')}]`);
     const response = availableTools.length > 0
       ? await tools.completeWithTools(prompt)
       : await tools.complete(prompt);

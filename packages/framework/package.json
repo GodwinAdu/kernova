@@ -1,7 +1,26 @@
 {
   "name": "@kernova/framework",
-  "version": "1.9.4",
+  "version": "2.0.0",
   "description": "Full-stack AI agent framework — frontend + agents in one project",
+  "keywords": [
+    "kernova",
+    "ai",
+    "agents",
+    "framework",
+    "full-stack",
+    "react",
+    "nextjs"
+  ],
+  "homepage": "https://kernova2026.vercel.app",
+  "bugs": {
+    "url": "https://github.com/GodwinAdu/kernova/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GodwinAdu/kernova.git",
+    "directory": "packages/framework"
+  },
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -28,18 +47,29 @@
       "default": "./dist/config/index.js"
     }
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "tsc",
+    "build": "node ../../scripts/clean.mjs dist && tsc",
     "dev": "tsc --watch",
-    "clean": "rimraf dist"
+    "clean": "node ../../scripts/clean.mjs dist",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@kernova/core": "^1.0.0",
-    "@kernova/types": "^1.0.0"
+    "@kernova/core": "^2.0.0",
+    "@kernova/types": "^1.1.0"
   },
   "peerDependencies": {
-    "react": ">=19.0.0",
-    "next": ">=16.0.0"
+    "next": ">=16.0.0",
+    "react": ">=19.0.0"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -53,21 +83,6 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "react": "^19.0.0",
-    "rimraf": "^6.0.0",
-    "typescript": "^5.5.0"
-  },
-  "files": [
-    "dist",
-    "README.md"
-  ],
-  "license": "MIT",
-  "keywords": [
-    "kernova",
-    "ai",
-    "agents",
-    "framework",
-    "full-stack",
-    "react",
-    "nextjs"
-  ]
+    "typescript": "^6.0.3"
+  }
 }

@@ -72,7 +72,7 @@ export interface KernovaEvent {
   metadata: EventMetadata;
 }
 
-/** @deprecated Use KernovaEvent instead. Will be removed in v1.0. */
+/** @deprecated Use KernovaEvent instead. Will be removed in the next major version. */
 export type NexusEvent = KernovaEvent;
 
 export interface EventMetadata {

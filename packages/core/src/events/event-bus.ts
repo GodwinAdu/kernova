@@ -13,11 +13,11 @@
  * hot cache for recent events.
  */
 
-import type { NexusEvent, NexusId } from '@kernova/types';
+import type { KernovaEvent, KernovaId } from '@kernova/types';
 import { EventStore, type EventStoreConfig, type EventQuery, type EventStoreStats } from './event-store.js';
 import { generateId } from '../utils.js';
 
-type EventHandler = (event: NexusEvent) => void | Promise<void>;
+type EventHandler = (event: KernovaEvent) => void | Promise<void>;
 
 interface Subscription {
   id: string;
@@ -38,7 +38,7 @@ export interface EventBusConfig {
 
 export class EventBus {
   private subscriptions: Map<string, Subscription> = new Map();
-  private history: NexusEvent[] = [];
+  private history: KernovaEvent[] = [];
   private maxHistorySize: number;
   private store: EventStore | null = null;
   private persistent: boolean;
@@ -69,7 +69,7 @@ export class EventBus {
   /**
    * Publish an event to all matching subscribers and persist to storage.
    */
-  publish(event: NexusEvent): void {
+  publish(event: KernovaEvent): void {
     // Store in hot cache (in-memory)
     this.history.push(event);
     if (this.history.length > this.maxHistorySize) {
@@ -102,9 +102,9 @@ export class EventBus {
    * Subscribe to events matching patterns.
    * Patterns support wildcards: "intent.*", "*.created", "*"
    */
-  subscribe(patterns: string[], handler: EventHandler): string {
+  subscribe(patterns: string | string[], handler: EventHandler): string {
     const id = generateId('sub');
-    this.subscriptions.set(id, { id, patterns, handler });
+    this.subscriptions.set(id, { id, patterns: Array.isArray(patterns) ? patterns : [patterns], handler });
     return id;
   }
 
@@ -119,7 +119,7 @@ export class EventBus {
    * Get event timeline for a specific object.
    * Uses persistent store if available, falls back to in-memory.
    */
-  getTimeline(subjectId: NexusId, limit = 100): NexusEvent[] {
+  getTimeline(subjectId: KernovaId, limit = 100): KernovaEvent[] {
     if (this.store) {
       return this.store.getTimeline(subjectId, limit);
     }
@@ -131,7 +131,7 @@ export class EventBus {
   /**
    * Get events by correlation ID (trace a full request flow).
    */
-  getCorrelated(correlationId: NexusId, limit = 100): NexusEvent[] {
+  getCorrelated(correlationId: KernovaId, limit = 100): KernovaEvent[] {
     if (this.store) {
       return this.store.getCorrelated(correlationId, limit);
     }
@@ -144,7 +144,7 @@ export class EventBus {
    * Query events with rich filtering.
    * Only available with persistent storage enabled.
    */
-  query(params: EventQuery): NexusEvent[] {
+  query(params: EventQuery): KernovaEvent[] {
     if (this.store) {
       return this.store.query(params);
     }
@@ -197,7 +197,7 @@ export class EventBus {
   /**
    * Get all events matching a type pattern (from hot cache)
    */
-  getEvents(eventType: string, limit = 100): NexusEvent[] {
+  getEvents(eventType: string, limit = 100): KernovaEvent[] {
     return this.history
       .filter(e => this.matchesPattern(e.eventType, eventType))
       .slice(-limit);
@@ -206,7 +206,7 @@ export class EventBus {
   /**
    * Get recent events from the hot cache (most recent first).
    */
-  getRecentEvents(limit = 50): NexusEvent[] {
+  getRecentEvents(limit = 50): KernovaEvent[] {
     return this.history.slice(-limit).reverse();
   }
 
@@ -249,7 +249,7 @@ export class EventBus {
   /**
    * Check if an event matches any of the patterns
    */
-  private matches(event: NexusEvent, patterns: string[]): boolean {
+  private matches(event: KernovaEvent, patterns: string[]): boolean {
     return patterns.some(pattern => this.matchesPattern(event.eventType, pattern));
   }
 

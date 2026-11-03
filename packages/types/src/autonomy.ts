@@ -5,14 +5,14 @@
  * Scheduler, BackgroundLoop, TaskQueue, ProactiveTriggerEngine, ConnectorRegistry
  */
 
-import type { NexusId, Timestamp, Priority } from './base.js';
+import type { KernovaId, Timestamp, Priority } from './base.js';
 import type { IntentType } from './intent.js';
-import type { NexusEvent } from './event.js';
+import type { KernovaEvent } from './event.js';
 
 // ─── Scheduler ───────────────────────────────────────────────
 
 export interface ScheduledJob {
-  id: NexusId;
+  id: KernovaId;
   name: string;
   cronExpression: string;
   delayMs?: number;                // One-shot delay in ms
@@ -35,7 +35,7 @@ export interface ScheduledJobInput {
 
 export interface ScheduleTarget {
   type: 'intent' | 'agent';
-  id?: NexusId;                    // agent ID if type is 'agent'
+  id?: KernovaId;                    // agent ID if type is 'agent'
   goal: string;                    // intent goal
   metadata?: Record<string, unknown>;
 }
@@ -43,7 +43,7 @@ export interface ScheduleTarget {
 // ─── Background Loop ─────────────────────────────────────────
 
 export interface BackgroundLoopDef {
-  id: NexusId;
+  id: KernovaId;
   name: string;
   intervalMs: number;              // 1000–86_400_000
   state: LoopState;
@@ -56,7 +56,7 @@ export type LoopState = 'active' | 'paused' | 'removed';
 export type MonitorFunction = (context: unknown | null) => Promise<unknown | null | undefined> | unknown | null | undefined;
 
 export interface BackgroundLoopInput {
-  id?: NexusId;                    // optional caller-provided ID
+  id?: KernovaId;                    // optional caller-provided ID
   name: string;
   intervalMs: number;
   monitor: MonitorFunction;
@@ -66,7 +66,7 @@ export interface BackgroundLoopInput {
 // ─── Task Queue ──────────────────────────────────────────────
 
 export interface TaskItem {
-  id: NexusId;
+  id: KernovaId;
   priority: Priority;
   status: QueueTaskStatus;
   payload: unknown;
@@ -96,8 +96,8 @@ export interface QueueStats {
 }
 
 export interface DeadLetterItem {
-  id: NexusId;
-  taskId: NexusId;
+  id: KernovaId;
+  taskId: KernovaId;
   payload: unknown;
   handler: string;
   errorMessage: string;
@@ -121,10 +121,10 @@ export interface DeadLetterFilter {
 
 // ─── Proactive Triggers ──────────────────────────────────────
 
-export type TriggerCondition = (event: NexusEvent) => boolean;
+export type TriggerCondition = (event: KernovaEvent) => boolean;
 
 export interface TriggerRule {
-  id: NexusId;
+  id: KernovaId;
   name: string;
   eventPattern: string;            // EventBus wildcard pattern, max 256 chars
   condition?: string;              // serialized condition description
@@ -161,7 +161,7 @@ export type ChannelType = 'slack' | 'discord' | 'whatsapp' | 'telegram' | 'email
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'failed';
 
 export interface ConnectorDef {
-  id: NexusId;
+  id: KernovaId;
   channelType: ChannelType;
   name: string;
   state: ConnectionState;
@@ -209,12 +209,18 @@ export interface WhatsAppConfig {
   accessToken: string;
   phoneNumberId: string;
   verifyToken: string;
+  /** App secret: verifies the X-Hub-Signature-256 of each webhook POST. Required to receive messages */
+  appSecret?: string;
+  webhookPort?: number;     // Port for the webhook server (default: 3400)
 }
 
 export interface TelegramConfig {
   type: 'telegram';
   botToken: string;
-  webhookUrl?: string;
+  webhookUrl?: string;      // Public HTTPS URL; enables webhook mode (default: long-polling)
+  /** Webhook secret sent by Telegram in X-Telegram-Bot-Api-Secret-Token (default: a random one per connect) */
+  secretToken?: string;
+  webhookPort?: number;     // Local port for the webhook server (default: the webhookUrl's port, or 8443)
 }
 
 export interface EmailConfig {
@@ -235,6 +241,9 @@ export interface TeamsConfig {
   appId: string;
   appPassword: string;
   tenantId?: string;
+  port?: number;            // Port for the messaging endpoint (default: 3400)
+  /** Bot Framework OpenID metadata URL, for sovereign clouds (default: the public cloud) */
+  openIdMetadataUrl?: string;
 }
 
 export interface SmsConfig {
@@ -243,6 +252,8 @@ export interface SmsConfig {
   authToken: string;        // Twilio Auth Token
   fromNumber: string;       // Twilio phone number (e.g., +1234567890)
   webhookPort?: number;     // Port for receiving incoming SMS (default: 3500)
+  /** Public webhook URL configured in Twilio, used to check X-Twilio-Signature (default: rebuilt from the request) */
+  webhookUrl?: string;
 }
 
 export interface SignalConfig {
@@ -277,6 +288,8 @@ export interface VoiceConfig {
   fromNumber: string;       // Twilio phone number
   webhookPort?: number;     // Port for TwiML webhooks (default: 3600)
   ttsVoice?: string;        // Text-to-speech voice (default: 'alice')
+  /** Public webhook URL configured in Twilio, used to check X-Twilio-Signature (default: rebuilt from the request) */
+  webhookUrl?: string;
 }
 
 export interface PushConfig {
@@ -296,20 +309,22 @@ export interface RssConfig {
 }
 
 export interface ConnectorStatus {
-  id: NexusId;
+  id: KernovaId;
   channelType: ChannelType;
   name: string;
   state: ConnectionState;
 }
 
 export interface InboundMessage {
-  id: NexusId;
+  id: KernovaId;
   sender: string;              // max 256 chars
   channel: ChannelType;
   content: string;             // max 32_000 chars
   timestamp: Timestamp;
-  connectorId: NexusId;
+  connectorId: KernovaId;
   raw?: unknown;               // original platform payload
+  /** Where a reply should go (a chat, channel, conversation, or phone number). Pass it as `recipient` when sending */
+  replyTo?: string;
 }
 
 export interface OutboundMessage {
@@ -343,14 +358,14 @@ export interface Embed {
 }
 
 export interface OutboundMessageRequest {
-  connectorId: NexusId;
+  connectorId: KernovaId;
   recipient?: string;
   message: OutboundMessage;
 }
 
 export interface OutboundMessageResult {
-  messageId: NexusId;
-  connectorId: NexusId;
+  messageId: KernovaId;
+  connectorId: KernovaId;
   deliveredAt?: Timestamp;
   status: 'sent' | 'failed' | 'partial';
 }
@@ -367,6 +382,8 @@ export interface RawInboundMessage {
   content: string;
   timestamp: string;
   raw?: unknown;
+  /** Where a reply should go (a chat, channel, conversation, or phone number) */
+  replyTo?: string;
 }
 
 // ─── Agent Config File Schema ─────────────────────────────────
@@ -449,8 +466,11 @@ export interface SDKChannelAdapter {
   /** Disconnect the adapter (stop listening, clean up) */
   disconnect(): Promise<void>;
 
-  /** Send a message through the adapter */
-  send(message: OutboundMessage): Promise<DeliveryReceipt>;
+  /**
+   * Send a message through the adapter. `recipient` is an inbound message's `replyTo`;
+   * without it, adapters fall back to a default (for WebSocket: every connected client).
+   */
+  send(message: OutboundMessage, recipient?: string): Promise<DeliveryReceipt>;
 
   /** Register a handler for inbound messages */
   onMessage(handler: (message: InboundMessage) => Promise<void>): void;

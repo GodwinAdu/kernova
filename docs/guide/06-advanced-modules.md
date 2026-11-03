@@ -14,7 +14,7 @@ const result = await kernel.fallback.complete(
   { messages: [{ role: 'user', content: 'Hello' }], model: '' },
   {
     candidates: [
-      { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
+      { provider: 'anthropic', model: 'claude-sonnet-5-5' },
       { provider: 'openai', model: 'gpt-4o' },
       { provider: 'ollama', model: 'llama3' },
     ],
@@ -191,7 +191,7 @@ if (result.matched) {
 Execution trace recording for debugging AI agent runs.
 
 ```typescript
-const kernel = new NexusKernel({
+const kernel = new KernovaKernel({
   environment: 'development',
   debug: true, // Enables trajectory recording
 });

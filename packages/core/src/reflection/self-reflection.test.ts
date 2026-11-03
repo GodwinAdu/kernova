@@ -14,7 +14,7 @@ import { SelfReflection, clampConfidence, resolveReflectionConfig } from './self
 import { EventBus } from '../events/event-bus.js';
 import { ModelRouter } from '../models/model-router.js';
 import { MockModelProvider } from '../testing/mock-model-provider.js';
-import type { NexusEvent } from '@kernova/types';
+import type { KernovaEvent } from '@kernova/types';
 
 describe('SelfReflection', () => {
   let eventBus: EventBus;
@@ -115,7 +115,8 @@ describe('SelfReflection', () => {
       const result = await reflection.evaluate('Some output', 'Goal');
       expect(result).toBeDefined();
       expect(result.score).toBe(0.5); // Fallback score
-      expect(result.passed).toBe(false);
+      // An evaluation that can't be read must not trigger rewrites of the output
+      expect(result.passed).toBe(true);
     });
 
     it('should clamp out-of-range scores to [0.0, 1.0]', async () => {
@@ -390,7 +391,7 @@ describe('SelfReflection', () => {
 
   describe('reflection.regenerated event', () => {
     it('should emit reflection.regenerated when regeneration occurs', async () => {
-      const regeneratedEvents: NexusEvent[] = [];
+      const regeneratedEvents: KernovaEvent[] = [];
       eventBus.subscribe(['reflection.regenerated'], (evt) => {
         regeneratedEvents.push(evt);
       });
@@ -444,7 +445,7 @@ describe('SelfReflection', () => {
     });
 
     it('should include agentId in regenerated event when provided', async () => {
-      const regeneratedEvents: NexusEvent[] = [];
+      const regeneratedEvents: KernovaEvent[] = [];
       eventBus.subscribe(['reflection.regenerated'], (evt) => {
         regeneratedEvents.push(evt);
       });
@@ -496,7 +497,7 @@ describe('SelfReflection', () => {
     });
 
     it('should include original and new scores in regenerated event', async () => {
-      const regeneratedEvents: NexusEvent[] = [];
+      const regeneratedEvents: KernovaEvent[] = [];
       eventBus.subscribe(['reflection.regenerated'], (evt) => {
         regeneratedEvents.push(evt);
       });
@@ -547,7 +548,7 @@ describe('SelfReflection', () => {
     });
 
     it('should include maxReached=true when max regeneration limit is hit', async () => {
-      const regeneratedEvents: NexusEvent[] = [];
+      const regeneratedEvents: KernovaEvent[] = [];
       eventBus.subscribe(['reflection.regenerated'], (evt) => {
         regeneratedEvents.push(evt);
       });
@@ -582,7 +583,7 @@ describe('SelfReflection', () => {
     });
 
     it('should NOT emit reflection.regenerated when no regeneration occurs', async () => {
-      const regeneratedEvents: NexusEvent[] = [];
+      const regeneratedEvents: KernovaEvent[] = [];
       eventBus.subscribe(['reflection.regenerated'], (evt) => {
         regeneratedEvents.push(evt);
       });
@@ -717,7 +718,7 @@ describe('SelfReflection', () => {
     });
 
     it('should emit reflection.regenerated event with originalScore and newScore', async () => {
-      const regeneratedEvents: NexusEvent[] = [];
+      const regeneratedEvents: KernovaEvent[] = [];
       eventBus.subscribe(['reflection.regenerated'], (evt) => {
         regeneratedEvents.push(evt);
       });
@@ -774,7 +775,7 @@ describe('SelfReflection', () => {
 
   describe('stops at max limit', () => {
     it('should make only 2 regeneration attempts when maxAttempts=2 and score stays low', async () => {
-      const regeneratedEvents: NexusEvent[] = [];
+      const regeneratedEvents: KernovaEvent[] = [];
       eventBus.subscribe(['reflection.regenerated'], (evt) => {
         regeneratedEvents.push(evt);
       });

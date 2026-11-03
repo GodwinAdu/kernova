@@ -370,14 +370,14 @@ The auth profile manager emits events through the kernel's event system. Use the
 ### Listening to Events
 
 ```typescript
-kernel.on('auth.profile.cooldown', (data) => {
+kernel.events.subscribe('auth.profile.cooldown', ({ data }) => {
   console.warn(
     `⚠️ Key "${data.label}" (${data.provider}) hit rate limit. ` +
     `Cooldown: ${data.cooldownMs / 1000}s (failure #${data.failureCount})`
   );
 });
 
-kernel.on('auth.profile.added', (data) => {
+kernel.events.subscribe('auth.profile.added', ({ data }) => {
   console.log(`✅ New ${data.provider} key registered: ${data.label} (priority ${data.priority})`);
 });
 ```

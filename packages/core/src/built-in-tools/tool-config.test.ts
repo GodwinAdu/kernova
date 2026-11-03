@@ -5,25 +5,43 @@
  * - The whitelist (enabled) restricts available tools
  * - The blacklist (disabled) removes specific tools
  * - Disabled takes priority over enabled
- * - Default config enables all tools
+ * - Default config enables the safe tools only
  * - KernelConfig.builtInTools flows into the registry
  */
 
 import { describe, it, expect } from 'vitest';
-import { BuiltInToolRegistry } from './index.js';
+import { BuiltInToolRegistry, DEFAULT_BUILT_IN_TOOLS, UNSAFE_BUILT_IN_TOOLS } from './index.js';
 
 describe('BuiltInToolRegistry - enable/disable configuration', () => {
-  it('enables all tools by default when no config is provided', () => {
+  it('enables only the safe tools by default when no config is provided', () => {
     const registry = new BuiltInToolRegistry();
     const tools = registry.getTools();
 
     expect(tools.length).toBeGreaterThan(0);
     expect(registry.isEnabled('http-fetch')).toBe(true);
-    expect(registry.isEnabled('file-read')).toBe(true);
-    expect(registry.isEnabled('file-write')).toBe(true);
-    expect(registry.isEnabled('shell-exec')).toBe(true);
     expect(registry.isEnabled('date-time')).toBe(true);
     expect(registry.isEnabled('web-search')).toBe(true);
+    for (const unsafe of UNSAFE_BUILT_IN_TOOLS) {
+      expect(registry.isEnabled(unsafe)).toBe(false);
+    }
+    expect(tools.map((t) => t.id).filter((id) => UNSAFE_BUILT_IN_TOOLS.includes(id))).toEqual([]);
+  });
+
+  it('adds an unsafe tool to the defaults when listed with them', () => {
+    const registry = new BuiltInToolRegistry({ enabled: [...DEFAULT_BUILT_IN_TOOLS, 'shell-exec'] });
+
+    expect(registry.isEnabled('shell-exec')).toBe(true);
+    expect(registry.isEnabled('http-fetch')).toBe(true);
+    expect(registry.isEnabled('code-eval')).toBe(false);
+  });
+
+  it('offers web-search only when a search provider is configured', () => {
+    expect(new BuiltInToolRegistry().getTools().some((t) => t.id === 'web-search')).toBe(false);
+
+    const withProvider = new BuiltInToolRegistry({
+      webSearchProvider: { search: async () => [] },
+    });
+    expect(withProvider.getTools().some((t) => t.id === 'web-search')).toBe(true);
   });
 
   it('restricts tools to only those in the enabled whitelist', () => {
@@ -44,18 +62,16 @@ describe('BuiltInToolRegistry - enable/disable configuration', () => {
 
   it('disables specific tools via the disabled blacklist', () => {
     const registry = new BuiltInToolRegistry({
-      disabled: ['shell-exec', 'web-search'],
+      disabled: ['http-fetch', 'web-search'],
     });
 
-    expect(registry.isEnabled('http-fetch')).toBe(true);
-    expect(registry.isEnabled('file-read')).toBe(true);
-    expect(registry.isEnabled('file-write')).toBe(true);
-    expect(registry.isEnabled('shell-exec')).toBe(false);
+    expect(registry.isEnabled('http-fetch')).toBe(false);
     expect(registry.isEnabled('web-search')).toBe(false);
     expect(registry.isEnabled('date-time')).toBe(true);
+    expect(registry.isEnabled('math-eval')).toBe(true);
 
     const tools = registry.getTools();
-    expect(tools.find((t) => t.id === 'shell-exec')).toBeUndefined();
+    expect(tools.find((t) => t.id === 'http-fetch')).toBeUndefined();
     expect(tools.find((t) => t.id === 'web-search')).toBeUndefined();
   });
 

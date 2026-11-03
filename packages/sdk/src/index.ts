@@ -23,10 +23,15 @@ export type { DaemonConfig } from '@kernova/core';
 
 // Re-export BuiltInToolConfig for use with builtInTools configuration
 export type { BuiltInToolConfig } from '@kernova/core';
+export { DEFAULT_BUILT_IN_TOOLS, UNSAFE_BUILT_IN_TOOLS } from '@kernova/core';
 
-/** @deprecated Use Kernova instead. Will be removed in v1.0. */
+// Channel adapters for use with app.channel()
+export { WebhookChannelAdapter, WebSocketChannelAdapter } from '@kernova/core';
+export type { WebhookAdapterConfig, WebSocketAdapterConfig } from '@kernova/core';
+
+/** @deprecated Use Kernova instead. Will be removed in the next major version. */
 export { Nexus } from './kernova.js';
-/** @deprecated Use KernovaConfig instead. Will be removed in v1.0. */
+/** @deprecated Use KernovaConfig instead. Will be removed in the next major version. */
 export type { NexusConfig } from './kernova.js';
 
 export { agent } from './helpers/agent.js';
@@ -104,5 +109,5 @@ export type {
   TriggerActionDef,
 } from '@kernova/types';
 
-/** @deprecated Use KernovaEvent instead. Will be removed in v1.0. */
+/** @deprecated Use KernovaEvent instead. Will be removed in the next major version. */
 export type { NexusEvent } from '@kernova/types';

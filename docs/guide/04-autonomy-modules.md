@@ -21,9 +21,9 @@ All modules follow the same lifecycle pattern: `constructor(eventBus, config)` â
 Cron-based task scheduling with overlap detection and missed execution recovery.
 
 ```typescript
-import { Nexus } from '@kernova/sdk';
+import { Kernova } from '@kernova/sdk';
 
-const app = await Nexus.create();
+const app = await Kernova.create();
 const kernel = app.getKernel();
 
 // Register a job that runs every hour

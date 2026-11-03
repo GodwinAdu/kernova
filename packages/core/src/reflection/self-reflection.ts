@@ -20,8 +20,8 @@
  */
 
 import type {
-  NexusId,
-  NexusEvent,
+  KernovaId,
+  KernovaEvent,
   ReflectionResult,
   ReflectionEvaluation,
   ReflectionCriterion,
@@ -126,7 +126,10 @@ export class SelfReflection {
     this.eventBus = eventBus;
     this.modelRouter = modelRouter;
 
-    // Merge config with defaults, mapping maxAttempts to maxIterations for compat
+    // Merge config with defaults, mapping maxAttempts to maxIterations for compat.
+    // Undefined values are dropped so they can't erase a default (a missing threshold
+    // would otherwise make every evaluation fail).
+    config = config && Object.fromEntries(Object.entries(config).filter(([, value]) => value !== undefined));
     const merged = { ...DEFAULT_CONFIG, ...config };
     if (config?.maxAttempts !== undefined && config?.maxIterations === undefined) {
       // maxAttempts = number of regeneration attempts (not counting initial eval)
@@ -426,11 +429,11 @@ Provide the revised output only, no explanations or metadata.`;
   private parseEvaluation(content: string): ReflectionEvaluation {
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      // Fallback: return a neutral evaluation with clamped scores
+      // The output could not be judged, so keep it: rewriting without feedback can only make it worse
       const fallbackScore = clampConfidence(0.5);
       return {
         score: fallbackScore,
-        passed: fallbackScore >= this.config.threshold,
+        passed: true,
         criteria: this.config.criteria.map(name => ({
           name,
           score: fallbackScore,
@@ -461,10 +464,11 @@ Provide the revised output only, no explanations or metadata.`;
         suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions.map(String) : [],
       };
     } catch {
+      // Unparseable evaluation: keep the output (see above)
       const fallbackScore = clampConfidence(0.5);
       return {
         score: fallbackScore,
-        passed: fallbackScore >= this.config.threshold,
+        passed: true,
         criteria: this.config.criteria.map(name => ({
           name,
           score: fallbackScore,
@@ -479,8 +483,8 @@ Provide the revised output only, no explanations or metadata.`;
   /**
    * Emit a reflection event.
    */
-  private emitEvent(eventType: string, subjectId: NexusId, data: Record<string, unknown>): void {
-    const event: NexusEvent = {
+  private emitEvent(eventType: string, subjectId: KernovaId, data: Record<string, unknown>): void {
+    const event: KernovaEvent = {
       id: generateId('evt'),
       eventType,
       category: 'system',

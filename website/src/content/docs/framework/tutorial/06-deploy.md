@@ -9,7 +9,7 @@ Your support bot works locally. Let's put it on the internet.
 
 ## Sign Up for Kernova Cloud
 
-1. Go to [cloud.kernova.app](https://cloud.kernova.app)
+1. Go to [kernova-cloud.vercel.app](https://kernova-cloud.vercel.app)
 2. Create an account
 3. Go to **Dashboard → Settings**
 4. Click **"Create Key"** to generate an API key
@@ -26,7 +26,7 @@ You'll see:
 ```
   ✓ Logged in to Kernova Cloud
     Key: kn_live_xxxxxxxx...
-    Cloud: https://cloud.kernova.app
+    Cloud: https://kernova-cloud.vercel.app
 ```
 
 ## Add Your Secrets

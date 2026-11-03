@@ -12,8 +12,8 @@
  */
 
 import type {
-  NexusId,
-  NexusEvent,
+  KernovaId,
+  KernovaEvent,
   ModelCandidate,
   FallbackAttempt,
   FailoverReason,
@@ -245,8 +245,8 @@ export class ModelFallbackManager {
     return 'unknown';
   }
 
-  private emitEvent(eventType: string, subjectId: NexusId, data: Record<string, unknown>): void {
-    const event: NexusEvent = {
+  private emitEvent(eventType: string, subjectId: KernovaId, data: Record<string, unknown>): void {
+    const event: KernovaEvent = {
       id: generateId('evt'),
       eventType,
       category: 'model',

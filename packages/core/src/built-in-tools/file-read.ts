@@ -6,26 +6,10 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { resolve, normalize } from 'node:path';
 import type { ToolDefinition } from '../plugins/plugin-registry.js';
-import { SandboxViolationError } from './sandbox-error.js';
+import { assertRealPathInSandbox, validateSandboxPath } from './sandbox-path.js';
 
-/**
- * Validates that the resolved path is within the sandbox directory.
- * Throws SandboxViolationError if the path escapes the sandbox.
- */
-export function validateSandboxPath(filePath: string, sandboxDir: string): string {
-  const resolvedSandbox = resolve(normalize(sandboxDir));
-  const resolvedPath = resolve(resolvedSandbox, normalize(filePath));
-
-  if (!resolvedPath.startsWith(resolvedSandbox)) {
-    throw new SandboxViolationError(
-      `Access denied: path "${filePath}" resolves outside the sandbox directory.`,
-    );
-  }
-
-  return resolvedPath;
-}
+export { validateSandboxPath };
 
 export function createFileReadTool(sandboxDir: string): ToolDefinition {
   return {
@@ -54,6 +38,7 @@ export function createFileReadTool(sandboxDir: string): ToolDefinition {
 
       // Validate sandbox boundary (throws SandboxViolationError on violation)
       const resolvedPath = validateSandboxPath(filePath, sandboxDir);
+      await assertRealPathInSandbox(resolvedPath, sandboxDir);
 
       try {
         const content = await readFile(resolvedPath, { encoding });

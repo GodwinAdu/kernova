@@ -19,7 +19,7 @@ export default function HomePage() {
             <Link href="/chat" className="text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
               Chat
             </Link>
-            <a href="https://kernova.dev" className="text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
+            <a href="https://kernova2026.vercel.app" className="text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
               Docs
             </a>
             <Link href="/chat" className="rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)] hover:opacity-90 transition-all hover:shadow-lg hover:shadow-[var(--primary)]/10 active:scale-[0.98]">

@@ -11,7 +11,7 @@
  * Inspired by OpenClaw's gateway rate limiting.
  */
 
-import type { NexusId, NexusEvent } from '@kernova/types';
+import type { KernovaId, KernovaEvent } from '@kernova/types';
 import type { EventBus } from '../events/event-bus.js';
 import { generateId, now } from '../utils.js';
 
@@ -125,6 +125,11 @@ export class RateLimiter {
    */
   addRule(rule: RateLimitRule): void {
     this.rules.push(rule);
+  }
+
+  /** Whether a rule (rather than the default limit) covers this scope and key */
+  hasRule(scope: 'identity' | 'provider' | 'global', key: string): boolean {
+    return this.findRule(scope, key) !== undefined;
   }
 
   /**

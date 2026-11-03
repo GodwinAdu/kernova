@@ -8,7 +8,7 @@ July 8, 2026
 
 ## Context
 
-Nexus needs a primary implementation language. The decision has significant long-term implications since this is a 20-50 year project.
+Kernova needs a primary implementation language. The decision has significant long-term implications since this is a 20-50 year project.
 
 Options considered:
 - **TypeScript** — Strong typing, vast ecosystem, AI SDK availability

@@ -5,11 +5,11 @@ description: Navigate the Kernova Cloud dashboard — projects, deployments, mon
 
 # Cloud Dashboard Guide
 
-The Kernova Cloud dashboard at [cloud.kernova.app](https://cloud.kernova.app) is where you manage your deployed projects, monitor health, configure secrets, and handle billing.
+The Kernova Cloud dashboard at [kernova-cloud.vercel.app](https://kernova-cloud.vercel.app) is where you manage your deployed projects, monitor health, configure secrets, and handle billing.
 
 ## Signing Up
 
-1. Go to [cloud.kernova.app](https://cloud.kernova.app)
+1. Go to [kernova-cloud.vercel.app](https://kernova-cloud.vercel.app)
 2. Click **"Sign Up"**
 3. Create an account with email or OAuth (Google, GitHub)
 4. You're automatically redirected to the dashboard

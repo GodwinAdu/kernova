@@ -13,7 +13,7 @@
  * - Rate: requests per time window (sliding window)
  */
 
-import type { NexusId } from '@kernova/types';
+import type { KernovaId } from '@kernova/types';
 import { EventBus } from '../events/event-bus.js';
 import { generateId, now } from '../utils.js';
 
@@ -80,10 +80,10 @@ const DEFAULT_COST_PER_MILLION_TOKENS = 3.00; // $3/1M tokens average
 
 export class BudgetManager {
   private globalConfig: BudgetConfig = {};
-  private identityBudgets: Map<NexusId, IdentityBudget> = new Map();
-  private usage: Map<NexusId, UsageRecord> = new Map(); // identity → usage
+  private identityBudgets: Map<KernovaId, IdentityBudget> = new Map();
+  private usage: Map<KernovaId, UsageRecord> = new Map(); // identity → usage
   private globalUsage: UsageRecord;
-  private requestTimestamps: Map<NexusId, number[]> = new Map(); // identity → timestamps
+  private requestTimestamps: Map<KernovaId, number[]> = new Map(); // identity → timestamps
   private globalRequestTimestamps: number[] = [];
   private eventBus: EventBus;
 
@@ -102,7 +102,7 @@ export class BudgetManager {
   /**
    * Set budget for a specific identity
    */
-  setIdentityBudget(identityId: NexusId, budget: IdentityBudget): void {
+  setIdentityBudget(identityId: KernovaId, budget: IdentityBudget): void {
     this.identityBudgets.set(identityId, budget);
   }
 
@@ -110,7 +110,7 @@ export class BudgetManager {
    * Check if a request is allowed within budget constraints.
    * Call this BEFORE making an LLM call.
    */
-  check(identityId: NexusId, estimatedTokens = 0): BudgetCheckResult {
+  check(identityId: KernovaId, estimatedTokens = 0): BudgetCheckResult {
     // 1. Check global token budget
     if (this.globalConfig.maxTokens) {
       if (this.globalUsage.totalTokens + estimatedTokens > this.globalConfig.maxTokens) {
@@ -175,7 +175,7 @@ export class BudgetManager {
    * Record usage after an LLM call completes.
    * Call this AFTER the model responds.
    */
-  record(identityId: NexusId, tokens: number): void {
+  record(identityId: KernovaId, tokens: number): void {
     const timestamp = Date.now();
     const cost = (tokens / 1_000_000) * DEFAULT_COST_PER_MILLION_TOKENS;
 
@@ -211,7 +211,7 @@ export class BudgetManager {
   /**
    * Get usage for a specific identity
    */
-  getUsage(identityId: NexusId): UsageRecord {
+  getUsage(identityId: KernovaId): UsageRecord {
     return this.usage.get(identityId) || this.createEmptyUsage();
   }
 
@@ -249,7 +249,7 @@ export class BudgetManager {
     this.globalUsage.tokensToday = 0;
   }
 
-  private deny(reason: string, identityId: NexusId): BudgetCheckResult {
+  private deny(reason: string, identityId: KernovaId): BudgetCheckResult {
     this.eventBus.publish({
       id: generateId('evt'),
       eventType: 'governance.budget.exceeded',
@@ -267,7 +267,7 @@ export class BudgetManager {
     return { allowed: false, reason };
   }
 
-  private getOrCreateUsage(identityId: NexusId): UsageRecord {
+  private getOrCreateUsage(identityId: KernovaId): UsageRecord {
     let record = this.usage.get(identityId);
     if (!record) {
       record = this.createEmptyUsage();

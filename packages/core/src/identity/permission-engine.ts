@@ -16,13 +16,13 @@
  *   "*" (superuser — all permissions)
  */
 
-import type { NexusId } from '@kernova/types';
+import type { KernovaId } from '@kernova/types';
 import { EventBus } from '../events/event-bus.js';
 import { generateId, now } from '../utils.js';
 
 export interface PermissionCheck {
   /** The identity requesting access */
-  identityId: NexusId;
+  identityId: KernovaId;
 
   /** The resource being accessed */
   resource: string;
@@ -51,8 +51,8 @@ export interface Role {
 
 export class PermissionEngine {
   private roles: Map<string, Role> = new Map();
-  private identityRoles: Map<NexusId, string[]> = new Map(); // identity → role IDs
-  private identityPermissions: Map<NexusId, string[]> = new Map(); // direct permissions
+  private identityRoles: Map<KernovaId, string[]> = new Map(); // identity → role IDs
+  private identityPermissions: Map<KernovaId, string[]> = new Map(); // direct permissions
   private eventBus: EventBus;
 
   constructor(eventBus: EventBus) {
@@ -157,7 +157,7 @@ export class PermissionEngine {
   /**
    * Assign a role to an identity
    */
-  assignRole(identityId: NexusId, roleId: string): void {
+  assignRole(identityId: KernovaId, roleId: string): void {
     if (!this.roles.has(roleId)) {
       throw new Error(`Role "${roleId}" not found`);
     }
@@ -174,7 +174,7 @@ export class PermissionEngine {
   /**
    * Remove a role from an identity
    */
-  removeRole(identityId: NexusId, roleId: string): void {
+  removeRole(identityId: KernovaId, roleId: string): void {
     const existing = this.identityRoles.get(identityId) || [];
     this.identityRoles.set(identityId, existing.filter(r => r !== roleId));
   }
@@ -182,7 +182,7 @@ export class PermissionEngine {
   /**
    * Grant a direct permission to an identity (bypasses roles)
    */
-  grantPermission(identityId: NexusId, permission: string): void {
+  grantPermission(identityId: KernovaId, permission: string): void {
     const existing = this.identityPermissions.get(identityId) || [];
     if (!existing.includes(permission)) {
       existing.push(permission);
@@ -193,7 +193,7 @@ export class PermissionEngine {
   /**
    * Revoke a direct permission from an identity
    */
-  revokePermission(identityId: NexusId, permission: string): void {
+  revokePermission(identityId: KernovaId, permission: string): void {
     const existing = this.identityPermissions.get(identityId) || [];
     this.identityPermissions.set(identityId, existing.filter(p => p !== permission));
   }
@@ -201,7 +201,7 @@ export class PermissionEngine {
   /**
    * Get all effective permissions for an identity (roles + direct)
    */
-  getEffectivePermissions(identityId: NexusId): string[] {
+  getEffectivePermissions(identityId: KernovaId): string[] {
     const permissions = new Set<string>();
 
     // Direct permissions
@@ -230,7 +230,7 @@ export class PermissionEngine {
   /**
    * Get roles for an identity
    */
-  getRoles(identityId: NexusId): Role[] {
+  getRoles(identityId: KernovaId): Role[] {
     const roleIds = this.identityRoles.get(identityId) || [];
     return roleIds
       .map(id => this.roles.get(id))

@@ -61,7 +61,7 @@ This plan implements five autonomy modules (Scheduler, BackgroundLoop, TaskQueue
     - Create `packages/core/src/background-loop/background-loop.ts` with `BackgroundLoopModule` class
     - Implement `register()` with validation (interval 1000–86,400,000 ms, duplicate ID check), `pause()`, `resume()`, `remove()`, `list()`
     - Implement `start()` to load persisted loops and resume active ones, `stop()` to clear all timers
-    - Use `setTimeout` chaining per loop; store previous monitor return value in `Map<NexusId, unknown>` for context threading
+    - Use `setTimeout` chaining per loop; store previous monitor return value in `Map<KernovaId, unknown>` for context threading
     - On monitor error: log, emit `loop.error`, continue next cycle
     - On non-null/non-undefined monitor result: submit intent, emit `loop.action.triggered`
     - On intent failure: emit `loop.action.failed`, continue polling
@@ -135,7 +135,7 @@ This plan implements five autonomy modules (Scheduler, BackgroundLoop, TaskQueue
     - Implement `register()` with validation (event pattern syntax: dot-separated segments, each alphanumeric or `*`, ≤256 chars; duplicate combo check), `remove()`, `enable()`, `disable()`, `list()`
     - Implement `start()` to load persisted rules and subscribe to EventBus for enabled rules
     - Implement event evaluation: check cooldown → evaluate condition → fire action (submit intent)
-    - Maintain `Map<NexusId, string>` for subscription IDs, `Map<NexusId, number>` for cooldown timestamps
+    - Maintain `Map<KernovaId, string>` for subscription IDs, `Map<KernovaId, number>` for cooldown timestamps
     - Emit events: `trigger.fired`, `trigger.action.failed`, `trigger.condition.error`, `trigger.removed`
     - Handle condition errors: skip action, emit `trigger.condition.error`
     - Create barrel export `packages/core/src/triggers/index.ts`
@@ -187,8 +187,8 @@ This plan implements five autonomy modules (Scheduler, BackgroundLoop, TaskQueue
     - Test connection lifecycle, reconnection backoff, delivery timeout, adapter integration, config validation
     - _Requirements: 10.2, 10.4, 10.5, 10.6, 10.7, 11.5, 12.2, 12.3, 12.7_
 
-- [x] 9. Integrate autonomy modules into NexusKernel
-  - [x] 9.1 Extend NexusKernel with autonomy module instantiation and lifecycle
+- [x] 9. Integrate autonomy modules into KernovaKernel
+  - [x] 9.1 Extend KernovaKernel with autonomy module instantiation and lifecycle
     - Modify `packages/core/src/kernel.ts`:
       - Import Scheduler, BackgroundLoopModule, TaskQueue, ProactiveTriggerEngine, ConnectorRegistry
       - Add private readonly fields for each module

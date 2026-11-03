@@ -2,6 +2,8 @@
  * Agent definition types for file-based agent routing.
  */
 
+import type { ReasoningOptions, ResponseFormat } from '@kernova/types';
+
 export interface AgentContext {
   /** The user's message or goal */
   input: string;
@@ -104,6 +106,12 @@ export interface AgentDefinition {
   maxTokens?: number;
   /** Temperature for model */
   temperature?: number;
+  /** Reasoning controls: `{ effort: 'low' | 'medium' | 'high' }`, or `{ budgetTokens }` for a thinking budget */
+  reasoning?: ReasoningOptions;
+  /** Answer as JSON: `{ type: 'json' }`, or `{ type: 'json_schema', schema }` to match a JSON Schema */
+  responseFormat?: ResponseFormat;
+  /** Prompt caching: mark the stable start of this agent's prompts as cacheable (Claude, Bedrock) */
+  promptCache?: boolean;
   /** Capabilities this agent has */
   capabilities?: string[];
   /** Skills to load (skill names or paths) */
@@ -131,6 +139,14 @@ export interface AgentDefinition {
   channels?: string[];
   /** Remote agents this agent can communicate with (cross-organization) */
   remoteAgents?: string[];
+  /** Self-reflection for this agent: grade each answer and regenerate weak ones (overrides the project setting) */
+  reflection?: {
+    enabled: boolean;
+    /** Score below which an answer is regenerated (default: 0.7) */
+    threshold?: number;
+    /** Maximum regenerations (default: 2) */
+    maxAttempts?: number;
+  };
   /** Agent loop config — enables iterative goal-oriented execution */
   loop?: {
     /** Enable loop mode (agent keeps working until goal is achieved) */

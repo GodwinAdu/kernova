@@ -11,8 +11,8 @@
  */
 
 import type {
-  NexusId,
-  NexusEvent,
+  KernovaId,
+  KernovaEvent,
   ExecutionPlan,
   PlanStep,
   PlanStatus,
@@ -46,7 +46,7 @@ export class AgentPlanner {
   private readonly eventBus: EventBus;
   private readonly modelRouter: ModelRouter;
   private readonly config: AgentPlannerConfig;
-  private activePlans: Map<NexusId, ExecutionPlan> = new Map();
+  private activePlans: Map<KernovaId, ExecutionPlan> = new Map();
 
   constructor(eventBus: EventBus, modelRouter: ModelRouter, config?: Partial<PlannerConfig>) {
     this.eventBus = eventBus;
@@ -231,7 +231,7 @@ export class AgentPlanner {
   /**
    * Cancel an active plan.
    */
-  cancel(planId: NexusId): void {
+  cancel(planId: KernovaId): void {
     const plan = this.activePlans.get(planId);
     if (!plan) return;
 
@@ -252,7 +252,7 @@ export class AgentPlanner {
   /**
    * Get an active plan by ID.
    */
-  getPlan(planId: NexusId): ExecutionPlan | undefined {
+  getPlan(planId: KernovaId): ExecutionPlan | undefined {
     return this.activePlans.get(planId);
   }
 
@@ -397,8 +397,8 @@ Respond ONLY with the JSON array.`;
   /**
    * Emit a planning event.
    */
-  private emitEvent(eventType: string, planId: NexusId, data: Record<string, unknown>): void {
-    const event: NexusEvent = {
+  private emitEvent(eventType: string, planId: KernovaId, data: Record<string, unknown>): void {
+    const event: KernovaEvent = {
       id: generateId('evt'),
       eventType,
       category: 'system',

@@ -5,8 +5,7 @@
  * Supports standard 5-field cron expressions (minute, hour, day-of-month, month, day-of-week).
  */
 
-import cronParser from 'cron-parser';
-const { parseExpression } = cronParser;
+import { CronExpressionParser } from 'cron-parser';
 
 /**
  * Validate a cron expression string.
@@ -23,7 +22,7 @@ export function isValidCron(expr: string): boolean {
     if (fields.length !== 5) {
       return false;
     }
-    parseExpression(expr);
+    CronExpressionParser.parse(expr);
     return true;
   } catch {
     return false;
@@ -39,7 +38,7 @@ export function isValidCron(expr: string): boolean {
  * @throws Error if the cron expression is invalid
  */
 export function getNextCronDate(expr: string, after?: Date): Date {
-  const options = after ? { currentDate: after } : undefined;
-  const interval = parseExpression(expr, options);
+  if (after && Number.isNaN(after.getTime())) throw new Error('getNextCronDate: invalid reference date');
+  const interval = CronExpressionParser.parse(expr, after ? { currentDate: after } : undefined);
   return interval.next().toDate();
 }

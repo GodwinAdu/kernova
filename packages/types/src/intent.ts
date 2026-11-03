@@ -9,8 +9,8 @@
  */
 
 import type {
-  NexusObject,
-  NexusId,
+  KernovaObject,
+  KernovaId,
   Priority,
   Confidence,
   Temporal,
@@ -46,7 +46,7 @@ export type IntentStatus =
  * This is what replaces "prompts" and "conversations" in Kernova.
  * An Intent captures WHAT the user wants, WHY, and all constraints.
  */
-export interface Intent extends NexusObject {
+export interface Intent extends KernovaObject {
   type: 'intent';
 
   /** What kind of intent */
@@ -77,13 +77,13 @@ export interface Intent extends NexusObject {
   };
 
   /** What this intent depends on */
-  dependencies: NexusId[];
+  dependencies: KernovaId[];
 
   /** Parent intent (for decomposed intents) */
-  parentId?: NexusId;
+  parentId?: KernovaId;
 
   /** Child intents (sub-goals) */
-  childIds: NexusId[];
+  childIds: KernovaId[];
 
   /** Constraints and requirements */
   constraints: IntentConstraint[];
@@ -103,7 +103,7 @@ export interface Intent extends NexusObject {
 
 export interface IntentSource {
   /** Who created this intent */
-  actorId: NexusId;
+  actorId: KernovaId;
 
   /** How it was created */
   channel: 'user' | 'agent' | 'workflow' | 'schedule' | 'event';
@@ -125,7 +125,7 @@ export interface IntentConstraint {
 
 export interface Approval {
   /** Who needs to approve */
-  approverId: NexusId;
+  approverId: KernovaId;
 
   /** Current approval status */
   status: 'pending' | 'approved' | 'rejected';

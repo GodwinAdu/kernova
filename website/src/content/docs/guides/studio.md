@@ -10,14 +10,18 @@ Kernova Studio is a visual developer dashboard that connects to your running Ker
 ### Option 1: CLI (Recommended)
 
 ```bash
-# Start your Kernova app (Gateway runs on port 3000 by default)
-kernova serve
+# Terminal 1: run your agents with the Gateway on port 3000
+export KERNOVA_API_KEY=pick-a-long-random-token
+kernova serve --config ./agents --port 3000
 
-# In another terminal, launch Studio
+# Terminal 2: launch Studio with the same token
+export KERNOVA_API_KEY=pick-a-long-random-token
 kernova studio
 ```
 
-Studio opens at `http://localhost:4200` and connects to your Gateway automatically.
+Studio opens at `http://localhost:4200`. Your browser talks only to Studio; Studio forwards its API calls to the Gateway and adds the token, so the token never reaches the page. Pass `--token` instead of setting `KERNOVA_API_KEY`, and `--gateway <url>` for a Gateway elsewhere.
+
+If your app starts the Gateway itself (`await kernel.gateway.start({ port: 3000, auth: { tokens: [token] } })`), run `kernova studio --token <token>`.
 
 ### Option 2: Development Mode
 
@@ -33,8 +37,8 @@ NEXT_PUBLIC_KERNOVA_URL=http://localhost:3000 npm run dev
 Point Studio at any Kernova Gateway — local, staging, or production:
 
 ```bash
-kernova studio --gateway https://staging.myapp.com:3000
-kernova studio --port 8080 --gateway http://192.168.1.50:3000
+kernova studio --gateway https://staging.myapp.com --token "$STAGING_GATEWAY_TOKEN"
+kernova studio --port 8080 --gateway http://192.168.1.50:3000 --token "$GATEWAY_TOKEN"
 ```
 
 ## When to Use Studio
@@ -130,7 +134,9 @@ Full identity and API key management:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NEXT_PUBLIC_KERNOVA_URL` | `http://localhost:3000` | Gateway API URL |
+| `KERNOVA_API_KEY` | — | Gateway token for `kernova studio` (same as `--token`) |
+| `NEXT_PUBLIC_KERNOVA_URL` | `http://localhost:3000` | Gateway URL for `npm run dev` in `packages/studio` |
+| `NEXT_PUBLIC_KERNOVA_TOKEN` | — | Gateway token for `npm run dev` (visible in the browser; local use only) |
 
 ### CLI Options
 
@@ -140,6 +146,7 @@ kernova studio [options]
 Options:
   -p, --port <number>     Studio UI port (default: 4200)
   -g, --gateway <url>     Gateway API URL (default: http://localhost:3000)
+  -t, --token <token>     Gateway token (default: $KERNOVA_API_KEY)
   -h, --help              Show help
 ```
 
@@ -181,25 +188,27 @@ Studio continues checking every 5 seconds. When the Gateway comes back, data loa
 
 ## Production Use
 
-For production deployments:
+How Studio stays safe:
 
-1. **Auth tokens** — Configure `auth.tokens` on your Gateway to require Bearer authentication
-2. **CORS** — The Gateway enables CORS by default; disable in production if Studio runs on the same origin
-3. **Port binding** — Change the Gateway host from `0.0.0.0` to a specific IP if you don't want it exposed
+1. **Token stays on the server** — `kernova studio` keeps the Gateway token in its own process and adds it to the requests it forwards. The page never sees it
+2. **Local only** — Studio listens on `127.0.0.1`, so other machines can't reach it (or the Gateway through it)
+3. **No cross-site use** — Studio only forwards requests sent by its own page (a custom header other sites can't send) to `localhost` host names (no DNS rebinding)
+4. **Remote Gateways** — Point `--gateway` at a Gateway behind HTTPS and pass its token with `--token`
+
+### Running the Studio app in development mode
+
+`npm run dev` in `packages/studio` talks to the Gateway directly from the browser, so the Gateway must allow Studio's origin:
 
 ```typescript
 const kernel = new KernovaKernel({
-  environment: 'production',
-  gateway: {
-    port: 3000,
-    host: '127.0.0.1', // Only local connections
-    auth: {
-      allowAnonymous: false,
-      tokens: [process.env.GATEWAY_TOKEN!],
-    },
-  },
+  environment: 'development',
+  gateway: { port: 3000, auth: { allowAnonymous: true }, cors: ['http://localhost:4200'] },
 });
+await kernel.start();
+await kernel.gateway.start();
 ```
+
+Or keep the token and set `NEXT_PUBLIC_KERNOVA_TOKEN` (it's visible in the browser, so only for local development) together with `cors: ['http://localhost:4200']`.
 
 ## Customizing Studio
 

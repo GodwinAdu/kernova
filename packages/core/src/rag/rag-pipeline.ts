@@ -16,8 +16,8 @@
  */
 
 import type {
-  NexusId,
-  NexusEvent,
+  KernovaId,
+  KernovaEvent,
   Document,
   DocumentChunk,
   RetrievalResult,
@@ -80,13 +80,13 @@ export class RAGPipeline {
   private readonly config: RAGPipelineConfig;
 
   /** All ingested documents */
-  private documents: Map<NexusId, Document> = new Map();
+  private documents: Map<KernovaId, Document> = new Map();
 
   /** All chunks indexed by chunk ID */
-  private chunks: Map<NexusId, DocumentChunk> = new Map();
+  private chunks: Map<KernovaId, DocumentChunk> = new Map();
 
   /** Document ID → chunk IDs mapping */
-  private documentChunks: Map<NexusId, NexusId[]> = new Map();
+  private documentChunks: Map<KernovaId, KernovaId[]> = new Map();
 
   constructor(eventBus: EventBus, modelRouter: ModelRouter, config?: Partial<RAGConfig>) {
     this.eventBus = eventBus;
@@ -114,7 +114,7 @@ export class RAGPipeline {
 
     // Chunk the document
     const textChunks = this.chunkText(content);
-    const chunkIds: NexusId[] = [];
+    const chunkIds: KernovaId[] = [];
 
     this.emitEvent('rag.ingesting', doc.id, {
       source,
@@ -220,7 +220,7 @@ export class RAGPipeline {
   /**
    * Remove a document and all its chunks.
    */
-  remove(documentId: NexusId): boolean {
+  remove(documentId: KernovaId): boolean {
     const doc = this.documents.get(documentId);
     if (!doc) return false;
 
@@ -456,8 +456,8 @@ export class RAGPipeline {
 
   // ─── Events ────────────────────────────────────────────────
 
-  private emitEvent(eventType: string, subjectId: NexusId, data: Record<string, unknown>): void {
-    const event: NexusEvent = {
+  private emitEvent(eventType: string, subjectId: KernovaId, data: Record<string, unknown>): void {
+    const event: KernovaEvent = {
       id: generateId('evt'),
       eventType,
       category: 'system',

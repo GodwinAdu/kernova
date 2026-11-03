@@ -30,6 +30,12 @@ export interface StreamChunk {
 
   /** Finish reason (only in final chunk) */
   finishReason?: 'stop' | 'length' | 'error' | 'tool_call';
+
+  /** Reasoning text in this chunk, when the provider streams it */
+  reasoning?: string;
+
+  /** Data to send back with this assistant turn (only in final chunk; see CompletionResponse.providerData) */
+  providerData?: Record<string, unknown>;
 }
 
 /**

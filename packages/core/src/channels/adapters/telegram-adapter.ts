@@ -1,7 +1,7 @@
 /**
  * Telegram Channel Adapter
  *
- * Connects Nexus to Telegram via the Bot API using native fetch.
+ * Connects Kernova to Telegram via the Bot API using native fetch.
  * Supports both long-polling and webhook modes for receiving updates.
  */
 
@@ -9,8 +9,12 @@ import type { ChannelType, ConnectionState, OutboundMessage, DeliveryReceipt, Te
 import type { ChannelAdapter, MessageHandler, StateChangeHandler } from '../channel-adapter.js';
 import { now } from '../../utils.js';
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http';
+import { randomBytes } from 'node:crypto';
+import { BodyTooLargeError, ReplyTargets, header, readBody, safeEqual } from '../inbound.js';
 
 const TELEGRAM_API = 'https://api.telegram.org/bot';
+/** Wait after a failed getUpdates before polling again */
+const POLL_RETRY_MS = 5000;
 
 export class TelegramAdapter implements ChannelAdapter {
   readonly channelType: ChannelType = 'telegram';
@@ -21,7 +25,9 @@ export class TelegramAdapter implements ChannelAdapter {
   private polling = false;
   private abortController?: AbortController;
   private webhookServer?: Server;
-  private chatIds = new Map<string, number>();
+  private readonly targets = new ReplyTargets();
+  /** Telegram sends this in X-Telegram-Bot-Api-Secret-Token with every webhook update */
+  private webhookSecret?: string;
 
   constructor(private config: TelegramConfig) {}
 
@@ -63,11 +69,13 @@ export class TelegramAdapter implements ChannelAdapter {
     this.setState('disconnected');
   }
 
-  async send(message: OutboundMessage): Promise<DeliveryReceipt> {
-    const chatId = this.getTargetChatId(message);
-    if (!chatId) {
-      return { success: false, timestamp: now(), error: 'No chat_id available for routing' };
+  /** Send to `recipient` (a chat ID, e.g. an inbound message's replyTo) */
+  async send(message: OutboundMessage, recipient?: string): Promise<DeliveryReceipt> {
+    const resolved = this.targets.resolve(recipient);
+    if ('error' in resolved) {
+      return { success: false, timestamp: now(), error: resolved.error };
     }
+    const chatId = resolved.target;
 
     const body: Record<string, unknown> = {
       chat_id: chatId,
@@ -87,7 +95,9 @@ export class TelegramAdapter implements ChannelAdapter {
       };
     }
 
-    const result = await this.apiCall<{ message_id: number }>('sendMessage', body);
+    // Replies with unbalanced Markdown (a lone _ or *) are refused; send those as plain text
+    const result = await this.apiCall<{ message_id: number }>('sendMessage', body)
+      ?? await this.apiCall<{ message_id: number }>('sendMessage', { ...body, parse_mode: undefined });
     if (!result) {
       return { success: false, timestamp: now(), error: 'sendMessage failed' };
     }
@@ -141,7 +151,12 @@ export class TelegramAdapter implements ChannelAdapter {
         timeout: 30,
       });
 
-      if (!updates || !this.polling) continue;
+      if (!this.polling) break;
+      if (!updates) {
+        // Network or API error: back off instead of retrying in a tight loop
+        await new Promise((resolve) => setTimeout(resolve, POLL_RETRY_MS));
+        continue;
+      }
 
       for (const update of updates) {
         this.pollOffset = update.update_id + 1;
@@ -153,29 +168,37 @@ export class TelegramAdapter implements ChannelAdapter {
   // ─── Webhook Mode ──────────────────────────────────────────
 
   private async startWebhook(): Promise<void> {
-    await this.apiCall('setWebhook', { url: this.config.webhookUrl });
+    const url = new URL(this.config.webhookUrl!);
+    // Updates must carry this secret, so only Telegram can post to the webhook
+    this.webhookSecret = this.config.secretToken ?? randomBytes(32).toString('hex');
+    const registered = await this.apiCall('setWebhook', { url: this.config.webhookUrl, secret_token: this.webhookSecret });
+    if (registered === null) throw new Error('Telegram: setWebhook failed');
 
-    const port = new URL(this.config.webhookUrl!).port || 443;
+    const port = this.config.webhookPort ?? (Number(url.port) || 443);
 
     this.webhookServer = createServer((req: IncomingMessage, res: ServerResponse) => {
-      if (req.method !== 'POST') {
-        res.writeHead(405).end();
+      if (req.method !== 'POST' || (req.url ?? '').split('?')[0] !== url.pathname) {
+        res.writeHead(404).end();
+        return;
+      }
+      if (!safeEqual(header(req, 'x-telegram-bot-api-secret-token') ?? '', this.webhookSecret!)) {
+        res.writeHead(401).end();
         return;
       }
 
-      const chunks: Buffer[] = [];
-      req.on('data', (chunk: Buffer) => chunks.push(chunk));
-      req.on('end', () => {
+      readBody(req).then((body) => {
         res.writeHead(200).end('OK');
         try {
-          const update = JSON.parse(Buffer.concat(chunks).toString()) as TelegramUpdate;
-          this.processUpdate(update);
+          this.processUpdate(JSON.parse(body.toString()) as TelegramUpdate);
         } catch { /* ignore malformed payloads */ }
+      }, (err) => {
+        res.writeHead(err instanceof BodyTooLargeError ? 413 : 400).end();
       });
     });
 
-    await new Promise<void>((resolve) => {
-      this.webhookServer!.listen(Number(port), () => resolve());
+    await new Promise<void>((resolve, reject) => {
+      this.webhookServer!.once('error', reject);
+      this.webhookServer!.listen(port, () => resolve());
     });
   }
 
@@ -186,27 +209,19 @@ export class TelegramAdapter implements ChannelAdapter {
     if (!msg?.text) return;
 
     const sender = msg.from?.username || msg.from?.first_name || String(msg.from?.id ?? 'unknown');
-    this.chatIds.set(sender, msg.chat.id);
+    const chatId = String(msg.chat.id);
+    this.targets.remember(chatId);
 
     this.messageHandler?.({
       sender,
       content: msg.text,
       timestamp: new Date(msg.date * 1000).toISOString(),
       raw: update,
+      replyTo: chatId,
     });
   }
 
   // ─── Helpers ───────────────────────────────────────────────
-
-  private getTargetChatId(message: OutboundMessage): number | undefined {
-    // Use the most recently received chat_id, or look up by raw metadata
-    const raw = (message as unknown as Record<string, unknown>).raw as { chat_id?: number } | undefined;
-    if (raw?.chat_id) return raw.chat_id;
-
-    // Fall back to most recent chat
-    const entries = [...this.chatIds.values()];
-    return entries.length > 0 ? entries[entries.length - 1] : undefined;
-  }
 
   private setState(state: ConnectionState): void {
     this._state = state;

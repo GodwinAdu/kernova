@@ -25,7 +25,7 @@ MemoryStore (SQLite)
 
 ### Key Decisions
 
-1. **Same SQLite database** as events (`nexus.db`) — single file, single connection
+1. **Same SQLite database** as events (`kernova.db`) — single file, single connection
 2. **FTS5** for full-text search — built into SQLite, no external dependencies
 3. **Layer-partitioned** — Each layer can be queried independently or together
 4. **Relevance scoring** — Combines FTS rank + recency + access frequency

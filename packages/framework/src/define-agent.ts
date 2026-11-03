@@ -30,14 +30,12 @@ export function defineAgent(definition: AgentDefinition): AgentDefinition {
     throw new Error('defineAgent: "instructions" is required');
   }
 
-  // Apply defaults
+  // Apply defaults. No `middleware` default: leaving it out runs every middleware (an empty list
+  // runs none). No temperature/maxTokens defaults: the provider's own apply unless the agent sets them.
   return {
     memory: { type: 'conversational' },
-    maxTokens: 4096,
-    temperature: 0.7,
     capabilities: [],
     tools: [],
-    middleware: [],
     ...definition,
   };
 }

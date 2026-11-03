@@ -7,7 +7,7 @@ description: Ship your agent app to production with one command.
 
 ## Prerequisites
 
-1. A Kernova Cloud account → [Sign up at cloud.kernova.app](https://cloud.kernova.app)
+1. A Kernova Cloud account → [Sign up at kernova-cloud.vercel.app](https://kernova-cloud.vercel.app)
 2. An API key → Create one in Dashboard → Settings
 
 ## Login
@@ -113,7 +113,7 @@ After deploying, add a custom domain in Dashboard → Projects → [Your Project
 # The CLI polls automatically after deploy
 # You can also check manually:
 curl -H "Authorization: Bearer kn_live_xxx" \
-  https://cloud.kernova.app/api/deploy/DEPLOYMENT_ID
+  https://kernova-cloud.vercel.app/api/deploy/DEPLOYMENT_ID
 ```
 
 ## Self-Hosting

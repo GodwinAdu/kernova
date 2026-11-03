@@ -16,7 +16,7 @@ import type {
   Intent,
   IntentResult,
   ComputedContext,
-  NexusId,
+  KernovaId,
 } from '@kernova/types';
 import type { AgentRegistry } from './agent-registry.js';
 import { EventBus } from '../events/event-bus.js';
@@ -44,7 +44,7 @@ export interface DelegationResult {
   durationMs: number;
 
   /** The sub-intent that was created */
-  intentId: NexusId;
+  intentId: KernovaId;
 }
 
 export class AgentCoordinator {
@@ -67,7 +67,7 @@ export class AgentCoordinator {
   async delegate(
     targetAgentName: string,
     goal: string,
-    parentIntentId: NexusId,
+    parentIntentId: KernovaId,
     currentDepth: number,
     context: ComputedContext,
   ): Promise<DelegationResult> {
@@ -187,7 +187,7 @@ export class AgentCoordinator {
    */
   async ask(
     goal: string,
-    parentIntentId: NexusId,
+    parentIntentId: KernovaId,
     currentDepth: number,
     context: ComputedContext,
   ): Promise<DelegationResult> {
@@ -212,7 +212,7 @@ export class AgentCoordinator {
    */
   async broadcast(
     goal: string,
-    parentIntentId: NexusId,
+    parentIntentId: KernovaId,
     currentDepth: number,
     context: ComputedContext,
   ): Promise<DelegationResult> {

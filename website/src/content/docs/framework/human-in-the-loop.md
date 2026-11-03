@@ -26,9 +26,9 @@ Timeout → Auto-deny
 ```typescript
 import { ApprovalManager } from '@kernova/core';
 
-const approval = new ApprovalManager(eventBus, {
+const approval = new ApprovalManager(kernel.events, {
   defaultTimeout: 30 * 60 * 1000, // 30 minutes
-  autoApproveInDev: true,          // Skip approvals in development
+  autoApproveInDev: true,          // Skip approvals when NODE_ENV=development
 });
 
 // Request approval (blocks until resolved)
@@ -159,7 +159,7 @@ export async function POST(req: Request) {
 ## Configuration
 
 ```typescript
-const approval = new ApprovalManager(eventBus, {
+const approval = new ApprovalManager(kernel.events, {
   // How long to wait before auto-denying (default: 30 min)
   defaultTimeout: 60 * 60 * 1000, // 1 hour
   

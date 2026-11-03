@@ -11,9 +11,10 @@ import type {
   Intent,
   IntentResult,
   ComputedContext,
-  NexusId,
+  KernovaId,
   ToolSpec,
   ModelMessage,
+  CompletionRequest,
 } from '@kernova/types';
 import { EventBus } from '../events/event-bus.js';
 import { ModelRouter } from '../models/model-router.js';
@@ -86,13 +87,14 @@ interface RegisteredAgent {
 }
 
 export class AgentRegistry {
-  private agents: Map<NexusId, RegisteredAgent> = new Map();
-  private instances: Map<NexusId, AgentInstance> = new Map();
+  private agents: Map<KernovaId, RegisteredAgent> = new Map();
+  private instances: Map<KernovaId, AgentInstance> = new Map();
   private eventBus: EventBus;
   private modelRouter: ModelRouter;
   private pluginRegistry: PluginRegistry | null = null;
   private memoryEngine: any = null; // Set by kernel
   private coordinator: AgentCoordinator;
+  private debug = false;
 
   constructor(eventBus: EventBus, modelRouter: ModelRouter) {
     this.eventBus = eventBus;
@@ -108,6 +110,11 @@ export class AgentRegistry {
   /** Connect the memory engine (called by kernel after construction) */
   setMemoryEngine(memory: any): void {
     this.memoryEngine = memory;
+  }
+
+  /** Print agent `log()` messages to the console (off by default; they are always emitted as events) */
+  setDebug(enabled: boolean): void {
+    this.debug = enabled;
   }
 
   async start(): Promise<void> {
@@ -217,11 +224,15 @@ export class AgentRegistry {
 
   /**
    * Execute an intent through a specific agent
+   *
+   * @param options.allowedTools - IDs of the plugin tools this execution may see and call
+   *   (after tool policies). All registered tools when omitted.
    */
   async execute(
     instance: AgentInstance,
     intent: Intent,
     context: ComputedContext,
+    options: { allowedTools?: string[] } = {},
   ): Promise<IntentResult> {
     const registered = this.agents.get(instance.definitionId);
     if (!registered) {
@@ -231,6 +242,23 @@ export class AgentRegistry {
     // Update instance state
     instance.state = 'executing';
     instance.activeIntents.push(intent.id);
+
+    const allowed = options.allowedTools ? new Set(options.allowedTools) : null;
+    const visibleTools = (): ToolDefinition[] => {
+      const all = this.pluginRegistry?.listTools() ?? [];
+      return allowed ? all.filter(t => allowed.has(t.id)) : all;
+    };
+
+    // Earlier turns of the conversation thread (if any) go between the instructions and the prompt
+    const history: ModelMessage[] = (context.conversation ?? []).map(turn => ({
+      role: turn.role,
+      content: turn.content,
+    }));
+    const messagesFor = (prompt: string): ModelMessage[] => [
+      { role: 'system', content: registered.definition.instructions },
+      ...history,
+      { role: 'user', content: prompt },
+    ];
 
     // Create tools interface for this execution
     const self = this;
@@ -272,15 +300,13 @@ export class AgentRegistry {
         return [];
       },
       log: (message) => {
-        console.log(`[Agent:${registered.definition.name}] ${message}`);
+        tools.emit('log', { message });
+        if (self.debug) console.log(`[Agent:${registered.definition.name}] ${message}`);
       },
       complete: async (prompt: string) => {
         const response = await this.modelRouter.complete({
-          messages: [
-            { role: 'system', content: registered.definition.instructions },
-            { role: 'user', content: prompt },
-          ],
-          model: '',
+          messages: messagesFor(prompt),
+          ...self.modelSettings(registered.definition),
           metadata: {
             intentId: intent.id,
             agentId: instance.id,
@@ -292,11 +318,8 @@ export class AgentRegistry {
       },
       stream: async function*(prompt: string) {
         const generator = self.modelRouter.stream({
-          messages: [
-            { role: 'system', content: registered.definition.instructions },
-            { role: 'user', content: prompt },
-          ],
-          model: '',
+          messages: messagesFor(prompt),
+          ...self.modelSettings(registered.definition),
           metadata: {
             intentId: intent.id,
             agentId: instance.id,
@@ -313,11 +336,8 @@ export class AgentRegistry {
       streamToString: async (prompt: string) => {
         let result = '';
         const generator = self.modelRouter.stream({
-          messages: [
-            { role: 'system', content: registered.definition.instructions },
-            { role: 'user', content: prompt },
-          ],
-          model: '',
+          messages: messagesFor(prompt),
+          ...self.modelSettings(registered.definition),
           metadata: { intentId: intent.id, agentId: instance.id, purpose: 'reasoning' },
         });
         for await (const chunk of generator) {
@@ -329,18 +349,19 @@ export class AgentRegistry {
         return result;
       },
       completeWithTools: async (prompt: string, toolNames?: string[]) => {
-        return self.completeWithToolLoop(registered, instance, intent, prompt, toolNames);
+        return self.completeWithToolLoop(registered, instance, intent, messagesFor(prompt), visibleTools(), toolNames);
       },
       useTool: async (toolId: string, params: Record<string, unknown>) => {
         if (!self.pluginRegistry) {
           throw new Error('Plugin registry not available. Cannot use tools.');
         }
+        const tool = self.pluginRegistry.getTool(toolId);
+        if (tool && allowed && !allowed.has(tool.id)) {
+          throw new Error(`Tool "${toolId}" is not allowed for this agent.`);
+        }
         return self.pluginRegistry.executeTool(toolId, params);
       },
-      listTools: () => {
-        if (!self.pluginRegistry) return [];
-        return self.pluginRegistry.listTools();
-      },
+      listTools: () => visibleTools(),
       delegate: async (agentName: string, goal: string) => {
         const depth = (intent.metadata?.depth as number) || 0;
         return self.coordinator.delegate(agentName, goal, intent.id, depth, context);
@@ -421,7 +442,7 @@ export class AgentRegistry {
    * Unregister an agent by definition ID.
    * Removes the agent definition and any associated instances.
    */
-  unregister(definitionId: NexusId): boolean {
+  unregister(definitionId: KernovaId): boolean {
     const registered = this.agents.get(definitionId);
     if (!registered) return false;
 
@@ -469,6 +490,27 @@ export class AgentRegistry {
   }
 
   /**
+   * The model settings an agent's calls use: its first model reference (provider and/or model)
+   * and its temperature, maxTokens, reasoning, response format, and prompt caching.
+   * Without a model reference the kernel's routing decides.
+   */
+  private modelSettings(
+    definition: AgentDefinition,
+  ): Pick<CompletionRequest, 'model' | 'provider' | 'temperature' | 'maxTokens' | 'reasoning' | 'responseFormat' | 'cache'> {
+    const primary = definition.models?.[0];
+    const config = definition.config;
+    return {
+      model: primary?.model ?? '',
+      ...(primary?.provider && { provider: primary.provider }),
+      ...(config?.temperature !== undefined && { temperature: config.temperature }),
+      ...(config?.maxTokens !== undefined && { maxTokens: config.maxTokens }),
+      ...(config?.reasoning && { reasoning: config.reasoning }),
+      ...(config?.responseFormat && { responseFormat: config.responseFormat }),
+      ...(config?.promptCache && { cache: true }),
+    };
+  }
+
+  /**
    * Tool-calling loop.
    * Sends prompt to LLM with tool definitions. If LLM requests tool calls,
    * executes them, feeds results back, and loops until LLM responds with text.
@@ -477,61 +519,44 @@ export class AgentRegistry {
     registered: RegisteredAgent,
     instance: AgentInstance,
     intent: Intent,
-    prompt: string,
+    initialMessages: ModelMessage[],
+    tools: ToolDefinition[],
     toolNames?: string[],
     maxIterations = 10,
   ): Promise<string> {
     if (!this.pluginRegistry) {
       // No plugin registry — fall back to plain completion
       const response = await this.modelRouter.complete({
-        messages: [
-          { role: 'system', content: registered.definition.instructions },
-          { role: 'user', content: prompt },
-        ],
-        model: '',
+        messages: initialMessages,
+        ...this.modelSettings(registered.definition),
       });
       instance.metrics.tokensConsumed += response.usage.totalTokens;
       return response.content;
     }
 
-    // Get available tools
-    let availableTools = this.pluginRegistry.listTools();
+    // Narrow to the requested tools, if any
+    let availableTools = tools;
     if (toolNames?.length) {
       availableTools = availableTools.filter(t =>
         toolNames.some(name => t.id.includes(name) || t.name === name)
       );
     }
 
-    // Convert to ToolSpec format for the model
-    // Sanitize tool IDs for OpenAI (replace colons with underscores)
+    // Registered tool IDs already match the function-name pattern providers require
     const toolSpecs: ToolSpec[] = availableTools.map(t => ({
-      name: t.id.replace(/:/g, '_'),
+      name: t.id,
       description: t.description,
       parameters: t.parameters,
     }));
+    const offered = new Set(toolSpecs.map(t => t.name));
 
-    // Build a map from sanitized name back to original tool ID
-    const nameToId = new Map<string, string>();
-    for (const t of availableTools) {
-      nameToId.set(t.id.replace(/:/g, '_'), t.id);
-    }
-
-    // Build initial messages
-    const messages: ModelMessage[] = [
-      { role: 'system', content: registered.definition.instructions },
-      { role: 'user', content: prompt },
-    ];
+    const messages: ModelMessage[] = [...initialMessages];
 
     // Tool-calling loop
     for (let iteration = 0; iteration < maxIterations; iteration++) {
-      // Debug logging: log tool count and names before sending to ModelRouter
-      if (toolSpecs.length > 0) {
-        console.debug(`[AgentRegistry] Sending ${toolSpecs.length} tools to ModelRouter: ${toolSpecs.map(t => t.name).join(', ')}`);
-      }
-
       const response = await this.modelRouter.complete({
         messages,
-        model: '',
+        ...this.modelSettings(registered.definition),
         tools: toolSpecs.length > 0 ? toolSpecs : undefined,
         metadata: {
           intentId: intent.id,
@@ -544,18 +569,17 @@ export class AgentRegistry {
 
       // If no tool calls, return the text response
       if (!response.toolCalls || response.toolCalls.length === 0) {
-        if (iteration === 0) {
-          console.log(`[Kernova] LLM returned text (no tool calls). Content length: ${response.content.length}`);
-        }
         return response.content;
       }
 
       // LLM wants to call tools — execute them
       // Add assistant message with tool calls (for conversation history)
+      // providerData carries what the provider needs back with this turn (e.g. Claude's signed thinking)
       messages.push({
         role: 'assistant',
         content: response.content || '',
         toolCalls: response.toolCalls,
+        ...(response.providerData && { providerData: response.providerData }),
       });
 
       for (const toolCall of response.toolCalls) {
@@ -581,11 +605,13 @@ export class AgentRegistry {
           },
         });
 
-        // Execute the tool (map sanitized name back to original ID with colons)
+        // Execute the tool. Only tools offered to the model may run.
         let toolResult: string;
         try {
-          const originalToolId = nameToId.get(toolCall.name) || toolCall.name;
-          const result = await this.pluginRegistry.executeTool(originalToolId, toolCall.arguments);
+          if (!offered.has(toolCall.name)) {
+            throw new Error(`Tool "${toolCall.name}" is not available.`);
+          }
+          const result = await this.pluginRegistry.executeTool(toolCall.name, toolCall.arguments);
           toolResult = typeof result === 'string' ? result : JSON.stringify(result);
         } catch (error) {
           toolResult = `Error: ${(error as Error).message}`;

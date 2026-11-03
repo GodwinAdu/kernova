@@ -10,8 +10,8 @@
  */
 
 import type {
-  NexusObject,
-  NexusId,
+  KernovaObject,
+  KernovaId,
   Confidence,
   Timestamp,
 } from './base.js';
@@ -39,7 +39,7 @@ export type MemoryType =
  * Memory Entry
  * A single piece of knowledge in the memory system
  */
-export interface MemoryEntry extends NexusObject {
+export interface MemoryEntry extends KernovaObject {
   type: 'memory_entry';
 
   /** Which layer this belongs to */
@@ -84,7 +84,7 @@ export interface MemorySource {
   type: 'user' | 'agent' | 'system' | 'import' | 'inference';
 
   /** Reference to the source */
-  ref?: NexusId;
+  ref?: KernovaId;
 
   /** Human-readable description */
   description?: string;
@@ -92,7 +92,7 @@ export interface MemorySource {
 
 export interface MemoryRelation {
   /** Related memory ID */
-  targetId: NexusId;
+  targetId: KernovaId;
 
   /** Type of relationship */
   relationType: 'supports' | 'contradicts' | 'extends' | 'supersedes' | 'related';
@@ -119,7 +119,7 @@ export interface MemoryQuery {
   tags?: string[];
 
   /** Filter by owner */
-  ownerId?: NexusId;
+  ownerId?: KernovaId;
 
   /** Minimum relevance score */
   minRelevance?: number;
@@ -142,7 +142,7 @@ export interface MemoryQuery {
  */
 export interface ComputedContext {
   /** The intent this context was computed for */
-  intentId: NexusId;
+  intentId: KernovaId;
 
   /** Relevant memories */
   memories: MemoryEntry[];
@@ -159,6 +159,12 @@ export interface ComputedContext {
   /** Relevant knowledge */
   knowledge: MemoryEntry[];
 
+  /** Passages retrieved from ingested documents (RAG), formatted for a prompt */
+  documents?: string;
+
+  /** Earlier turns of the conversation thread this intent belongs to, oldest first */
+  conversation?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+
   /** Total token estimate */
   estimatedTokens: number;
 
@@ -168,7 +174,7 @@ export interface ComputedContext {
 
 export interface ContextUser {
   /** User ID */
-  userId: NexusId;
+  userId: KernovaId;
 
   /** User's active role */
   role: string;

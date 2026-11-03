@@ -16,7 +16,7 @@ Most systems store only current state. If you want to know what happened, you ch
 
 ## Decision
 
-Nexus is Event Native, not merely event-driven.
+Kernova is Event Native, not merely event-driven.
 
 Every object has a timeline. Instead of only storing the latest state, we preserve the sequence of meaningful events. Every state change emits a typed event with:
 - Event type (domain.action)

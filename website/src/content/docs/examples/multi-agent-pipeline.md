@@ -1,9 +1,9 @@
 ---
 title: "Content Pipeline"
-description: Multi-agent content production pipeline — research, write, review, publish — with workflow orchestration.
+description: Multi-agent content production pipeline — research, write, review, publish, chained in code with budget limits.
 ---
 
-A complete content production system with four specialized agents: a researcher that gathers source material, a writer that drafts articles, an editor that reviews and coordinates the pipeline, and a publisher that formats and distributes the final content. The pipeline uses workflow orchestration, approval gates, budget management, and accepts requests via email.
+A complete content production system with four specialized agents: a researcher that gathers source material, a writer that drafts articles, an editor that reviews and coordinates the pipeline, and a publisher that formats and distributes the final content. Each stage feeds the next, the editor acts as an approval gate, a budget caps token use, and requests arrive by email.
 
 ---
 
@@ -71,6 +71,7 @@ async function main() {
     dataDir: './pipeline-data',
     builtInTools: {
       enabled: ['web-search', 'http-fetch', 'file-write', 'date-time'],
+      // web-search also needs a backend: webSearchProvider (see the Built-in Tools guide)
       sandboxDir: OUTPUT_DIR,
     },
   });
@@ -80,12 +81,10 @@ async function main() {
   const kernel = app.getKernel();
 
   // ─── 2. Budget management ─────────────────────────────────────
-  // Prevent runaway costs by setting a daily token budget
-  kernel.budget.configure({
-    owner: 'content-pipeline',
-    maxTokens: MAX_DAILY_TOKENS,
-    period: 'daily',
-    action: 'reject', // Reject intents once budget is exhausted
+  // Prevent runaway costs: intents owned by 'content-pipeline' are rejected
+  // once it has used MAX_DAILY_TOKENS today
+  kernel.budget.setIdentityBudget('content-pipeline', {
+    maxTokensPerDay: MAX_DAILY_TOKENS,
   });
 
   // ─── 3. Define Agent: Researcher ──────────────────────────────
@@ -181,49 +180,9 @@ Use save-report to save to the output directory.`,
     tools: ['file-write'],
   });
 
-  // ─── 7. Define the content production workflow ────────────────
-  app.workflow({
-    id: 'content-production',
-    name: 'Content Production Pipeline',
-    description: 'Research → Write → Review → Publish',
-    steps: [
-      {
-        id: 'research',
-        name: 'Research Phase',
-        agent: 'content-researcher',
-        input: { topic: '{{topic}}', brief: '{{brief}}' },
-        output: 'researchBrief',
-      },
-      {
-        id: 'write',
-        name: 'Writing Phase',
-        agent: 'content-writer',
-        input: { researchBrief: '{{researchBrief}}', format: '{{format}}' },
-        output: 'draft',
-        dependsOn: ['research'],
-      },
-      {
-        id: 'review',
-        name: 'Editorial Review',
-        agent: 'content-editor',
-        input: { draft: '{{draft}}', topic: '{{topic}}' },
-        output: 'reviewResult',
-        dependsOn: ['write'],
-      },
-      {
-        id: 'publish',
-        name: 'Publication',
-        agent: 'content-publisher',
-        input: { article: '{{draft}}', review: '{{reviewResult}}' },
-        output: 'published',
-        dependsOn: ['review'],
-        // Approval gate: only runs if review passed
-        condition: '{{reviewResult.verdict === "APPROVED"}}',
-      },
-    ],
-  });
-
-  // ─── 8. Main content production function ──────────────────────
+  // ─── 7. Main content production function ──────────────────────
+  // Each stage's output goes into the next prompt, so the stages are chained
+  // app.ask() calls. (Workflow agent steps run independently and don't pass outputs along.)
   async function produceContent(topic: string, format: string = 'blog-post', brief?: string) {
     console.log(`[PIPELINE] Starting content production: "${topic}"`);
     const startTime = Date.now();
@@ -346,7 +305,7 @@ Use save-report to save to the output directory.`,
     return { success: true, topic, format, durationMs, publishResult };
   }
 
-  // ─── 9. Email channel for receiving content requests ──────────
+  // ─── 8. Email channel for receiving content requests ──────────
   // Team members email the bot with article requests
   if (process.env.IMAP_HOST) {
     const { EmailAdapter } = await import('@kernova/core');
@@ -390,7 +349,7 @@ Use save-report to save to the output directory.`,
     });
   }
 
-  // ─── 10. Task queue handler ───────────────────────────────────
+  // ─── 9. Task queue handler ───────────────────────────────────
   kernel.taskQueue.registerHandler('content-job', async (task) => {
     const { topic, format, brief } = task.payload as {
       topic: string;
@@ -400,7 +359,7 @@ Use save-report to save to the output directory.`,
     await produceContent(topic, format || 'blog-post', brief);
   });
 
-  // ─── 11. Scheduled weekly content generation ──────────────────
+  // ─── 10. Scheduled weekly content generation ──────────────────
   // Every Monday at 8 AM, generate a content piece from the backlog
   app.schedule('weekly-content', '0 8 * * 1', async () => {
     console.log('[SCHEDULE] Weekly content generation triggered');
@@ -434,7 +393,7 @@ Use save-report to save to the output directory.`,
     }
   });
 
-  // ─── 12. Budget monitoring trigger ────────────────────────────
+  // ─── 11. Budget monitoring trigger ────────────────────────────
   // Alert when budget is getting low
   app.trigger('budget-warning', 'budget.threshold.*', {
     goal: 'The content pipeline token budget is running low. Log a warning and pause non-critical content generation.',
@@ -442,7 +401,7 @@ Use save-report to save to the output directory.`,
     cooldownMs: 3_600_000, // 1 hour cooldown
   });
 
-  // ─── 13. Start the daemon ─────────────────────────────────────
+  // ─── 12. Start the daemon ─────────────────────────────────────
   console.log('📝 Content Pipeline starting...');
   console.log(`   4 agents: researcher, writer, editor, publisher`);
   console.log(`   Email channel: ${process.env.EMAIL_USER || 'not configured'}`);
@@ -492,12 +451,11 @@ Check the `output/` directory for published content.
 | Feature | Guide |
 |---------|-------|
 | Multi-agent delegation (4 specialized agents) | [Multi-Agent Systems](/guides/multi-agent) |
-| Workflow engine orchestration | [Workflows](/guides/workflows) |
-| Approval gates (editor review) | [Workflows](/guides/workflows#conditional-steps) |
+| Approval gate (the editor checks each draft) | [Multi-Agent Systems](/guides/multi-agent) |
 | Email channel for requests | [Channels & Adapters](/guides/channels) |
-| Scheduled weekly generation | [Scheduler](/guides/scheduler) |
-| Budget management | [Governance](/guides/governance) |
-| Task queue for job processing | [Task Queue](/guides/task-queue) |
+| Scheduled weekly generation | [Scheduler](/guides/scheduler-queue-triggers) |
+| Budget management | [Governance](/guides/budgets) |
+| Task queue for job processing | [Task Queue](/guides/scheduler-queue-triggers) |
 | Long-term memory (content history) | [Context & Memory](/guides/context-memory) |
-| Proactive triggers (budget alerts) | [Triggers](/guides/triggers) |
+| Proactive triggers (budget alerts) | [Triggers](/guides/scheduler-queue-triggers) |
 | Daemon mode for production | [Daemon Mode](/guides/daemon) |

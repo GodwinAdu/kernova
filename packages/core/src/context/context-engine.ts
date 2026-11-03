@@ -12,16 +12,16 @@
 import type {
   ComputedContext,
   MemoryEntry,
-  NexusId,
+  KernovaId,
 } from '@kernova/types';
 import { MemoryEngine } from '../memory/memory-engine.js';
 import { now } from '../utils.js';
 
 export interface ContextRequest {
-  intentId: NexusId;
-  ownerId: NexusId;
+  intentId: KernovaId;
+  ownerId: KernovaId;
   goal: string;
-  sessionId?: NexusId;
+  sessionId?: KernovaId;
 }
 
 export class ContextEngine {

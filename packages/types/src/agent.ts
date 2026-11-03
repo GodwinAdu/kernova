@@ -14,8 +14,8 @@
  */
 
 import type {
-  NexusObject,
-  NexusId,
+  KernovaObject,
+  KernovaId,
   Confidence,
 } from './base.js';
 
@@ -32,7 +32,7 @@ export type AgentState =
  * Agent Definition
  * The blueprint for creating an agent
  */
-export interface AgentDefinition extends NexusObject {
+export interface AgentDefinition extends KernovaObject {
   type: 'agent_definition';
 
   /** Human-readable name */
@@ -70,20 +70,20 @@ export interface AgentDefinition extends NexusObject {
  * Agent Instance
  * A running instance of an agent definition
  */
-export interface AgentInstance extends NexusObject {
+export interface AgentInstance extends KernovaObject {
   type: 'agent_instance';
 
   /** Which definition this is an instance of */
-  definitionId: NexusId;
+  definitionId: KernovaId;
 
   /** Current operational state */
   state: AgentState;
 
   /** Currently processing intent IDs */
-  activeIntents: NexusId[];
+  activeIntents: KernovaId[];
 
   /** Session context */
-  sessionId?: NexusId;
+  sessionId?: KernovaId;
 
   /** Runtime metrics */
   metrics: AgentMetrics;
@@ -165,6 +165,15 @@ export interface AgentConfig {
 
   /** Maximum tokens per response */
   maxTokens?: number;
+
+  /** Reasoning controls sent with this agent's model calls */
+  reasoning?: import('./model.js').ReasoningOptions;
+
+  /** Answer shape for this agent's model calls (JSON, optionally matching a schema) */
+  responseFormat?: import('./model.js').ResponseFormat;
+
+  /** Mark the stable start of this agent's prompts as cacheable (prompt caching) */
+  promptCache?: boolean;
 
   /** Retry configuration */
   retries: {

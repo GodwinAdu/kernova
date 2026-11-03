@@ -11,7 +11,7 @@ Automatic performance metrics collection from the EventBus. Tracks intent throug
 Metrics are collected automatically when the kernel starts:
 
 ```typescript
-const kernel = new NexusKernel({ environment: 'production' });
+const kernel = new KernovaKernel({ environment: 'production' });
 await kernel.start();
 // Metrics are now being collected from all EventBus events
 
@@ -348,9 +348,9 @@ reloader.stop();
 ## Complete Operational Setup Example
 
 ```typescript
-import { NexusKernel, defineAgent, HotReloader } from '@kernova/core';
+import { KernovaKernel, defineAgent, HotReloader } from '@kernova/core';
 
-const kernel = new NexusKernel({
+const kernel = new KernovaKernel({
   environment: 'production',
   dataDir: './data',
 });

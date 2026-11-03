@@ -23,7 +23,7 @@ import type {
   MemoryLayer,
   MemoryType,
   MemoryRelation,
-  NexusId,
+  KernovaId,
 } from '@kernova/types';
 import { now } from '../utils.js';
 
@@ -134,7 +134,7 @@ export class MemoryStore {
   /**
    * Get a single memory by ID
    */
-  get(id: NexusId): MemoryEntry | undefined {
+  get(id: KernovaId): MemoryEntry | undefined {
     const row = this.db.prepare('SELECT * FROM memories WHERE id = ?').get(id) as MemoryRow | undefined;
     if (!row) return undefined;
 
@@ -149,7 +149,7 @@ export class MemoryStore {
   /**
    * Delete a memory
    */
-  delete(id: NexusId): boolean {
+  delete(id: KernovaId): boolean {
     const result = this.db.prepare('DELETE FROM memories WHERE id = ?').run(id);
     this.db.prepare('DELETE FROM memory_relations WHERE source_id = ? OR target_id = ?').run(id, id);
     return result.changes > 0;
@@ -486,7 +486,7 @@ export class MemoryStore {
   /**
    * Store a vector embedding for a memory
    */
-  storeEmbedding(memoryId: NexusId, vector: number[]): void {
+  storeEmbedding(memoryId: KernovaId, vector: number[]): void {
     const buffer = serializeVector(vector);
     this.db.prepare('UPDATE memories SET embedding = ? WHERE id = ?').run(buffer, memoryId);
   }
@@ -495,7 +495,7 @@ export class MemoryStore {
    * Get all memories with embeddings for vector search
    * Filters by layer/owner if specified.
    */
-  getEmbeddings(filters: { layers?: MemoryLayer[]; ownerId?: NexusId } = {}): Array<{ id: string; vector: number[] }> {
+  getEmbeddings(filters: { layers?: MemoryLayer[]; ownerId?: KernovaId } = {}): Array<{ id: string; vector: number[] }> {
     const conditions: string[] = ["status = 'active'", 'embedding IS NOT NULL'];
     const bindings: Record<string, unknown> = {};
 

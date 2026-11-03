@@ -11,7 +11,7 @@
  * Inspired by OpenClaw's config system.
  */
 
-import type { NexusId, NexusEvent } from '@kernova/types';
+import type { KernovaId, KernovaEvent } from '@kernova/types';
 import type { EventBus } from '../events/event-bus.js';
 import { generateId, now } from '../utils.js';
 

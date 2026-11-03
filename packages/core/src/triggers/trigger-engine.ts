@@ -5,7 +5,7 @@
  * and fires actions (intent submissions) when conditions are met.
  *
  * Design decisions:
- * - Cooldown tracked in-memory via Map<NexusId, number> for fast lookup
+ * - Cooldown tracked in-memory via Map<KernovaId, number> for fast lookup
  * - Condition functions are runtime-only (not serialized); persisted rules
  *   store a human-readable description instead
  * - Subscriptions managed per-rule to allow individual enable/disable
@@ -13,8 +13,8 @@
  */
 
 import type {
-  NexusId,
-  NexusEvent,
+  KernovaId,
+  KernovaEvent,
   TriggerRule,
   TriggerRuleInput,
   TriggerActionDef,
@@ -44,16 +44,16 @@ export class ProactiveTriggerEngine {
   private readonly store: TriggerStore;
 
   /** All registered rules keyed by rule ID */
-  private rules: Map<NexusId, TriggerRule> = new Map();
+  private rules: Map<KernovaId, TriggerRule> = new Map();
 
   /** EventBus subscription IDs keyed by rule ID */
-  private subscriptionIds: Map<NexusId, string> = new Map();
+  private subscriptionIds: Map<KernovaId, string> = new Map();
 
   /** Last-fired timestamps (ms since epoch) keyed by rule ID for cooldown tracking */
-  private lastFiredTimestamps: Map<NexusId, number> = new Map();
+  private lastFiredTimestamps: Map<KernovaId, number> = new Map();
 
   /** Runtime condition functions keyed by rule ID (not persisted) */
-  private conditions: Map<NexusId, TriggerCondition> = new Map();
+  private conditions: Map<KernovaId, TriggerCondition> = new Map();
 
   constructor(eventBus: EventBus, config: TriggerEngineConfig) {
     this.eventBus = eventBus;
@@ -156,7 +156,7 @@ export class ProactiveTriggerEngine {
   /**
    * Remove a trigger rule.
    */
-  remove(ruleId: NexusId): void {
+  remove(ruleId: KernovaId): void {
     const rule = this.rules.get(ruleId);
     if (!rule) {
       return;
@@ -196,7 +196,7 @@ export class ProactiveTriggerEngine {
   /**
    * Enable a trigger rule and subscribe to EventBus.
    */
-  enable(ruleId: NexusId): void {
+  enable(ruleId: KernovaId): void {
     const rule = this.rules.get(ruleId);
     if (!rule || rule.enabled) {
       return;
@@ -212,7 +212,7 @@ export class ProactiveTriggerEngine {
   /**
    * Disable a trigger rule and unsubscribe from EventBus.
    */
-  disable(ruleId: NexusId): void {
+  disable(ruleId: KernovaId): void {
     const rule = this.rules.get(ruleId);
     if (!rule || !rule.enabled) {
       return;
@@ -265,7 +265,7 @@ export class ProactiveTriggerEngine {
    * Subscribe a rule to the EventBus and store the subscription ID.
    */
   private subscribeRule(rule: TriggerRule): void {
-    const subId = this.eventBus.subscribe([rule.eventPattern], (event: NexusEvent) => {
+    const subId = this.eventBus.subscribe([rule.eventPattern], (event: KernovaEvent) => {
       this.handleEvent(rule.id, event);
     });
     this.subscriptionIds.set(rule.id, subId);
@@ -275,7 +275,7 @@ export class ProactiveTriggerEngine {
    * Handle an incoming event for a specific rule.
    * Flow: cooldown check → condition evaluation → fire action.
    */
-  private handleEvent(ruleId: NexusId, event: NexusEvent): void {
+  private handleEvent(ruleId: KernovaId, event: KernovaEvent): void {
     const rule = this.rules.get(ruleId);
     if (!rule || !rule.enabled) {
       return;
@@ -330,7 +330,7 @@ export class ProactiveTriggerEngine {
   /**
    * Fire the rule's action: update cooldown, call execute callback, emit events.
    */
-  private fireAction(rule: TriggerRule, event: NexusEvent): void {
+  private fireAction(rule: TriggerRule, event: KernovaEvent): void {
     // Update cooldown timestamp
     const firedAt = Date.now();
     this.lastFiredTimestamps.set(rule.id, firedAt);

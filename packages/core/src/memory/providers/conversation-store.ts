@@ -182,7 +182,6 @@ export class PostgresConversationStore implements ConversationStore {
         [threadId, role, content.slice(0, 60)]
       );
 
-      console.log(`[ConversationStore] ✓ Message saved: ${role} in thread ${threadId} (${content.slice(0, 40)}...)`);
       return this.rowToMessage(rows[0]);
     } catch (err: any) {
       console.error(`[ConversationStore] ✗ addMessage failed:`, err.message);

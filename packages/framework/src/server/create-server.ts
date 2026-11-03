@@ -9,7 +9,7 @@
 
 import { createServer as createHttpServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { KernovaKernel } from '@kernova/core';
+import { KernovaKernel, RateLimiter, setLongInterval, type LongTimer } from '@kernova/core';
 import { loadConfig } from './load-config.js';
 import { discoverAgents } from './discover-agents.js';
 import { discoverTools } from './discover-tools.js';
@@ -19,8 +19,27 @@ import { ConnectionPool, RecallCache, EmbeddingCache, createSSEStream } from './
 import { parseInstructions, selectInstructions } from './dynamic-instructions.js';
 import { createWebSocketServer } from './websocket.js';
 import { cronMatches, getNextCronTime } from './cron.js';
+import { discoverMiddleware, type DiscoveredMiddleware } from './middleware-pipeline.js';
+import { MCPManager } from '../mcp/mcp-manager.js';
+import {
+  AgentBudgets,
+  AgentRunError,
+  BudgetExceededError,
+  MiddlewareRejection,
+  connectMcpServers,
+  createConfiguredProviders,
+  loadAgentSkills,
+  mcpToolPrefix,
+  middlewareFor,
+  providerId,
+  requestMetadata,
+  resolveAgentModel,
+  runWithMiddleware,
+} from './agent-runtime.js';
 import type { KernovaFrameworkConfig } from '../types/config.js';
 import type { AgentDefinition as FrameworkAgentDef } from '../types/agent.js';
+import type { MiddlewareContext } from '../types/middleware.js';
+import type { TokenUsage } from '@kernova/types';
 import type { DiscoveredAgent } from './discover-agents.js';
 import type { DiscoveredTool } from './discover-tools.js';
 import type { DiscoveredMemory } from './discover-memory.js';
@@ -80,15 +99,20 @@ export async function createServer(options: ServerOptions = {}) {
     environment: process.env.NODE_ENV === 'production' ? 'production' : 'development',
     debug: process.env.NODE_ENV !== 'production',
     dataDir: `${projectRoot}/kernova-data`,
+    // Local servers and models with a custom baseUrl/apiKeyEnv; others are detected from env vars
+    providers: createConfiguredProviders(config),
     models: config.model ? {
       default: {
-        provider: config.model.provider,
+        provider: providerId(config.model.provider),
         model: config.model.model,
       },
-      ...(config.models ? Object.fromEntries(
-        Object.entries(config.models).map(([key, val]) => [key, { provider: val.provider, model: val.model }])
-      ) : {}),
     } : undefined,
+    builtInTools: config.builtInTools,
+    toolPolicy: config.toolPolicy,
+    // An extra model call grades each answer; off unless enabled here or on an agent
+    reflection: config.reflection,
+    // The framework keeps its own conversation history (conversationStore) and puts it in the prompt
+    threadHistory: false,
   });
 
   await kernel.start();
@@ -193,9 +217,58 @@ export async function createServer(options: ServerOptions = {}) {
   // Register discovered agents with the kernel
   const agentRouteMap = new Map<string, string>(); // route → definitionId
 
+  // Skills and MCP servers: a skill adds instructions, knowledge, tools, and MCP requirements to its agent
+  const mcpManager = new MCPManager();
+  await mcpManager.discoverFromDirectory(projectRoot);
+  await mcpManager.discoverFromConfig(projectRoot);
+  const mcpServers = new Set<string>();
+
+  for (const agent of agents) {
+    const def = agent.definition;
+    const agentMcp = [...(def.mcp ?? [])];
+    let extraTools: string[] = [];
+
+    if (def.skills?.length) {
+      const skills = await loadAgentSkills(def.skills, projectRoot);
+      for (const tool of skills.tools) {
+        await kernel.plugins.register({
+          id: `skill_${tool.id}`,
+          name: tool.id,
+          version: '1.0.0',
+          type: 'tool',
+          tools: [{
+            id: tool.id,
+            name: tool.id,
+            description: tool.description,
+            parameters: tool.parameters,
+            execute: (params: Record<string, unknown>) => tool.execute(params, {
+              env: process.env as Record<string, string | undefined>,
+              log: (msg: string) => console.log(`  [tool:${tool.id}] ${msg}`),
+            }),
+          }],
+        }).catch(() => { /* already registered by another agent using the same skill */ });
+      }
+      extraTools = skills.tools.map(t => t.id);
+      agentMcp.push(...skills.mcpServers);
+      agent.definition = {
+        ...def,
+        instructions: `${def.instructions ?? ''}${skills.instructions}`,
+      };
+    }
+
+    // An agent that uses MCP servers gets their tools ("<server>_<tool>")
+    agentMcp.forEach(name => mcpServers.add(name));
+    const tools = [...(def.tools ?? []), ...extraTools, ...agentMcp.map(mcpToolPrefix)];
+    if (tools.length > 0) agent.definition = { ...agent.definition, tools: [...new Set(tools)] };
+  }
+
+  // Start MCP servers in the background; their tools become available once connected
+  if (mcpServers.size > 0) void connectMcpServers(kernel, mcpManager, [...mcpServers]);
+
   for (const agent of agents) {
     const definitionId = `agent_${agent.route.replace(/\//g, '_')}`;
     const def = agent.definition;
+    const agentModel = resolveAgentModel(config, def.model);
 
     // Convert framework AgentDefinition → core AgentDefinition
     const coreDefinition = {
@@ -205,7 +278,7 @@ export async function createServer(options: ServerOptions = {}) {
       owner: 'system',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      metadata: {},
+      metadata: def.reflection ? { reflection: def.reflection } : {},
       name: def.name,
       description: def.description || `Agent: ${def.name}`,
       capabilities: (def.capabilities || []).map((cap: string) => ({
@@ -215,11 +288,10 @@ export async function createServer(options: ServerOptions = {}) {
         confidence: 0.8,
       })),
       tools: (def.tools || []).map((t: string) => ({ id: t, name: t, required: false })),
-      models: [{
-        id: def.model || config.model?.model || 'gpt-4o',
-        provider: config.model?.provider || 'openai',
-        purpose: 'primary' as const,
-      }],
+      // The agent's own model (named in config.models, or a model ID); otherwise the project default
+      models: agentModel
+        ? [{ provider: agentModel.provider ?? '', model: agentModel.model, purpose: 'reasoning' as const }]
+        : [],
       instructions: def.instructions,
       memoryConfig: {
         layers: {
@@ -231,8 +303,11 @@ export async function createServer(options: ServerOptions = {}) {
       permissions: [],
       concurrency: 5,
       config: {
-        maxTokens: def.maxTokens || 4096,
-        temperature: def.temperature || 0.7,
+        ...(def.maxTokens !== undefined && { maxTokens: def.maxTokens }),
+        ...(def.temperature !== undefined && { temperature: def.temperature }),
+        ...(def.reasoning && { reasoning: def.reasoning }),
+        ...(def.responseFormat && { responseFormat: def.responseFormat }),
+        ...(def.promptCache !== undefined && { promptCache: def.promptCache }),
       },
     };
 
@@ -321,6 +396,18 @@ export async function createServer(options: ServerOptions = {}) {
     }
   }
 
+  // config.plugins: npm packages whose default export is a Kernova plugin (tools, middleware hooks).
+  // Agents call a plugin's tools by listing them in `tools`.
+  for (const name of config.plugins ?? []) {
+    try {
+      const mod = await import(name);
+      await kernel.plugins.register(mod.default ?? mod);
+      console.log(`  ✓ Plugin: ${name}`);
+    } catch (err) {
+      console.warn(`  ⚠ Plugin "${name}" failed to load: ${(err as Error).message}`);
+    }
+  }
+
   // Discover teams
   const { discoverTeams: discoverTeamsFromDir } = await import('./discover-teams.js') as any;
   let discoveredTeams: any[] = [];
@@ -349,73 +436,44 @@ export async function createServer(options: ServerOptions = {}) {
 
   // ─── Core Feature Initialization ──────────────────────────────────────────
 
-  // Model Fallback — auto-switch providers when primary fails
-  let modelFallback: any = null;
-  if (config.models && Object.keys(config.models).length > 1) {
-    try {
-      const { ModelFallbackManager } = await import('@kernova/core') as any;
-      if (ModelFallbackManager) {
-        modelFallback = new ModelFallbackManager({
-          providers: Object.entries(config.models).map(([key, val]: [string, any]) => ({
-            id: key,
-            provider: val.provider,
-            model: val.model,
-            priority: key === 'default' ? 1 : 2,
-          })),
-          maxRetries: 2,
-          retryDelayMs: 1000,
-        });
-        console.log(`  ✓ Model fallback: ${Object.keys(config.models).length} providers configured`);
-      }
-    } catch {}
-  }
-
-  // Rate Limiter — enforce request limits per agent/user
-  let rateLimiter: any = null;
+  // Rate limit per caller (user ID, or client IP for anonymous requests): gateway.rateLimit
+  let rateLimiter: RateLimiter | null = null;
   if (config.gateway?.rateLimit) {
-    try {
-      const { RateLimiter } = await import('@kernova/core') as any;
-      if (RateLimiter) {
-        const { requests, window } = config.gateway.rateLimit;
-        const windowMs = window.endsWith('m') ? parseInt(window) * 60000
-          : window.endsWith('h') ? parseInt(window) * 3600000
-          : parseInt(window) * 1000;
-        rateLimiter = new RateLimiter({
-          rules: [{ id: 'global', maxRequests: requests, windowMs }],
-        });
-        console.log(`  ✓ Rate limiter: ${requests} requests per ${window}`);
-      }
-    } catch {}
+    const { requests, window } = config.gateway.rateLimit;
+    rateLimiter = new RateLimiter(kernel.events, {
+      defaultMaxRequests: requests,
+      defaultWindowMs: parseWindow(window),
+    });
+    console.log(`  ✓ Rate limiter: ${requests} requests per ${window}`);
   }
 
-  // Budget Manager — track token usage and enforce limits
-  let budgetManager: any = null;
-  try {
-    const { BudgetManager } = await import('@kernova/core') as any;
-    if (BudgetManager) {
-      budgetManager = new BudgetManager({
-        defaultBudget: {
-          maxTokensPerDay: config.gateway?.rateLimit?.requests ? config.gateway.rateLimit.requests * 4000 : 1000000,
-          maxCostPerDay: 10.0, // $10/day default
-          warningThreshold: 0.8,
-        },
-      });
-      console.log(`  ✓ Budget manager: tracking token usage`);
-    }
-  } catch {}
+  // middleware/ files run around agent requests (all agents, or the ones an agent lists)
+  const allMiddleware = await discoverMiddleware(projectRoot);
+  if (allMiddleware.length > 0) {
+    console.log(`  ✓ Middleware: ${allMiddleware.map(m => m.name).join(', ')}`);
+  }
 
-  // Trajectory Recorder — logs agent actions for auditability
-  let trajectoryRecorder: any = null;
-  try {
-    const { TrajectoryRecorder } = await import('@kernova/core') as any;
-    if (TrajectoryRecorder) {
-      trajectoryRecorder = new TrajectoryRecorder({
-        maxEntries: 1000,
-        persist: false, // We'll handle persistence via the activity API
-      });
-      console.log(`  ✓ Trajectory recorder: logging agent actions`);
-    }
-  } catch {}
+  // Per-agent budgets (defineAgent({ budget })), keyed by agent route
+  // Monthly usage is saved in kernova-data, so limits hold across restarts
+  const agentBudgets = new AgentBudgets(
+    new Map(agents.filter(a => a.definition.budget).map(a => [a.route, a.definition.budget!])),
+    `${projectRoot}/kernova-data/agent-budgets.json`,
+  );
+
+  // Agent-level schedules and triggers run like the ones in triggers/
+  for (const agent of agents) {
+    const { schedule, triggers } = agent.definition;
+    const schedules = typeof schedule === 'string'
+      ? [{ cron: schedule, goal: `Run your scheduled task: ${agent.definition.description || agent.definition.name}` }]
+      : schedule ?? [];
+    schedules.forEach((s, i) => discoveredTriggers.push({
+      name: `${agent.route}:schedule:${i + 1}`, event: `cron:${s.cron}`, agent: agent.route, goal: s.goal,
+    }));
+    (triggers ?? []).forEach((t, i) => discoveredTriggers.push({
+      name: `${agent.route}:trigger:${i + 1}`, event: t.event, agent: agent.route, goal: t.goal,
+      priority: t.priority, cooldown: t.cooldown,
+    }));
+  }
 
   console.log(`\n  🧠 Kernova Framework Server`);
   console.log(`  ├─ Agents:  ${agents.length} discovered`);
@@ -454,12 +512,12 @@ export async function createServer(options: ServerOptions = {}) {
   }
 
   // Start autonomous scheduler for triggers
-  if (discoveredTriggers.length > 0) {
-    startTriggerScheduler(discoveredTriggers, kernel, agentRouteMap);
-  }
+  const stopTriggers = discoveredTriggers.length > 0
+    ? startTriggerScheduler(discoveredTriggers, kernel, agentRouteMap, agentBudgets)
+    : () => {};
 
   // Build route table
-  const routes: RouteHandler[] = buildRoutes(kernel, agents, tools, memories, config, agentRouteMap, apiKey, projectRoot, memoryProvider, conversationStore, memoryEngine, recallCache, generateEmbeddingCached, modelFallback, rateLimiter, budgetManager, trajectoryRecorder);
+  const routes: RouteHandler[] = buildRoutes(kernel, agents, tools, memories, config, agentRouteMap, apiKey, projectRoot, memoryProvider, conversationStore, memoryEngine, recallCache, generateEmbeddingCached, rateLimiter, allMiddleware, agentBudgets);
 
   // Create HTTP server
   const server = createHttpServer(async (req, res) => {
@@ -553,20 +611,39 @@ export async function createServer(options: ServerOptions = {}) {
           if (!defaultAgent) return 'No agents configured.';
 
           const defId = agentRouteMap.get(defaultAgent.route)!;
-          const result = await kernel.submit({
-            goal: message,
-            intentType: 'action',
-            priority: 'medium',
-            owner: clientId,
-            metadata: {
-              threadId,
-              agentRoute: defaultAgent.route,
-              targetAgent: defId,
-              source: 'websocket',
-            },
-          });
+          const ctx: MiddlewareContext = {
+            agentName: defaultAgent.route,
+            input: message,
+            threadId,
+            metadata: { source: 'websocket', clientId },
+          };
 
-          return String(result.result?.summary || result.result?.data || '');
+          try {
+            const { usage } = await kernel.models.measureUsage(() =>
+              runWithMiddleware(middlewareFor(defaultAgent.definition, allMiddleware), ctx, async (input) => {
+                agentBudgets.begin(defaultAgent.route);
+                const result = await kernel.submit({
+                  goal: input,
+                  intentType: 'action',
+                  priority: 'medium',
+                  owner: clientId,
+                  metadata: {
+                    threadId,
+                    agentRoute: defaultAgent.route,
+                    targetAgent: defId,
+                    source: 'websocket',
+                  },
+                });
+                return String(result.result?.summary || result.result?.data || '');
+              }),
+            );
+            agentBudgets.record(defaultAgent.route, usage);
+            return ctx.response?.content ?? '';
+          } catch (err) {
+            const cause = err instanceof AgentRunError ? err.cause : err;
+            if (cause instanceof BudgetExceededError || cause instanceof MiddlewareRejection) return `Error: ${cause.message}`;
+            throw cause;
+          }
         },
         onConnect: (clientId) => {
           console.log(`  [ws] Client connected: ${clientId}`);
@@ -578,17 +655,28 @@ export async function createServer(options: ServerOptions = {}) {
     );
   }
 
+  /** Stop accepting requests and release everything: triggers, connections, stores, and the kernel */
+  let closing: Promise<void> | undefined;
+  const close = () => closing ??= (async () => {
+    stopTriggers();
+    agentBudgets.flush();
+    if (wsServer) wsServer.close();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    await ConnectionPool.closeAll();
+    await conversationStore?.close?.();
+    await kernel.stop();
+  })();
+
   // Register graceful shutdown
   const shutdown = async () => {
     console.log('\n  ⏹ Shutting down...');
-    if (wsServer) wsServer.close();
-    await ConnectionPool.closeAll();
-    server.close();
+    await close();
+    process.exit(0);
   };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
 
-  return { server, kernel, config, agents, tools, memories, teams: discoveredTeams };
+  return { server, kernel, config, agents, tools, memories, teams: discoveredTeams, close };
 }
 
 // ─── Route Builder ───────────────────────────────────────────────────────────
@@ -607,12 +695,59 @@ function buildRoutes(
   memoryEngine: any,
   recallCache: RecallCache,
   generateEmbeddingCached: (text: string) => Promise<number[] | null>,
-  modelFallback: any,
-  rateLimiter: any,
-  budgetManager: any,
-  trajectoryRecorder: any,
+  rateLimiter: RateLimiter | null,
+  allMiddleware: DiscoveredMiddleware[],
+  agentBudgets: AgentBudgets,
 ): RouteHandler[] {
   const routes: RouteHandler[] = [];
+  const agentMiddleware = new Map(agents.map(a => [a.route, middlewareFor(a.definition, allMiddleware)]));
+
+  const reject = (res: ServerResponse, status: number, error: string) => {
+    if (res.headersSent) console.error(`  [request] ${error}`);
+    else sendJson(res, status, { error });
+  };
+
+  /**
+   * Run an agent request: rate limit per caller, then the agent's middleware, then (once
+   * before-middleware has let it through) the agent's budget and the agent itself.
+   * Answers rejections itself and returns null; otherwise the tokens the request used. Agent errors are rethrown.
+   */
+  async function handleAgentRequest(
+    req: IncomingMessage,
+    res: ServerResponse,
+    route: string,
+    ctx: MiddlewareContext,
+    run: (input: string) => Promise<string>,
+  ): Promise<TokenUsage | null> {
+    if (rateLimiter && !rateLimiter.consume('identity', ctx.user?.id || req.socket.remoteAddress || 'anonymous')) {
+      reject(res, 429, 'Rate limit exceeded. Try again shortly.');
+      return null;
+    }
+    try {
+      const { usage } = await kernel.models.measureUsage(() =>
+        runWithMiddleware(agentMiddleware.get(route) ?? [], ctx, (input) => {
+          agentBudgets.begin(route);
+          return run(input);
+        }),
+      );
+      agentBudgets.record(route, usage);
+      return usage;
+    } catch (err) {
+      const cause = err instanceof AgentRunError ? err.cause : err;
+      if (cause instanceof BudgetExceededError) {
+        if (cause.retryAfterMs !== undefined && !res.headersSent) {
+          res.setHeader('Retry-After', String(Math.ceil(cause.retryAfterMs / 1000)));
+        }
+        reject(res, 429, cause.message);
+        return null;
+      }
+      if (cause instanceof MiddlewareRejection) {
+        reject(res, cause.status, cause.message);
+        return null;
+      }
+      throw cause;
+    }
+  }
 
   // Health check (no auth required)
   routes.push({
@@ -638,6 +773,17 @@ function buildRoutes(
     const routePattern = new RegExp(`^\\/agents\\/${escapeRegex(agent.route)}$`);
     const streamPattern = new RegExp(`^\\/agents\\/${escapeRegex(agent.route)}\\/stream$`);
     const definitionId = agentRouteMap.get(agent.route)!;
+    const agentModel = resolveAgentModel(config, agent.definition.model);
+    // Streaming calls the model directly, with the same settings the kernel uses for this agent
+    const streamModel = {
+      model: agentModel?.model ?? '',
+      ...(agentModel?.provider && { provider: agentModel.provider }),
+      ...(agent.definition.temperature !== undefined && { temperature: agent.definition.temperature }),
+      ...(agent.definition.maxTokens !== undefined && { maxTokens: agent.definition.maxTokens }),
+      ...(agent.definition.reasoning && { reasoning: agent.definition.reasoning }),
+      ...(agent.definition.responseFormat && { responseFormat: agent.definition.responseFormat }),
+      ...(agent.definition.promptCache && { cache: true }),
+    };
 
     // POST /agents/:name — synchronous request through KernovaKernel
     routes.push({
@@ -645,28 +791,30 @@ function buildRoutes(
       pattern: routePattern,
       handler: async (req, res) => {
         const body = await parseBody(req);
-        const { input, threadId, context, user } = body as {
+        const { input: requestInput, threadId, context, user } = body as {
           input?: string;
           threadId?: string;
           context?: Record<string, unknown>;
           user?: { id: string };
         };
 
-        if (!input) {
+        if (!requestInput) {
           sendJson(res, 400, { error: 'Missing "input" in request body' });
           return;
         }
 
-        // Rate limit check
-        if (rateLimiter) {
-          const allowed = rateLimiter.check('global', user?.id || 'anonymous');
-          if (!allowed) {
-            sendJson(res, 429, { error: 'Rate limit exceeded. Try again shortly.' });
-            return;
-          }
-        }
-
         const resolvedThreadId = threadId || `thread_${Date.now()}`;
+        const mwCtx: MiddlewareContext = {
+          agentName: agent.route,
+          input: requestInput,
+          threadId: resolvedThreadId,
+          user,
+          metadata: requestMetadata(req.headers, req.socket.remoteAddress, context),
+        };
+        let reply: Record<string, unknown> = {};
+
+        // Middleware may rewrite ctx.input before the agent runs
+        const handled = await handleAgentRequest(req, res, agent.route, mwCtx, async (input) => {
 
         // ─── MEMORY RECALL (vector search for scale, fallback to all for small stores) ───
         let memoryContext = '';
@@ -865,47 +1013,23 @@ function buildRoutes(
         console.log(`  [conversation] Saving assistant response to thread: ${resolvedThreadId}`);
         await conversationStore.addMessage(resolvedThreadId, 'assistant', String(responseContent));
 
-        // Track token usage
-        if (budgetManager && result.result?.durationMs) {
-          try {
-            budgetManager.recordUsage({
-              identity: user?.id || 'system',
-              tokens: Math.ceil((input.length + (String(responseContent).length || 0)) / 4), // Rough estimate
-              cost: 0, // Actual cost tracking requires model pricing
-              model: agent.definition.model || config.model?.model || 'gpt-4o',
-              timestamp: new Date().toISOString(),
-            });
-          } catch {}
-        }
-
-        // Record trajectory
-        if (trajectoryRecorder) {
-          try {
-            trajectoryRecorder.record({
-              intentId: result.id,
-              agent: agent.route,
-              goal: input,
-              response: String(responseContent).slice(0, 200),
-              toolsCalled: result.result?.evidence?.reasoning || '',
-              durationMs: result.result?.durationMs || 0,
-              success: true,
-              timestamp: new Date().toISOString(),
-            });
-          } catch {}
-        }
-
-        sendJson(res, 200, {
-          content: responseContent,
+        reply = {
           threadId: resolvedThreadId,
           agent: agent.route,
           intentId: result.id,
           status: result.intentStatus,
           metadata: {
-            model: agent.definition.model || config.model?.model,
+            model: agentModel?.model || config.model?.model,
             durationMs: result.result?.durationMs,
             confidence: result.result?.evidence?.confidence,
           },
+        };
+        return String(responseContent);
         });
+        if (!handled) return;
+
+        // After-middleware may have rewritten ctx.response
+        sendJson(res, 200, { content: mwCtx.response?.content ?? '', ...reply });
       },
     });
 
@@ -915,27 +1039,29 @@ function buildRoutes(
       pattern: streamPattern,
       handler: async (req, res) => {
         const body = await parseBody(req);
-        const { input, threadId, user } = body as {
+        const { input: requestInput, threadId, context, user } = body as {
           input?: string;
           threadId?: string;
+          context?: Record<string, unknown>;
           user?: { id: string };
         };
 
-        if (!input) {
+        if (!requestInput) {
           sendJson(res, 400, { error: 'Missing "input" in request body' });
           return;
         }
 
-        // Rate limit check
-        if (rateLimiter) {
-          const allowed = rateLimiter.check('global', user?.id || 'anonymous');
-          if (!allowed) {
-            sendJson(res, 429, { error: 'Rate limit exceeded. Try again shortly.' });
-            return;
-          }
-        }
-
         const resolvedThreadId = threadId || `thread_${Date.now()}`;
+        const mwCtx: MiddlewareContext = {
+          agentName: agent.route,
+          input: requestInput,
+          threadId: resolvedThreadId,
+          user,
+          metadata: requestMetadata(req.headers, req.socket.remoteAddress, context),
+        };
+
+        // Tokens are already sent when after-middleware runs, so ctx.response is read-only here
+        await handleAgentRequest(req, res, agent.route, mwCtx, async (input) => {
 
         // ─── MEMORY RECALL (same as sync endpoint) ───
         let memoryContext = '';
@@ -1076,7 +1202,7 @@ function buildRoutes(
           // Try streaming completion
           const firstResponse = await modelRouter.complete({
             messages,
-            model: '',
+            ...streamModel,
             tools: toolSpecs,
           });
 
@@ -1109,7 +1235,7 @@ function buildRoutes(
             // Re-do the call with streaming enabled
             for await (const chunk of modelRouter.stream({
               messages,
-              model: '',
+              ...streamModel,
             })) {
               if (chunk.content) {
                 fullContent += chunk.content;
@@ -1162,39 +1288,96 @@ function buildRoutes(
             }
           }
 
-          // Track token usage
-          if (budgetManager && fullContent) {
-            try {
-              budgetManager.recordUsage({
-                identity: user?.id || 'system',
-                tokens: Math.ceil((input.length + fullContent.length) / 4),
-                cost: 0,
-                model: agent.definition.model || config.model?.model || 'gpt-4o',
-                timestamp: new Date().toISOString(),
-              });
-            } catch {}
-          }
-
-          // Record trajectory
-          if (trajectoryRecorder) {
-            try {
-              trajectoryRecorder.record({
-                intentId: `stream_${Date.now()}`,
-                agent: agent.route,
-                goal: input,
-                response: fullContent.slice(0, 200),
-                toolsCalled: '',
-                durationMs: 0,
-                success: true,
-                timestamp: new Date().toISOString(),
-              });
-            } catch {}
-          }
         } catch (err) {
           stream.write(JSON.stringify({ error: (err as Error).message }));
         } finally {
           stream.end();
         }
+        return fullContent;
+        });
+      },
+    });
+  }
+
+  // ─── OpenAI-compatible endpoint (gateway.openaiCompat) ───────────────────
+  // `model` picks the agent by route (default: the first agent). Earlier messages become
+  // the conversation history; system messages are passed along as caller instructions.
+
+  if (config.gateway?.openaiCompat) {
+    const text = (content: unknown): string => typeof content === 'string'
+      ? content
+      : Array.isArray(content) ? content.map((part: { text?: string }) => part?.text ?? '').join('') : '';
+
+    routes.push({
+      method: 'POST',
+      pattern: /^\/v1\/chat\/completions$/,
+      handler: async (req, res) => {
+        const body = await parseBody(req) as {
+          model?: string;
+          messages?: Array<{ role: string; content: unknown }>;
+          stream?: boolean;
+          user?: string;
+        };
+        const messages = Array.isArray(body.messages) ? body.messages : [];
+        const last = messages.map(m => m.role).lastIndexOf('user');
+        if (last === -1) {
+          sendJson(res, 400, { error: { message: '"messages" must include a user message', type: 'invalid_request_error' } });
+          return;
+        }
+        const agent = agents.find(a => a.route === body.model) ?? agents[0];
+        if (!agent) {
+          sendJson(res, 404, { error: { message: 'No agents configured', type: 'invalid_request_error' } });
+          return;
+        }
+
+        const system = messages.filter(m => m.role === 'system').map(m => text(m.content)).join('\n');
+        const history = messages.slice(0, last).filter(m => m.role === 'user' || m.role === 'assistant')
+          .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${text(m.content)}`).join('\n');
+        const ctx: MiddlewareContext = {
+          agentName: agent.route,
+          input: text(messages[last].content),
+          threadId: `openai_${Date.now()}`,
+          ...(body.user && { user: { id: body.user } }),
+          metadata: requestMetadata(req.headers, req.socket.remoteAddress, undefined),
+        };
+
+        const usage = await handleAgentRequest(req, res, agent.route, ctx, async (input) => {
+          const goal = input
+            + (system ? `\n\nINSTRUCTIONS FROM THE CALLER:\n${system}` : '')
+            + (history ? `\n\nCONVERSATION HISTORY (use this for context):\n${history}` : '');
+          const result = await kernel.submit({
+            goal,
+            intentType: 'action',
+            priority: 'medium',
+            owner: body.user || 'system',
+            metadata: { agentRoute: agent.route, targetAgent: agentRouteMap.get(agent.route), source: 'openai-compat' },
+          });
+          return String(result.result?.summary || result.result?.data || '');
+        });
+        if (!usage) return;
+
+        const content = ctx.response?.content ?? '';
+        const id = `chatcmpl-${Date.now()}`;
+        const created = Math.floor(Date.now() / 1000);
+        const model = body.model || agent.route;
+        if (body.stream) {
+          // The answer comes back in one chunk (the agent runs to completion first)
+          const chunk = (delta: Record<string, unknown>, finish: string | null) =>
+            `data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created, model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
+          res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
+          res.write(chunk({ role: 'assistant', content }, null));
+          res.write(chunk({}, 'stop'));
+          res.end('data: [DONE]\n\n');
+          return;
+        }
+        sendJson(res, 200, {
+          id,
+          object: 'chat.completion',
+          created,
+          model,
+          choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: usage.promptTokens, completion_tokens: usage.completionTokens, total_tokens: usage.totalTokens },
+        });
       },
     });
   }
@@ -1840,66 +2023,6 @@ User: ${userMessage}`;
     }
     } // end if (!response) — single-pass mode
 
-    // ─── SELF-REFLECTION: Evaluate and improve response quality ──────
-    // Only reflects on non-trivial responses (skip errors, short answers, greetings)
-    const shouldReflect = response.length > 100 &&
-      !response.startsWith("I'm having trouble") &&
-      userMessage.length > 20;
-
-    if (shouldReflect) {
-      try {
-        const { SelfReflection } = await import('@kernova/core') as any;
-        if (SelfReflection) {
-          // Use a simple completion wrapper that works with ANY provider
-          // by calling agentTools.complete (which routes through the kernel's model router)
-          // without attaching tools
-          const reflectionRouter = {
-            complete: async (options: any) => {
-              // Extract the prompt from the messages array
-              const messages = options.messages || [];
-              const prompt = messages.map((m: any) => m.content).join('\n\n');
-
-              // Use the agent's simple complete (no tools attached)
-              const content = await agentTools.complete(prompt);
-              return {
-                content,
-                usage: { totalTokens: Math.ceil(content.length / 4) },
-              };
-            },
-          };
-
-          const reflection = new SelfReflection(
-            { publish: () => {} },
-            reflectionRouter,
-            {
-              enabled: true,
-              threshold: 0.7,
-              maxAttempts: 1, // Only 1 revision attempt (keeps it fast)
-              criteria: ['relevance', 'helpfulness', 'accuracy', 'completeness'],
-            }
-          );
-
-          const reflectionResult = await reflection.reflect(
-            response,
-            userMessage,
-            undefined,
-            agentDef.name,
-          );
-
-          // Use revised output if reflection improved it
-          if (reflectionResult.revisedOutput && reflectionResult.evaluation?.score > 0.7) {
-            console.log(`  [reflection:${agentDef.name}] Revised response (${reflectionResult.evaluation.score.toFixed(2)} → improved)`);
-            response = reflectionResult.revisedOutput;
-          } else if (reflectionResult.evaluation) {
-            console.log(`  [reflection:${agentDef.name}] Score: ${reflectionResult.evaluation.score.toFixed(2)} (passed: ${reflectionResult.evaluation.passed})`);
-          }
-        }
-      } catch (reflErr: any) {
-        // Reflection is non-critical — if it fails, use original response
-        console.log(`  [reflection] Skipped: ${reflErr.message?.slice(0, 60)}`);
-      }
-    }
-
     return {
       success: true,
       summary: response,
@@ -1917,114 +2040,93 @@ User: ${userMessage}`;
 // ─── Trigger Scheduler (Autonomous Background Tasks) ─────────────────────────
 
 /**
- * Starts background timers that fire triggers at their configured intervals.
- * Each trigger submits a goal to the specified agent when it fires.
+ * Starts the triggers from triggers/ and from agents' `schedule` and `triggers` fields.
+ * An event can be a cron expression ("0 9 * * *" or "cron:..."), an interval
+ * ("schedule.5m"), or an event pattern ("deploy.failed", "webhook.alert.*") matched
+ * against the kernel's event bus. Each firing submits the goal to the trigger's agent.
  */
 function startTriggerScheduler(
   triggers: Array<{ name: string; event: string; agent: string; goal: string; priority?: string; cooldown?: number }>,
-  kernel: any,
+  kernel: KernovaKernel,
   agentRouteMap: Map<string, string>,
-): void {
+  agentBudgets: AgentBudgets,
+): () => void {
   const lastFired = new Map<string, number>();
+  // A trigger doesn't fire again while its previous run is going (so it can't react to its own events)
+  const running = new Set<string>();
+  const timers: LongTimer[] = [];
+  const subscriptions: string[] = [];
 
-  for (const trigger of triggers) {
-    // Check if event is a cron expression (contains spaces = 5 fields, or starts with @ or cron:)
-    if (trigger.event.includes(' ') || trigger.event.startsWith('@') || trigger.event.startsWith('cron:')) {
-      const cronExpr = trigger.event.startsWith('cron:') ? trigger.event.slice(5).trim() : trigger.event;
+  const fire = async (trigger: (typeof triggers)[number], defaultCooldown: number, label: string) => {
+    if (running.has(trigger.name)) return;
+    const last = lastFired.get(trigger.name) || 0;
+    if (Date.now() - last < (trigger.cooldown || defaultCooldown)) return;
+    lastFired.set(trigger.name, Date.now());
 
-      // Use cron-based scheduling
-      console.log(`  ⏰ Trigger: "${trigger.name}" → cron: ${cronExpr}`);
-
-      // Check every minute if the cron expression matches
-      setInterval(async () => {
-        if (!cronMatches(cronExpr)) return;
-
-        // Check cooldown
-        const last = lastFired.get(trigger.name) || 0;
-        const cooldown = trigger.cooldown || 60000;
-        if (Date.now() - last < cooldown) return;
-
-        lastFired.set(trigger.name, Date.now());
-        console.log(`  [trigger:cron] Firing: ${trigger.name}`);
-
-        try {
-          const defId = agentRouteMap.get(trigger.agent);
-          if (!defId) {
-            console.warn(`  [trigger] Agent "${trigger.agent}" not found for trigger "${trigger.name}"`);
-            return;
-          }
-
-          await kernel.submit({
-            goal: trigger.goal,
-            intentType: 'action',
-            priority: trigger.priority || 'medium',
-            owner: 'system',
-            metadata: {
-              triggerName: trigger.name,
-              triggerEvent: trigger.event,
-              autonomous: true,
-              threadId: `trigger_${trigger.name}`,
-              targetAgent: defId,
-              agentRoute: trigger.agent,
-            },
-          });
-
-          console.log(`  [trigger:cron] ✓ ${trigger.name} completed`);
-        } catch (err) {
-          console.error(`  [trigger:cron] ✗ ${trigger.name} failed:`, (err as Error).message);
-        }
-      }, 60000); // Check every minute
-
-      continue; // Skip the interval-based logic below
+    const defId = agentRouteMap.get(trigger.agent);
+    if (!defId) {
+      console.warn(`  [trigger] Agent "${trigger.agent}" not found for trigger "${trigger.name}"`);
+      return;
     }
 
-    // Parse interval from event pattern
+    console.log(`  [${label}] Firing: ${trigger.name}`);
+    running.add(trigger.name);
+    try {
+      agentBudgets.begin(trigger.agent);
+      const { usage } = await kernel.models.measureUsage(() => kernel.submit({
+        goal: trigger.goal,
+        intentType: 'action',
+        priority: (trigger.priority as 'critical' | 'high' | 'medium' | 'low') || 'medium',
+        owner: 'system',
+        metadata: {
+          triggerName: trigger.name,
+          triggerEvent: trigger.event,
+          autonomous: true,
+          threadId: `trigger_${trigger.name}`,
+          targetAgent: defId,
+          agentRoute: trigger.agent,
+        },
+      }));
+      agentBudgets.record(trigger.agent, usage);
+      console.log(`  [${label}] ✓ ${trigger.name} completed`);
+    } catch (err) {
+      console.error(`  [${label}] ✗ ${trigger.name} failed:`, (err as Error).message);
+    } finally {
+      // Events the run caused may still be in flight; ignore them too
+      setTimeout(() => running.delete(trigger.name), 0);
+    }
+  };
+
+  for (const trigger of triggers) {
+    // Cron expression (contains spaces = 5 fields, or starts with @ or cron:)
+    if (trigger.event.includes(' ') || trigger.event.startsWith('@') || trigger.event.startsWith('cron:')) {
+      const cronExpr = trigger.event.startsWith('cron:') ? trigger.event.slice(5).trim() : trigger.event;
+      console.log(`  ⏰ Trigger: "${trigger.name}" → cron: ${cronExpr}`);
+      // Check every minute if the cron expression matches
+      timers.push(setLongInterval(() => {
+        if (cronMatches(cronExpr)) void fire(trigger, 60_000, 'trigger:cron');
+      }, 60_000));
+      continue;
+    }
+
+    // Interval ("schedule.5m")
     const intervalMs = parseEventInterval(trigger.event);
-    if (intervalMs <= 0) continue;
+    if (intervalMs > 0) {
+      console.log(`  ⏰ Trigger: "${trigger.name}" → every ${formatInterval(intervalMs)}`);
+      // setInterval fires intervals over ~24.8 days (schedule.30d) constantly; this doesn't
+      timers.push(setLongInterval(() => void fire(trigger, intervalMs, 'trigger'), intervalMs));
+      continue;
+    }
 
-    console.log(`  ⏰ Trigger: "${trigger.name}" → every ${formatInterval(intervalMs)}`);
-
-    // Set up the interval
-    setInterval(async () => {
-      // Check cooldown
-      const last = lastFired.get(trigger.name) || 0;
-      const cooldown = trigger.cooldown || intervalMs;
-      if (Date.now() - last < cooldown) return;
-
-      lastFired.set(trigger.name, Date.now());
-
-      console.log(`  [trigger] Firing: ${trigger.name}`);
-
-      try {
-        // Find the target agent
-        const defId = agentRouteMap.get(trigger.agent);
-        if (!defId) {
-          console.warn(`  [trigger] Agent "${trigger.agent}" not found for trigger "${trigger.name}"`);
-          return;
-        }
-
-        // Submit the goal to the agent
-        const result = await kernel.submit({
-          goal: trigger.goal,
-          intentType: 'action',
-          priority: trigger.priority || 'medium',
-          owner: 'system',
-          metadata: {
-            triggerName: trigger.name,
-            triggerEvent: trigger.event,
-            autonomous: true,
-            threadId: `trigger_${trigger.name}`,
-            targetAgent: defId,
-            agentRoute: trigger.agent,
-          },
-        });
-
-        console.log(`  [trigger] ✓ ${trigger.name} completed`);
-      } catch (err) {
-        console.error(`  [trigger] ✗ ${trigger.name} failed:`, (err as Error).message);
-      }
-    }, intervalMs);
+    // Event pattern on the kernel's event bus
+    console.log(`  ⚡ Trigger: "${trigger.name}" → on ${trigger.event}`);
+    subscriptions.push(kernel.events.subscribe([trigger.event], () => void fire(trigger, 1000, 'trigger:event')));
   }
+
+  return () => {
+    timers.forEach(timer => timer.cancel());
+    subscriptions.forEach(id => kernel.events.unsubscribe(id));
+  };
 }
 
 /**
@@ -2078,6 +2180,14 @@ async function generateEmbedding(text: string, kernelRef?: any): Promise<number[
  * Parse event pattern to interval in milliseconds.
  * Supports: schedule.5m, schedule.1h, schedule.12h, schedule.24h, schedule.weekly
  */
+/** gateway.rateLimit.window: "30s", "1m", "1h", or a number of seconds */
+function parseWindow(window: string): number {
+  const value = parseInt(window, 10);
+  if (window.endsWith('h')) return value * 3_600_000;
+  if (window.endsWith('m')) return value * 60_000;
+  return value * 1000;
+}
+
 function parseEventInterval(event: string): number {
   if (!event.startsWith('schedule.')) return 0;
   const value = event.replace('schedule.', '');

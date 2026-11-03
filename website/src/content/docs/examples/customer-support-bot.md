@@ -249,7 +249,7 @@ curl -X POST http://localhost:3100/messages \
 | Webhook channel adapter | [Channels & Adapters](/guides/channels) |
 | Long-term memory for customer preferences | [Context & Memory](/guides/context-memory) |
 | Conversation threads per customer | [Context & Memory](/guides/context-memory#conversation-threads) |
-| Proactive triggers for auto-escalation | [Triggers](/guides/triggers) |
-| Scheduled tasks (daily summary) | [Scheduler](/guides/scheduler) |
+| Proactive triggers for auto-escalation | [Triggers](/guides/scheduler-queue-triggers) |
+| Scheduled tasks (daily summary) | [Scheduler](/guides/scheduler-queue-triggers) |
 | Daemon mode for production | [Daemon Mode](/guides/daemon) |
-| Custom tool registration | [Tools](/guides/tools) |
+| Custom tool registration | [Tools](/concepts/tools) |

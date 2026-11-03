@@ -5,7 +5,7 @@
 
 ## Abstract
 
-Defines the event system — how state changes are recorded, streamed, and queried. Nexus is Event Native: every object has a timeline.
+Defines the event system — how state changes are recorded, streamed, and queried. Kernova is Event Native: every object has a timeline.
 
 ## Event Object
 

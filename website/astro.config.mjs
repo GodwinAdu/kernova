@@ -7,7 +7,7 @@ export default defineConfig({
       title: 'Kernova',
       description: 'The Intelligent Systems Runtime',
       social: {
-        github: 'https://github.com/nexus-runtime/nexus',
+        github: 'https://github.com/GodwinAdu/kernova',
       },
       customCss: ['./src/styles/custom.css'],
       sidebar: [

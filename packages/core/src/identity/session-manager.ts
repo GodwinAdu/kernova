@@ -6,7 +6,7 @@
  */
 
 import { randomBytes } from 'node:crypto';
-import type { NexusId } from '@kernova/types';
+import type { KernovaId } from '@kernova/types';
 import { generateId, now } from '../utils.js';
 
 export interface Session {
@@ -14,10 +14,10 @@ export interface Session {
   token: string;
 
   /** Session ID */
-  id: NexusId;
+  id: KernovaId;
 
   /** Who owns this session */
-  identityId: NexusId;
+  identityId: KernovaId;
 
   /** Permissions for this session */
   permissions: string[];
@@ -36,7 +36,7 @@ export interface Session {
 }
 
 export interface CreateSessionOptions {
-  identityId: NexusId;
+  identityId: KernovaId;
   permissions: string[];
   /** TTL in seconds (default: 24 hours) */
   ttlSeconds?: number;
@@ -104,7 +104,7 @@ export class SessionManager {
   /**
    * Invalidate all sessions for an identity
    */
-  invalidateAll(identityId: NexusId): number {
+  invalidateAll(identityId: KernovaId): number {
     let count = 0;
     for (const session of this.sessions.values()) {
       if (session.identityId === identityId && session.active) {
@@ -118,7 +118,7 @@ export class SessionManager {
   /**
    * Get active sessions for an identity
    */
-  getActiveSessions(identityId: NexusId): Session[] {
+  getActiveSessions(identityId: KernovaId): Session[] {
     return Array.from(this.sessions.values())
       .filter(s => s.identityId === identityId && s.active && new Date(s.expiresAt) > new Date());
   }

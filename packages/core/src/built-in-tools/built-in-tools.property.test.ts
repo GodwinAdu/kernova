@@ -39,7 +39,7 @@ const fileContentArb = fc.oneof(
   // Simple ASCII strings
   fc.string({ minLength: 1, maxLength: 5000 }),
   // Unicode strings (includes emojis, CJK characters, diacritics)
-  fc.unicodeString({ minLength: 1, maxLength: 2000 }),
+  fc.string({ unit: 'binary', minLength: 1, maxLength: 2000 }),
   // Multi-line content
   fc.array(fc.string({ minLength: 0, maxLength: 200 }), { minLength: 1, maxLength: 50 })
     .map((lines) => lines.join('\n')),

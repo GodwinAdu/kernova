@@ -11,8 +11,8 @@
  */
 
 import type {
-  NexusObject,
-  NexusId,
+  KernovaObject,
+  KernovaId,
   Timestamp,
 } from './base.js';
 
@@ -41,7 +41,7 @@ export type TaskStatus =
  * Workflow Definition
  * The blueprint for a workflow
  */
-export interface WorkflowDefinition extends NexusObject {
+export interface WorkflowDefinition extends KernovaObject {
   type: 'workflow_definition';
 
   /** Workflow name */
@@ -73,14 +73,14 @@ export interface WorkflowDefinition extends NexusObject {
  * Workflow Instance
  * A running instance of a workflow
  */
-export interface WorkflowInstance extends NexusObject {
+export interface WorkflowInstance extends KernovaObject {
   type: 'workflow_instance';
 
   /** Which definition this is running */
-  definitionId: NexusId;
+  definitionId: KernovaId;
 
   /** The intent that triggered this workflow */
-  intentId: NexusId;
+  intentId: KernovaId;
 
   /** Current status */
   workflowStatus: WorkflowStatus;
@@ -135,7 +135,7 @@ export interface WorkflowStep {
 
 export interface StepConfig {
   /** For agent steps: which agent */
-  agentId?: NexusId;
+  agentId?: KernovaId;
 
   /** For tool steps: which tool */
   toolId?: string;
@@ -150,7 +150,7 @@ export interface StepConfig {
   branches?: ConditionalBranch[];
 
   /** For approval steps: who approves */
-  approvers?: NexusId[];
+  approvers?: KernovaId[];
 
   /** For wait steps: what to wait for */
   waitFor?: WaitCondition;

@@ -1,4 +1,4 @@
-# Spec: Nexus Studio (Web Dashboard)
+# Spec: Kernova Studio (Web Dashboard)
 
 ## Summary
 
@@ -12,7 +12,7 @@ A web UI embedded in the dev runtime that provides visual inspection of:
 ## Architecture
 
 ```
-nexus dev
+kernova dev
    ↓
 DevServer (kernel + watcher)
    ↓
@@ -29,7 +29,7 @@ StudioServer (HTTP API + static files)
 
 ## Key Decisions
 
-1. **Embedded HTTP server** — Part of `nexus dev`, no separate process
+1. **Embedded HTTP server** — Part of `kernova dev`, no separate process
 2. **No framework** — Native Node.js `http` module (zero deps for basic API)
 3. **Server-Sent Events** — Real-time event streaming to browser
 4. **Self-contained HTML** — Single HTML file with inline JS/CSS (no build step)

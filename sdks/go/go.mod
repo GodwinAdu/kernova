@@ -1,3 +1,3 @@
-module github.com/kernova/kernova-go
+module github.com/GodwinAdu/kernova/sdks/go
 
 go 1.21

@@ -19,9 +19,9 @@ Beyond basic autonomy, Kernova provides higher-level intelligence modules that e
 Automatically decomposes complex goals into actionable steps, then executes them sequentially with adaptive replanning on failure.
 
 ```typescript
-import { NexusKernel } from '@kernova/core';
+import { KernovaKernel } from '@kernova/core';
 
-const kernel = new NexusKernel({ environment: 'development' });
+const kernel = new KernovaKernel({ environment: 'development' });
 await kernel.start();
 
 // 1. Create a plan
@@ -246,7 +246,7 @@ const rag = new RAGPipeline(eventBus, modelRouter, {
 Test your agents with mock providers and conversation simulation.
 
 ```typescript
-import { AgentTestRunner, MockModelProvider, NexusKernel, defineAgent } from '@kernova/core';
+import { AgentTestRunner, MockModelProvider, KernovaKernel, defineAgent } from '@kernova/core';
 
 // Create a kernel with mock provider
 const mock = new MockModelProvider({
@@ -257,7 +257,7 @@ const mock = new MockModelProvider({
   defaultResponse: 'I can help with that.',
 });
 
-const kernel = new NexusKernel({
+const kernel = new KernovaKernel({
   environment: 'development',
   ephemeral: true,
   providers: [mock],
@@ -342,15 +342,15 @@ const responses = await sim.chat(['Hello', 'How are you?']);
 
 ```typescript
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { NexusKernel, defineAgent, AgentTestRunner, MockModelProvider } from '@kernova/core';
+import { KernovaKernel, defineAgent, AgentTestRunner, MockModelProvider } from '@kernova/core';
 
 describe('My Agent', () => {
-  let kernel: NexusKernel;
+  let kernel: KernovaKernel;
   let runner: AgentTestRunner;
 
   beforeEach(async () => {
     const mock = new MockModelProvider({ ... });
-    kernel = new NexusKernel({ environment: 'development', ephemeral: true, providers: [mock] });
+    kernel = new KernovaKernel({ environment: 'development', ephemeral: true, providers: [mock] });
     await kernel.start();
     // Register agent...
     runner = new AgentTestRunner(kernel);

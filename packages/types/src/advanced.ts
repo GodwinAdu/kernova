@@ -10,7 +10,7 @@
  * - Trajectory Recording
  */
 
-import type { NexusId, Timestamp, Priority } from './base.js';
+import type { KernovaId, Timestamp, Priority } from './base.js';
 
 // ─── Model Fallback ──────────────────────────────────────────
 
@@ -128,8 +128,8 @@ export type SubAgentContextMode = 'isolated' | 'fork';
 export type SubAgentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timeout';
 
 export interface SubAgentDef {
-  id: NexusId;
-  parentId: NexusId;
+  id: KernovaId;
+  parentId: KernovaId;
   name: string;
   agentName: string;
   goal: string;
@@ -162,7 +162,7 @@ export interface SubAgentManagerConfig {
 // ─── Webhook Router ──────────────────────────────────────────
 
 export interface WebhookRoute {
-  id: NexusId;
+  id: KernovaId;
   path: string;                    // e.g., '/hooks/github'
   method: 'POST' | 'GET' | 'PUT';
   secret?: string;                 // Signature verification secret
@@ -192,8 +192,8 @@ export interface WebhookTarget {
 }
 
 export interface WebhookEvent {
-  id: NexusId;
-  routeId: NexusId;
+  id: KernovaId;
+  routeId: KernovaId;
   method: string;
   path: string;
   headers: Record<string, string>;
@@ -205,7 +205,7 @@ export interface WebhookEvent {
 // ─── MCP Bridge ──────────────────────────────────────────────
 
 export interface MCPServerConfig {
-  id: NexusId;
+  id: KernovaId;
   name: string;
   transport: MCPTransport;
   toolPrefix?: string;             // Prefix for tool names (e.g., 'github_')
@@ -220,7 +220,7 @@ export interface MCPTool {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
-  serverId: NexusId;
+  serverId: KernovaId;
 }
 
 export interface MCPToolCallResult {
@@ -231,14 +231,14 @@ export interface MCPToolCallResult {
 // ─── Trajectory Recording ────────────────────────────────────
 
 export interface TrajectoryEvent {
-  id: NexusId;
-  traceId: NexusId;
+  id: KernovaId;
+  traceId: KernovaId;
   type: TrajectoryEventType;
   timestamp: Timestamp;
   seq: number;
-  sessionId?: NexusId;
-  agentId?: NexusId;
-  intentId?: NexusId;
+  sessionId?: KernovaId;
+  agentId?: KernovaId;
+  intentId?: KernovaId;
   data?: Record<string, unknown>;
 }
 
@@ -262,7 +262,7 @@ export type TrajectoryEventType =
   | 'error.occurred';
 
 export interface TrajectoryTrace {
-  id: NexusId;
+  id: KernovaId;
   startedAt: Timestamp;
   endedAt?: Timestamp;
   events: TrajectoryEvent[];

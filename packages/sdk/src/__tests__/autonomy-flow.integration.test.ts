@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { Kernova } from '../kernova.js';
-import type { NexusEvent } from '@kernova/types';
+import type { KernovaEvent } from '@kernova/types';
 
 describe('Full Autonomy Flow (Integration)', () => {
   let app: Kernova;
@@ -30,7 +30,7 @@ describe('Full Autonomy Flow (Integration)', () => {
     const eventBus = kernel.events;
 
     // Collect events as they are emitted
-    const collectedEvents: NexusEvent[] = [];
+    const collectedEvents: KernovaEvent[] = [];
     eventBus.subscribe(['*'], (event) => {
       collectedEvents.push(event);
     });
@@ -98,7 +98,7 @@ describe('Full Autonomy Flow (Integration)', () => {
     const eventBus = kernel.events;
 
     // Collect events matching queue task patterns
-    const queueEvents: NexusEvent[] = [];
+    const queueEvents: KernovaEvent[] = [];
     eventBus.subscribe(['queue.task.*'], (event) => {
       queueEvents.push(event);
     });

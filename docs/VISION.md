@@ -1,6 +1,6 @@
-# Nexus — Vision Document
+# Kernova — Vision Document
 
-> This document defines WHY Nexus exists. It should rarely change.
+> This document defines WHY Kernova exists. It should rarely change.
 > If this document changes, it means the company's direction has changed.
 
 ---
@@ -42,20 +42,20 @@ Applications shouldn't know or care which model performs the work. They should e
 
 ---
 
-## What Nexus Is
+## What Kernova Is
 
-Nexus is the **Intelligence Runtime** — the layer between applications and AI models.
+Kernova is the **Intelligence Runtime** — the layer between applications and AI models.
 
 Just as:
 - An **Operating System** abstracts hardware
 - **Node.js** abstracts OS-level I/O for JavaScript
 - **Kubernetes** abstracts infrastructure for services
 
-**Nexus** abstracts intelligence infrastructure for applications.
+**Kernova** abstracts intelligence infrastructure for applications.
 
 ---
 
-## What Nexus Is NOT
+## What Kernova Is NOT
 
 - Not an LLM company (we don't train models)
 - Not a chatbot company (we don't build end-user chat)
@@ -90,7 +90,7 @@ The infrastructure people rely on.
 
 Developers describe their software like this:
 
-> "Built on Nexus."
+> "Built on Kernova."
 
 The same way people say:
 - "Built with React."
@@ -111,7 +111,7 @@ AI models will change dramatically over the next 20 years:
 
 But the need for **identity, memory, trust, governance, workflows, and coordination** will only grow.
 
-Nexus owns that permanent layer.
+Kernova owns that permanent layer.
 
 ---
 

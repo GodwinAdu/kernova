@@ -133,9 +133,9 @@ export default defineConfig({
 
 function packageJsonTemplate(name: string, framework: string): string {
   const deps: Record<string, string> = {
-    '@kernova/framework': '^1.0.0',
-    '@kernova/core': '^1.0.0',
-    '@kernova/cli': '^1.0.0',
+    '@kernova/framework': '^2.0.0',
+    '@kernova/core': '^2.0.0',
+    '@kernova/cli': '^1.2.0',
     'pg': '^8.22.0',
   };
 
@@ -147,7 +147,7 @@ function packageJsonTemplate(name: string, framework: string): string {
     deps['react-dom'] = '^19.0.0';
     deps['@tailwindcss/postcss'] = '^4';
     deps['tailwindcss'] = '^4';
-    deps['typescript'] = '^5.5.0';
+    deps['typescript'] = '^6.0.0';
     deps['@types/node'] = '^22.0.0';
     deps['@types/react'] = '^19.0.0';
   } else if (framework === 'react') {
@@ -155,9 +155,13 @@ function packageJsonTemplate(name: string, framework: string): string {
     deps['react-dom'] = '^19.0.0';
     devDeps['vite'] = '^6.0.0';
     devDeps['@vitejs/plugin-react'] = '^4.0.0';
-    devDeps['typescript'] = '^5.5.0';
+    devDeps['typescript'] = '^6.0.0';
+    devDeps['@types/node'] = '^22.0.0';
     devDeps['@types/react'] = '^19.0.0';
     devDeps['@types/react-dom'] = '^19.0.0';
+  } else {
+    devDeps['typescript'] = '^6.0.0';
+    devDeps['@types/node'] = '^22.0.0';
   }
 
   const scripts: Record<string, string> = framework === 'react'
@@ -186,6 +190,8 @@ function tsconfigTemplate(framework: string): string {
       module: 'ESNext',
       moduleResolution: 'bundler',
       lib,
+      // TypeScript 6 includes no @types packages unless listed
+      types: ['node'],
       jsx: framework !== 'none' ? 'react-jsx' : undefined,
       strict: true,
       esModuleInterop: true,

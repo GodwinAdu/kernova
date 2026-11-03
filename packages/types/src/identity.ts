@@ -9,8 +9,8 @@
  */
 
 import type {
-  NexusObject,
-  NexusId,
+  KernovaObject,
+  KernovaId,
   Timestamp,
 } from './base.js';
 
@@ -24,7 +24,7 @@ export type AuthMethod = 'api_key' | 'oauth' | 'jwt' | 'certificate' | 'internal
  * Identity
  * Represents any actor in the system
  */
-export interface Identity extends NexusObject {
+export interface Identity extends KernovaObject {
   type: 'identity';
 
   /** What kind of actor */
@@ -37,7 +37,7 @@ export interface Identity extends NexusObject {
   email?: string;
 
   /** Organization this identity belongs to */
-  organizationId?: NexusId;
+  organizationId?: KernovaId;
 
   /** Roles assigned */
   roles: Role[];
@@ -69,7 +69,7 @@ export interface Role {
   scope: 'global' | 'organization' | 'project';
 
   /** Scope reference (org or project ID) */
-  scopeRef?: NexusId;
+  scopeRef?: KernovaId;
 }
 
 export interface EffectivePermission {
@@ -87,7 +87,7 @@ export interface EffectivePermission {
  * Organization
  * A group of identities that share resources
  */
-export interface Organization extends NexusObject {
+export interface Organization extends KernovaObject {
   type: 'organization';
 
   /** Organization name */
@@ -131,7 +131,7 @@ export interface OrgSettings {
  * Governance rules that apply to the organization
  * Pillar 7: Governance — Who is accountable?
  */
-export interface Policy extends NexusObject {
+export interface Policy extends KernovaObject {
   type: 'policy';
 
   /** Policy name */
@@ -147,7 +147,7 @@ export interface Policy extends NexusObject {
   enforced: boolean;
 
   /** Who created this policy */
-  authorId: NexusId;
+  authorId: KernovaId;
 }
 
 export interface PolicyRule {

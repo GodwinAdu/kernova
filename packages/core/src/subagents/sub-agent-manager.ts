@@ -12,8 +12,8 @@
  */
 
 import type {
-  NexusId,
-  NexusEvent,
+  KernovaId,
+  KernovaEvent,
   SubAgentDef,
   SubAgentSpawnInput,
   SubAgentStatus,
@@ -44,13 +44,13 @@ export class SubAgentManager {
   private executor?: SpawnExecutor;
 
   /** Active sub-agents by ID */
-  private agents: Map<NexusId, SubAgentDef> = new Map();
+  private agents: Map<KernovaId, SubAgentDef> = new Map();
 
   /** Parent → children mapping */
-  private parentChildren: Map<NexusId, Set<NexusId>> = new Map();
+  private parentChildren: Map<KernovaId, Set<KernovaId>> = new Map();
 
   /** Timeout handles */
-  private timeouts: Map<NexusId, ReturnType<typeof setTimeout>> = new Map();
+  private timeouts: Map<KernovaId, ReturnType<typeof setTimeout>> = new Map();
 
   constructor(eventBus: EventBus, config?: Partial<SubAgentManagerConfig>) {
     this.eventBus = eventBus;
@@ -68,7 +68,7 @@ export class SubAgentManager {
   /**
    * Spawn a sub-agent from a parent context.
    */
-  async spawn(parentId: NexusId, input: SubAgentSpawnInput): Promise<SubAgentDef> {
+  async spawn(parentId: KernovaId, input: SubAgentSpawnInput): Promise<SubAgentDef> {
     // Validate depth
     const parentDepth = this.getDepth(parentId);
     if (parentDepth >= this.config.maxDepth) {
@@ -127,7 +127,7 @@ export class SubAgentManager {
   /**
    * Cancel a running sub-agent.
    */
-  cancel(subAgentId: NexusId): boolean {
+  cancel(subAgentId: KernovaId): boolean {
     const def = this.agents.get(subAgentId);
     if (!def) return false;
     if (def.status !== 'pending' && def.status !== 'running') return false;
@@ -147,14 +147,14 @@ export class SubAgentManager {
   /**
    * Get a sub-agent definition by ID.
    */
-  get(subAgentId: NexusId): SubAgentDef | undefined {
+  get(subAgentId: KernovaId): SubAgentDef | undefined {
     return this.agents.get(subAgentId);
   }
 
   /**
    * List children of a parent agent.
    */
-  listChildren(parentId: NexusId): SubAgentDef[] {
+  listChildren(parentId: KernovaId): SubAgentDef[] {
     const childIds = this.parentChildren.get(parentId);
     if (!childIds) return [];
     return Array.from(childIds)
@@ -174,7 +174,7 @@ export class SubAgentManager {
   /**
    * Get the depth of an agent in the spawn tree.
    */
-  getDepth(agentId: NexusId): number {
+  getDepth(agentId: KernovaId): number {
     const def = this.agents.get(agentId);
     return def?.depth ?? 0;
   }
@@ -216,7 +216,7 @@ export class SubAgentManager {
     }
   }
 
-  private handleTimeout(subAgentId: NexusId): void {
+  private handleTimeout(subAgentId: KernovaId): void {
     const def = this.agents.get(subAgentId);
     if (!def || def.status !== 'running') return;
 
@@ -231,7 +231,7 @@ export class SubAgentManager {
     });
   }
 
-  private clearTimeout(subAgentId: NexusId): void {
+  private clearTimeout(subAgentId: KernovaId): void {
     const timer = this.timeouts.get(subAgentId);
     if (timer) {
       clearTimeout(timer);
@@ -239,8 +239,8 @@ export class SubAgentManager {
     }
   }
 
-  private emitEvent(eventType: string, subjectId: NexusId, data: Record<string, unknown>): void {
-    const event: NexusEvent = {
+  private emitEvent(eventType: string, subjectId: KernovaId, data: Record<string, unknown>): void {
+    const event: KernovaEvent = {
       id: generateId('evt'),
       eventType,
       category: 'system',

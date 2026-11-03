@@ -9,7 +9,7 @@
 import { writeFile, appendFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { ToolDefinition } from '../plugins/plugin-registry.js';
-import { validateSandboxPath } from './file-read.js';
+import { assertRealPathInSandbox, validateSandboxPath } from './sandbox-path.js';
 
 export function createFileWriteTool(sandboxDir: string): ToolDefinition {
   return {
@@ -48,6 +48,7 @@ export function createFileWriteTool(sandboxDir: string): ToolDefinition {
       const append = (params.append as boolean) ?? false;
 
       const resolvedPath = validateSandboxPath(filePath, sandboxDir);
+      await assertRealPathInSandbox(resolvedPath, sandboxDir);
 
       try {
         // Ensure parent directory exists (mkdir -p behavior)

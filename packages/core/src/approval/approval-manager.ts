@@ -6,6 +6,7 @@
  */
 
 import type { ApprovalRequest, ApprovalStatus, ApprovalConfig } from './types.js';
+import { setLongTimeout } from '../utils.js';
 
 export class ApprovalManager {
   private requests: Map<string, ApprovalRequest> = new Map();
@@ -69,8 +70,8 @@ export class ApprovalManager {
     return new Promise<boolean>((resolve) => {
       this.waiters.set(id, { resolve });
 
-      // Auto-expire after timeout
-      setTimeout(() => {
+      // Auto-expire after timeout (which may be longer than setTimeout's ~24.8-day limit)
+      setLongTimeout(() => {
         const req = this.requests.get(id);
         if (req && req.status === 'pending') {
           req.status = 'expired';
@@ -158,7 +159,7 @@ export class ApprovalManager {
         id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         eventType,
         category: 'approval',
-        severity: eventType.includes('denied') ? 'warning' : 'info',
+        severity: eventType.includes('denied') ? 'warn' : 'info',
         timestamp: new Date().toISOString(),
         subjectId: data.requestId as string,
         subjectType: 'approval_request',

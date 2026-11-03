@@ -224,7 +224,7 @@ const stats = kernel.rag.stats();
 Test your agents with mock providers and scenario-based assertions.
 
 ```typescript
-import { NexusKernel, defineAgent, AgentTestRunner, MockModelProvider } from '@kernova/core';
+import { KernovaKernel, defineAgent, AgentTestRunner, MockModelProvider } from '@kernova/core';
 
 // Create a kernel with deterministic mock responses
 const mock = new MockModelProvider({
@@ -235,7 +235,7 @@ const mock = new MockModelProvider({
   defaultResponse: 'I can help with that.',
 });
 
-const kernel = new NexusKernel({
+const kernel = new KernovaKernel({
   environment: 'development',
   ephemeral: true,
   providers: [mock],

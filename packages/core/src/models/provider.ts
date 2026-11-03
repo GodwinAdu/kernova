@@ -11,6 +11,7 @@
 import type {
   CompletionRequest,
   CompletionResponse,
+  ModelInfo,
   ModelProviderId,
   StreamChunk,
 } from '@kernova/types';
@@ -25,6 +26,9 @@ export interface ModelProvider {
 
   /** Human-readable name */
   readonly name: string;
+
+  /** Model used when a request doesn't name one */
+  readonly defaultModel?: string;
 
   /** Whether this provider is currently available */
   isAvailable(): boolean;
@@ -45,6 +49,18 @@ export interface ModelProvider {
    * Generate embeddings for text (optional — not all providers support this)
    */
   embed?(text: string): Promise<number[]>;
+
+  /**
+   * Embed several texts, batched into as few requests as the API allows.
+   * Returns one vector per text, in order.
+   */
+  embedMany?(texts: string[]): Promise<number[][]>;
+
+  /**
+   * The models this provider offers, as its API reports them (with context window and
+   * capabilities when the API includes them)
+   */
+  listModels?(): Promise<ModelInfo[]>;
 }
 
 /**

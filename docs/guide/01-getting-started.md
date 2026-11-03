@@ -1,33 +1,33 @@
-# Getting Started with Nexus
+# Getting Started with Kernova
 
 This guide takes you from zero to a working intelligent application in under 5 minutes.
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - An LLM API key (OpenAI, Anthropic, DeepSeek, or any supported provider)
 
 ## Installation
 
 ```bash
-npm install @nexus/sdk @nexus/types
+npm install @kernova/sdk @kernova/types
 ```
 
 Or install the full stack:
 
 ```bash
-npm install @nexus/core @nexus/types @nexus/cli
+npm install @kernova/core @kernova/types @kernova/cli
 ```
 
 ## Quick Start (SDK)
 
-The fastest way to build with Nexus:
+The fastest way to build with Kernova:
 
 ```typescript
-import { Nexus } from '@nexus/sdk';
+import { Kernova } from '@kernova/sdk';
 
 // 1. Create the runtime
-const app = await Nexus.create();
+const app = await Kernova.create();
 
 // 2. Define an agent
 app.agent('assistant', {
@@ -55,15 +55,15 @@ For project-based development with hot reload:
 
 ```bash
 # Install CLI globally
-npm install -g @nexus/cli
+npm install -g @kernova/cli
 
 # Create a project
-nexus init my-app
+kernova init my-app
 cd my-app
 npm install
 
 # Start development (with hot reload + Studio dashboard)
-nexus dev
+kernova dev
 ```
 
 Open http://localhost:4200 for the Studio dashboard.
@@ -91,7 +91,7 @@ The agent will automatically decide when to use this tool during reasoning.
 
 ## Using Memory
 
-Nexus remembers things across sessions:
+Kernova remembers things across sessions:
 
 ```typescript
 // Store

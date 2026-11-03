@@ -13,7 +13,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { createServer as createHttpsServer } from 'node:https';
 import { readFileSync } from 'node:fs';
 import type { KernovaKernel } from '../kernel.js';
-import type { NexusEvent } from '@kernova/types';
+import type { KernovaEvent } from '@kernova/types';
 import { getStudioHTML } from './studio-ui.js';
 
 export interface StudioServerConfig {
@@ -104,15 +104,31 @@ export class StudioServer {
     }
   }
 
+  /** Same-origin browser requests and non-browser clients (no Origin header) only */
+  private isTrustedRequest(req: IncomingMessage): boolean {
+    const host = req.headers.host ?? '';
+    const local = ['localhost', '127.0.0.1', '::1'].includes(this.host);
+    if (local && !/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host)) return false;
+
+    const origin = req.headers.origin;
+    if (!origin) return true;
+    const scheme = this.tlsCert && this.tlsKey ? 'https' : 'http';
+    return origin === `${scheme}://${host}`;
+  }
+
   private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url || '/', `http://${this.host}:${this.port}`);
     const path = url.pathname;
     const method = req.method || 'GET';
 
-    // CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    // The dashboard is served from this server, so it never needs CORS. Refuse requests from
+    // other origins (a web page open in your browser) and, on localhost, Host names other than
+    // localhost (DNS rebinding), so other sites can't use the API through your browser.
+    if (!this.isTrustedRequest(req)) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Cross-origin requests are not allowed' }));
+      return;
+    }
 
     if (method === 'OPTIONS') {
       res.writeHead(204);
@@ -315,7 +331,7 @@ export class StudioServer {
     this.json(res, { identities });
   }
 
-  private broadcastEvent(event: NexusEvent): void {
+  private broadcastEvent(event: KernovaEvent): void {
     const data = JSON.stringify(event);
     for (const client of this.sseClients) {
       client.write(`data: ${data}\n\n`);

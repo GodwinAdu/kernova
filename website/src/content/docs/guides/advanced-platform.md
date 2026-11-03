@@ -17,7 +17,7 @@ const result = await kernel.fallback.complete(
   },
   {
     candidates: [
-      { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
+      { provider: 'anthropic', model: 'claude-sonnet-5-5' },
       { provider: 'openai', model: 'gpt-4o' },
       { provider: 'ollama', model: 'llama3' },    // Local fallback
     ],
@@ -187,6 +187,23 @@ console.log(plan.hidden);
 
 Multi-layer allow/deny pipeline for restricting tool access per agent, user, or role.
 
+The kernel applies two layers automatically on every intent: `KernelConfig.toolPolicy`, then the agent's own `toolPolicy` from `defineAgent()`. Tools that don't pass are neither offered to the model nor runnable through `tools.useTool()`. Patterns match a tool's own ID (`'shell-exec'`, `'github_create_issue'`) as well as its registered ID, and a `deny` match on any of them wins.
+
+```typescript
+const kernel = new KernovaKernel({
+  environment: 'production',
+  toolPolicy: { deny: ['github_delete_*'] },
+});
+
+const support = defineAgent({
+  name: 'support',
+  // ...
+  toolPolicy: { allow: ['http-fetch', 'github_*'] },
+});
+```
+
+You can also run the engine directly:
+
 ```typescript
 const allowed = kernel.toolPolicy.apply(
   ['read', 'write', 'exec', 'search', 'delete', 'email'],
@@ -229,7 +246,8 @@ const tools = await kernel.mcp.connect(server.id);
 console.log(`Discovered ${tools.length} tools`);
 // Discovered 12 tools
 
-// Tools are automatically available to agents during execution
+// Once connected, the server's tools are registered as plugin tools (with toolPrefix),
+// so agents can call them and tool policies apply. They're removed on disconnect.
 // Call directly if needed:
 const result = await kernel.mcp.callTool(server.id, 'create_issue', {
   repo: 'my-org/my-repo',
@@ -276,7 +294,7 @@ Record every step of agent execution for debugging and auditing.
 
 ```typescript
 // Enable with debug mode
-const kernel = new NexusKernel({ environment: 'development', debug: true });
+const kernel = new KernovaKernel({ environment: 'development', debug: true });
 
 // After running some intents...
 const traces = kernel.trajectory.listTraces();

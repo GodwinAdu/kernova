@@ -7,7 +7,7 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { KernovaKernel, defineAgent } from '../index.js';
-import type { NexusPlugin } from '../plugins/plugin-registry.js';
+import type { KernovaPlugin } from '../plugins/plugin-registry.js';
 
 describe('Full Pipeline Integration', () => {
   let kernel: KernovaKernel;
@@ -21,7 +21,7 @@ describe('Full Pipeline Integration', () => {
     kernel = new KernovaKernel({ environment: 'development', ephemeral: true });
 
     // 2. Register a tool plugin
-    const mathPlugin: NexusPlugin = {
+    const mathPlugin: KernovaPlugin = {
       id: 'math',
       name: 'Math',
       version: '1.0.0',

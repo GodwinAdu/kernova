@@ -4,7 +4,7 @@
 
 ## Summary
 
-Persist all Nexus events to a local SQLite database so that:
+Persist all Kernova events to a local SQLite database so that:
 - Event timelines survive process restarts
 - Developers can query historical events
 - The system supports debugging, auditing, and replay
@@ -25,7 +25,7 @@ EventBus
 └───────────────────────────┘
    ↓ (async persist)
 ┌───────────────────────────┐
-│  SQLite (nexus.db)        │ ← Durable storage (survives restart)
+│  SQLite (kernova.db)        │ ← Durable storage (survives restart)
 └───────────────────────────┘
 ```
 
@@ -74,8 +74,8 @@ const byActor = await kernel.events.query({ actorId: agentId, after: '2026-07-01
 
 ### File Location
 
-- Development: `./nexus-data/nexus.db` (project-local)
-- Configurable via `nexus.config.json`
+- Development: `./kernova-data/kernova.db` (project-local)
+- Configurable via `kernova.config.json`
 
 ## Success Criteria
 

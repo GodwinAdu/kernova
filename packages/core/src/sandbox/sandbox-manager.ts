@@ -10,7 +10,7 @@
  * Inspired by OpenClaw's sandbox system.
  */
 
-import type { NexusId, NexusEvent } from '@kernova/types';
+import type { KernovaId, KernovaEvent } from '@kernova/types';
 import type { EventBus } from '../events/event-bus.js';
 import { generateId, now } from '../utils.js';
 import path from 'node:path';
@@ -40,8 +40,8 @@ export interface SandboxConfig {
 }
 
 interface SandboxContext {
-  id: NexusId;
-  agentId: NexusId;
+  id: KernovaId;
+  agentId: KernovaId;
   workspaceDir: string;
   policy: SandboxPolicy;
   createdAt: string;
@@ -58,7 +58,7 @@ const DEFAULT_POLICY: SandboxPolicy = {
 export class SandboxManager {
   private readonly eventBus: EventBus;
   private readonly config: SandboxConfig;
-  private contexts: Map<NexusId, SandboxContext> = new Map();
+  private contexts: Map<KernovaId, SandboxContext> = new Map();
 
   constructor(eventBus: EventBus, config: SandboxConfig) {
     this.eventBus = eventBus;
@@ -68,7 +68,7 @@ export class SandboxManager {
   /**
    * Create a sandbox context for an agent execution.
    */
-  createContext(agentId: NexusId, policy?: Partial<SandboxPolicy>): SandboxContext {
+  createContext(agentId: KernovaId, policy?: Partial<SandboxPolicy>): SandboxContext {
     const ctx: SandboxContext = {
       id: generateId('sandbox'),
       agentId,
@@ -83,7 +83,7 @@ export class SandboxManager {
   /**
    * Check if a file path access is allowed within a sandbox.
    */
-  isPathAllowed(contextId: NexusId, filePath: string): boolean {
+  isPathAllowed(contextId: KernovaId, filePath: string): boolean {
     const ctx = this.contexts.get(contextId);
     if (!ctx) return false;
 
@@ -112,7 +112,7 @@ export class SandboxManager {
   /**
    * Check if a tool call is allowed within a sandbox.
    */
-  isToolAllowed(contextId: NexusId, toolName: string): boolean {
+  isToolAllowed(contextId: KernovaId, toolName: string): boolean {
     const ctx = this.contexts.get(contextId);
     if (!ctx) return false;
 
@@ -136,7 +136,7 @@ export class SandboxManager {
   /**
    * Check if writes are allowed.
    */
-  isWriteAllowed(contextId: NexusId): boolean {
+  isWriteAllowed(contextId: KernovaId): boolean {
     const ctx = this.contexts.get(contextId);
     return ctx?.policy.allowWrite ?? false;
   }
@@ -144,7 +144,7 @@ export class SandboxManager {
   /**
    * Check if network access is allowed.
    */
-  isNetworkAllowed(contextId: NexusId): boolean {
+  isNetworkAllowed(contextId: KernovaId): boolean {
     const ctx = this.contexts.get(contextId);
     return ctx?.policy.allowNetwork ?? true;
   }
@@ -152,7 +152,7 @@ export class SandboxManager {
   /**
    * Get the timeout for tool execution in a sandbox.
    */
-  getTimeout(contextId: NexusId): number {
+  getTimeout(contextId: KernovaId): number {
     const ctx = this.contexts.get(contextId);
     return ctx?.policy.timeoutMs ?? 30_000;
   }
@@ -160,7 +160,7 @@ export class SandboxManager {
   /**
    * Destroy a sandbox context.
    */
-  destroy(contextId: NexusId): void {
+  destroy(contextId: KernovaId): void {
     this.contexts.delete(contextId);
   }
 
@@ -171,7 +171,7 @@ export class SandboxManager {
     return Array.from(this.contexts.values());
   }
 
-  private emitEvent(eventType: string, subjectId: NexusId, data: Record<string, unknown>): void {
+  private emitEvent(eventType: string, subjectId: KernovaId, data: Record<string, unknown>): void {
     this.eventBus.publish({
       id: generateId('evt'),
       eventType,

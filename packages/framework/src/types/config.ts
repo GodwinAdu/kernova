@@ -2,6 +2,8 @@
  * Framework configuration types.
  */
 
+import type { KernelConfig } from '@kernova/core';
+
 export interface ModelConfig {
   /** Model provider (openai, anthropic, etc.) */
   provider: string;
@@ -11,6 +13,11 @@ export interface ModelConfig {
   apiKeyEnv?: string;
   /** Base URL override */
   baseUrl?: string;
+  /**
+   * Provider-specific settings: `{ endpoint }` for azure, `{ region, profile }` for bedrock,
+   * `{ project, location, keyFile }` for vertex, `{ embeddingModel }` for most
+   */
+  options?: Record<string, unknown>;
 }
 
 export interface DeployConfig {
@@ -118,6 +125,18 @@ export interface KernovaFrameworkConfig {
   };
   /** Plugins to load */
   plugins?: string[];
+  /**
+   * Built-in tools (http-fetch, date-time, ...). shell-exec, code-eval, file-read, file-write and
+   * database-query are off unless listed in `enabled`. The sandbox defaults to kernova-data/workspace.
+   */
+  builtInTools?: KernelConfig['builtInTools'];
+  /** Which tools agents may call: allow/deny lists of tool IDs (e.g. "shell-exec") */
+  toolPolicy?: KernelConfig['toolPolicy'];
+  /**
+   * Self-reflection: an extra model call grades each answer and regenerates weak ones
+   * (default: off). Agents can turn it on for themselves with `reflection`.
+   */
+  reflection?: KernelConfig['reflection'];
   /** Frontend framework config */
   app?: {
     /** Framework: 'next' | 'react' | 'none' */

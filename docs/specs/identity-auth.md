@@ -53,7 +53,7 @@ workflow:approve
 
 ### API Keys
 
-- Generated with prefix: `nxs_` (Nexus secret)
+- Generated with prefix: `nxs_` (Kernova secret)
 - Hashed with SHA-256 before storage
 - Scoped to permissions (can't exceed creator's permissions)
 - Expirable (optional TTL)

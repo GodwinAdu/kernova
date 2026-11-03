@@ -344,12 +344,12 @@ The agent will detect the failure, queue a remediation task, and send a Slack al
 
 | Feature | Guide |
 |---------|-------|
-| Scheduled recurring tasks (cron) | [Scheduler](/guides/scheduler) |
+| Scheduled recurring tasks (cron) | [Scheduler](/guides/scheduler-queue-triggers) |
 | Background loops for continuous monitoring | [Background Loops](/guides/background-loops) |
-| Task queue for ordered remediation | [Task Queue](/guides/task-queue) |
-| Proactive triggers on failures | [Triggers](/guides/triggers) |
-| Built-in tools (shell-exec, http-fetch) | [Built-in Tools](/guides/tools#built-in-tools) |
-| Custom tool (Slack alerts) | [Tools](/guides/tools) |
+| Task queue for ordered remediation | [Task Queue](/guides/scheduler-queue-triggers) |
+| Proactive triggers on failures | [Triggers](/guides/scheduler-queue-triggers) |
+| Built-in tools (shell-exec, http-fetch) | [Built-in Tools](/concepts/tools) |
+| Custom tool (Slack alerts) | [Tools](/concepts/tools) |
 | Long-term memory for incident patterns | [Context & Memory](/guides/context-memory) |
 | Multi-agent (monitor + remediator) | [Building Agents](/guides/agents) |
 | Daemon mode | [Daemon Mode](/guides/daemon) |

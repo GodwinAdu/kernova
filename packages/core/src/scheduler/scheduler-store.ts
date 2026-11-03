@@ -8,9 +8,8 @@
  */
 
 import Database from 'better-sqlite3';
-import { mkdirSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-import type { ScheduledJob, NexusId, Timestamp } from '@kernova/types';
+import type { ScheduledJob, KernovaId, Timestamp } from '@kernova/types';
+import { resolveStorePath } from '../storage/store-path.js';
 
 export interface SchedulerStoreConfig {
   dataDir: string;
@@ -64,15 +63,8 @@ export class SchedulerStore {
   private updateExecutionStmt: Database.Statement;
 
   constructor(config: SchedulerStoreConfig) {
-    const dbPath = join(config.dataDir, 'kernova.db');
-
-    // Ensure directory exists
-    if (!existsSync(config.dataDir)) {
-      mkdirSync(config.dataDir, { recursive: true });
-    }
-
-    // Open database
-    this.db = new Database(dbPath);
+    // Open database (in memory when dataDir is ':memory:')
+    this.db = new Database(resolveStorePath(config.dataDir));
 
     // Configure for performance
     this.db.pragma('journal_mode = WAL');
@@ -142,7 +134,7 @@ export class SchedulerStore {
    * Remove a scheduled job by ID
    * @returns true if a row was deleted, false otherwise
    */
-  remove(jobId: NexusId): boolean {
+  remove(jobId: KernovaId): boolean {
     const result = this.removeStmt.run(jobId);
     return result.changes > 0;
   }
@@ -150,7 +142,7 @@ export class SchedulerStore {
   /**
    * Update execution timestamps for a job
    */
-  updateExecution(jobId: NexusId, lastExecutionAt: Timestamp, nextExecutionAt: Timestamp): void {
+  updateExecution(jobId: KernovaId, lastExecutionAt: Timestamp, nextExecutionAt: Timestamp): void {
     this.updateExecutionStmt.run({
       id: jobId,
       last_execution_at: lastExecutionAt,

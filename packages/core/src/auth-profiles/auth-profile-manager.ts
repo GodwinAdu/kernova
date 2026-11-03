@@ -12,12 +12,12 @@
  * Inspired by OpenClaw's auth-profiles system.
  */
 
-import type { NexusId, NexusEvent } from '@kernova/types';
+import type { KernovaId, KernovaEvent } from '@kernova/types';
 import type { EventBus } from '../events/event-bus.js';
 import { generateId, now } from '../utils.js';
 
 export interface AuthProfile {
-  id: NexusId;
+  id: KernovaId;
   provider: string;
   label: string;
   apiKey: string;
@@ -40,7 +40,7 @@ export interface AuthProfileManagerConfig {
 /** Result from getKey() — includes profileId for marking success/failure */
 export interface KeyResult {
   key: string;
-  profileId: NexusId;
+  profileId: KernovaId;
   provider: string;
   label: string;
 }
@@ -52,7 +52,7 @@ export class AuthProfileManager {
   private readonly eventBus: EventBus;
   private readonly defaultCooldownMs: number;
   private readonly maxCooldownMs: number;
-  private profiles: Map<NexusId, AuthProfile> = new Map();
+  private profiles: Map<KernovaId, AuthProfile> = new Map();
   /** Round-robin index per provider */
   private rotationIndex: Map<string, number> = new Map();
 
@@ -139,14 +139,14 @@ export class AuthProfileManager {
   /**
    * Get a profile by ID.
    */
-  get(profileId: NexusId): AuthProfile | undefined {
+  get(profileId: KernovaId): AuthProfile | undefined {
     return this.profiles.get(profileId);
   }
 
   /**
    * Mark a profile as rate-limited (applies cooldown).
    */
-  markRateLimited(profileId: NexusId): void {
+  markRateLimited(profileId: KernovaId): void {
     const profile = this.profiles.get(profileId);
     if (!profile) return;
 
@@ -168,7 +168,7 @@ export class AuthProfileManager {
   /**
    * Mark a successful usage (resets failure count).
    */
-  markSuccess(profileId: NexusId): void {
+  markSuccess(profileId: KernovaId): void {
     const profile = this.profiles.get(profileId);
     if (!profile) return;
     profile.failureCount = 0;
@@ -198,7 +198,7 @@ export class AuthProfileManager {
   /**
    * Remove a profile.
    */
-  remove(profileId: NexusId): boolean {
+  remove(profileId: KernovaId): boolean {
     const profile = this.profiles.get(profileId);
     if (!profile) return false;
 
@@ -215,7 +215,7 @@ export class AuthProfileManager {
   /**
    * Enable/disable a profile.
    */
-  setEnabled(profileId: NexusId, enabled: boolean): void {
+  setEnabled(profileId: KernovaId, enabled: boolean): void {
     const profile = this.profiles.get(profileId);
     if (profile) {
       profile.enabled = enabled;
@@ -229,7 +229,7 @@ export class AuthProfileManager {
   /**
    * Reset cooldown for a specific profile.
    */
-  resetCooldown(profileId: NexusId): void {
+  resetCooldown(profileId: KernovaId): void {
     const profile = this.profiles.get(profileId);
     if (profile) {
       profile.cooldownUntil = undefined;
@@ -245,7 +245,7 @@ export class AuthProfileManager {
     return Array.from(this.profiles.values()).filter(p => p.provider === provider).length;
   }
 
-  private emitEvent(eventType: string, subjectId: NexusId, data: Record<string, unknown>): void {
+  private emitEvent(eventType: string, subjectId: KernovaId, data: Record<string, unknown>): void {
     this.eventBus.publish({
       id: generateId('evt'),
       eventType,

@@ -21,7 +21,7 @@ import type {
   MemoryEntry,
   MemoryQuery,
   MemoryLayer,
-  NexusId,
+  KernovaId,
 } from '@kernova/types';
 import { EventBus } from '../events/event-bus.js';
 import { MemoryStore, type MemoryStoreConfig } from './memory-store.js';
@@ -46,7 +46,7 @@ export interface MemoryEngineConfig {
 export class MemoryEngine {
   private eventBus: EventBus;
   private memoryStore: MemoryStore | null = null;
-  private inMemory: Map<NexusId, MemoryEntry> = new Map();
+  private inMemory: Map<KernovaId, MemoryEntry> = new Map();
   private embeddingEngine: EmbeddingEngine;
   private persistent: boolean;
   private useEmbeddings: boolean;
@@ -170,7 +170,7 @@ export class MemoryEngine {
   /**
    * Get a specific memory by ID
    */
-  async get(id: NexusId): Promise<MemoryEntry | undefined> {
+  async get(id: KernovaId): Promise<MemoryEntry | undefined> {
     if (this.memoryStore) {
       return this.memoryStore.get(id);
     }
@@ -180,7 +180,7 @@ export class MemoryEngine {
   /**
    * Delete a memory
    */
-  async delete(id: NexusId): Promise<boolean> {
+  async delete(id: KernovaId): Promise<boolean> {
     if (this.memoryStore) {
       return this.memoryStore.delete(id);
     }
@@ -282,7 +282,7 @@ export class MemoryEngine {
   /**
    * Generate an embedding and store it for a memory entry
    */
-  private async generateAndStoreEmbedding(memoryId: NexusId, content: string): Promise<void> {
+  private async generateAndStoreEmbedding(memoryId: KernovaId, content: string): Promise<void> {
     if (!this.memoryStore) return;
 
     const vector = await this.embeddingEngine.embed(content);

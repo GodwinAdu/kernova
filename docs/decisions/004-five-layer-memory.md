@@ -14,7 +14,7 @@ A user's current task context is fundamentally different from organizational kno
 
 ## Decision
 
-Nexus implements memory as five distinct layers:
+Kernova implements memory as five distinct layers:
 
 | Layer | Scope | Lifetime | Access Pattern |
 |-------|-------|----------|----------------|

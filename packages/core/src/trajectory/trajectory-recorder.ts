@@ -12,8 +12,8 @@
  */
 
 import type {
-  NexusId,
-  NexusEvent,
+  KernovaId,
+  KernovaEvent,
   TrajectoryEvent,
   TrajectoryTrace,
   TrajectoryEventType,
@@ -44,10 +44,10 @@ export class TrajectoryRecorder {
   private readonly config: TrajectoryRecorderConfig;
 
   /** Active traces by trace ID */
-  private traces: Map<NexusId, TrajectoryTrace> = new Map();
+  private traces: Map<KernovaId, TrajectoryTrace> = new Map();
 
   /** Sequence counter per trace */
-  private sequences: Map<NexusId, number> = new Map();
+  private sequences: Map<KernovaId, number> = new Map();
 
   /** Subscription ID for event bus */
   private subscriptionId?: string;
@@ -63,7 +63,7 @@ export class TrajectoryRecorder {
   start(): void {
     if (!this.config.enabled) return;
 
-    this.subscriptionId = this.eventBus.subscribe(['*'], (event: NexusEvent) => {
+    this.subscriptionId = this.eventBus.subscribe(['*'], (event: KernovaEvent) => {
       this.recordFromEvent(event);
     });
   }
@@ -103,7 +103,7 @@ export class TrajectoryRecorder {
    * Record an event into a trace.
    */
   record(
-    traceId: NexusId,
+    traceId: KernovaId,
     type: TrajectoryEventType,
     data?: Record<string, unknown>,
   ): TrajectoryEvent | null {
@@ -134,7 +134,7 @@ export class TrajectoryRecorder {
   /**
    * End a trace (mark as complete with final metadata).
    */
-  endTrace(traceId: NexusId, metadata?: Record<string, unknown>): void {
+  endTrace(traceId: KernovaId, metadata?: Record<string, unknown>): void {
     const trace = this.traces.get(traceId);
     if (!trace) return;
 
@@ -148,7 +148,7 @@ export class TrajectoryRecorder {
   /**
    * Get a trace by ID.
    */
-  getTrace(traceId: NexusId): TrajectoryTrace | undefined {
+  getTrace(traceId: KernovaId): TrajectoryTrace | undefined {
     return this.traces.get(traceId);
   }
 
@@ -162,7 +162,7 @@ export class TrajectoryRecorder {
   /**
    * Export a trace as JSONL string (one event per line).
    */
-  exportJsonl(traceId: NexusId): string | null {
+  exportJsonl(traceId: KernovaId): string | null {
     const trace = this.traces.get(traceId);
     if (!trace) return null;
     return trace.events.map(e => JSON.stringify(e)).join('\n');
@@ -188,7 +188,7 @@ export class TrajectoryRecorder {
   /**
    * Record an EventBus event into the most recent active trace.
    */
-  private recordFromEvent(event: NexusEvent): void {
+  private recordFromEvent(event: KernovaEvent): void {
     const type = this.mapEventType(event.eventType);
     if (!type) return;
 

@@ -12,16 +12,21 @@
 import type {
   CompletionRequest,
   CompletionResponse,
+  ModelInfo,
   ModelProviderId,
   ModelRoutingConfig,
   ModelPurpose,
   TokenUsage,
   StreamChunk,
-  NexusId,
+  KernovaId,
 } from '@kernova/types';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ModelProvider } from './provider.js';
 import { EventBus } from '../events/event-bus.js';
 import { generateId, now } from '../utils.js';
+
+/** The usage totals of the ModelRouter.measureUsage() scopes a model call is running in (outermost first) */
+const usageScope = new AsyncLocalStorage<TokenUsage[]>();
 
 export interface ModelRouterConfig {
   routing: ModelRoutingConfig;
@@ -62,8 +67,10 @@ export class ModelRouter {
     request: CompletionRequest,
     purpose?: ModelPurpose,
   ): Promise<CompletionResponse> {
+    purpose ??= request.metadata?.purpose as ModelPurpose | undefined;
+
     // Determine which provider/model to use
-    const target = this.resolveTarget(purpose);
+    const target = this.resolveTarget(purpose, request.provider);
     const primaryProvider = this.providers.get(target.provider);
 
     if (!primaryProvider) {
@@ -127,7 +134,8 @@ export class ModelRouter {
     request: CompletionRequest,
     purpose?: ModelPurpose,
   ): AsyncGenerator<StreamChunk> {
-    const target = this.resolveTarget(purpose);
+    purpose ??= request.metadata?.purpose as ModelPurpose | undefined;
+    const target = this.resolveTarget(purpose, request.provider);
     const provider = this.providers.get(target.provider);
 
     if (!provider) {
@@ -141,18 +149,17 @@ export class ModelRouter {
 
     // If provider supports streaming, use it
     if (provider.stream) {
-      let totalContent = '';
       for await (const chunk of provider.stream(fullRequest)) {
-        totalContent += chunk.content;
-        yield chunk;
-
-        // Track usage from final chunk
-        if (chunk.done && chunk.usage) {
-          this.requestCount++;
-          this.totalUsage.promptTokens += chunk.usage.promptTokens;
-          this.totalUsage.completionTokens += chunk.usage.completionTokens;
-          this.totalUsage.totalTokens += chunk.usage.totalTokens;
+        // Track usage from the final chunk before handing it on
+        if (chunk.done) {
+          this.recordUsage(
+            chunk.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+            chunk.provider ?? target.provider,
+            chunk.model ?? fullRequest.model,
+            purpose,
+          );
         }
+        yield chunk;
       }
       return;
     }
@@ -160,6 +167,10 @@ export class ModelRouter {
     // Fallback: simulate streaming with complete()
     const response = await provider.complete(fullRequest);
     this.trackUsage(response, purpose);
+
+    if (response.reasoning) {
+      yield { content: '', reasoning: response.reasoning, done: false, provider: response.provider, model: response.model };
+    }
 
     // Yield content in chunks (simulate streaming)
     const words = response.content.split(' ');
@@ -181,6 +192,8 @@ export class ModelRouter {
       model: response.model,
       finishReason: response.metadata.finishReason,
       usage: response.usage,
+      toolCalls: response.toolCalls,
+      ...(response.providerData && { providerData: response.providerData }),
     };
   }
 
@@ -188,14 +201,73 @@ export class ModelRouter {
    * Generate embeddings using available provider
    */
   async embed(text: string): Promise<number[]> {
-    // Find a provider that supports embeddings
+    // Try each provider that can embed; some implement embed() but don't support it
+    let lastError: Error | undefined;
     for (const provider of this.providers.values()) {
-      if (provider.embed && provider.isAvailable()) {
-        return provider.embed(text);
+      if (!provider.embed || !provider.isAvailable()) continue;
+      try {
+        return await provider.embed(text);
+      } catch (error) {
+        lastError = error as Error;
       }
     }
 
-    throw new Error('No embedding-capable provider available.');
+    throw lastError ?? new Error('No embedding-capable provider available.');
+  }
+
+  /**
+   * Embed several texts with the first provider that can, batched where the provider supports it.
+   * Returns one vector per text, in order.
+   */
+  async embedMany(texts: string[]): Promise<number[][]> {
+    if (texts.length === 0) return [];
+    let lastError: Error | undefined;
+    for (const provider of this.providers.values()) {
+      if (!provider.isAvailable() || (!provider.embedMany && !provider.embed)) continue;
+      try {
+        if (provider.embedMany) return await provider.embedMany(texts);
+        const vectors: number[][] = [];
+        for (const text of texts) vectors.push(await provider.embed!(text));
+        return vectors;
+      } catch (error) {
+        lastError = error as Error;
+      }
+    }
+
+    throw lastError ?? new Error('No embedding-capable provider available.');
+  }
+
+  /**
+   * The models a provider offers, as its API reports them. Without a provider, the models of
+   * every available provider that can list them (providers whose listing fails are left out).
+   */
+  async listModels(provider?: ModelProviderId): Promise<ModelInfo[]> {
+    if (provider) {
+      const target = this.providers.get(provider);
+      if (!target) {
+        throw new Error(`Model provider "${provider}" not registered. Available: ${Array.from(this.providers.keys()).join(', ')}`);
+      }
+      if (!target.listModels) throw new Error(`${target.name} can't list its models.`);
+      return target.listModels();
+    }
+
+    const listings = await Promise.allSettled(
+      [...this.providers.values()]
+        .filter(p => p.isAvailable() && p.listModels)
+        .map(p => p.listModels!()),
+    );
+    return listings.flatMap(result => (result.status === 'fulfilled' ? result.value : []));
+  }
+
+  /**
+   * Run `fn` and report the tokens used by every model call it makes, including
+   * calls in nested async work. Concurrent scopes are counted separately; a scope
+   * nested inside another counts toward both.
+   */
+  async measureUsage<T>(fn: () => Promise<T>): Promise<{ result: T; usage: TokenUsage }> {
+    const usage: TokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+    const result = await usageScope.run([...(usageScope.getStore() ?? []), usage], fn);
+    return { result, usage };
   }
 
   /**
@@ -225,7 +297,13 @@ export class ModelRouter {
   }
 
   /** Resolve which provider/model to use */
-  private resolveTarget(purpose?: ModelPurpose): { provider: ModelProviderId; model: string } {
+  private resolveTarget(
+    purpose?: ModelPurpose,
+    provider?: ModelProviderId,
+  ): { provider: ModelProviderId; model: string } {
+    // A request that names a provider goes there (an empty model means that provider's default)
+    if (provider) return { provider, model: '' };
+
     // Check purpose-specific override
     if (purpose && this.routing.overrides?.[purpose]) {
       return this.routing.overrides[purpose]!;
@@ -237,22 +315,35 @@ export class ModelRouter {
 
   /** Track token usage */
   private trackUsage(response: CompletionResponse, purpose?: ModelPurpose): void {
-    this.requestCount++;
-    this.totalUsage.promptTokens += response.usage.promptTokens;
-    this.totalUsage.completionTokens += response.usage.completionTokens;
-    this.totalUsage.totalTokens += response.usage.totalTokens;
+    this.recordUsage(response.usage, response.provider, response.model, purpose, response.metadata.latencyMs);
+  }
 
-    if (response.usage.estimatedCostUsd) {
-      this.totalUsage.estimatedCostUsd =
-        (this.totalUsage.estimatedCostUsd || 0) + response.usage.estimatedCostUsd;
+  private recordUsage(
+    usage: TokenUsage,
+    provider: ModelProviderId,
+    model: string,
+    purpose?: ModelPurpose,
+    latencyMs?: number,
+  ): void {
+    this.requestCount++;
+    for (const totals of [this.totalUsage, ...(usageScope.getStore() ?? [])]) {
+      totals.promptTokens += usage.promptTokens;
+      totals.completionTokens += usage.completionTokens;
+      totals.totalTokens += usage.totalTokens;
+      for (const key of ['cachedTokens', 'cacheWriteTokens', 'reasoningTokens'] as const) {
+        if (usage[key]) totals[key] = (totals[key] ?? 0) + usage[key]!;
+      }
+      if (usage.estimatedCostUsd) {
+        totals.estimatedCostUsd = (totals.estimatedCostUsd || 0) + usage.estimatedCostUsd;
+      }
     }
 
     this.emitEvent('model.completed', {
-      provider: response.provider,
-      model: response.model,
+      provider,
+      model,
       purpose,
-      tokens: response.usage.totalTokens,
-      latencyMs: response.metadata.latencyMs,
+      tokens: usage.totalTokens,
+      latencyMs,
     });
   }
 

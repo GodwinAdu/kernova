@@ -8,9 +8,9 @@ The Agent Gateway exposes your Kernova agents as a production HTTP service — c
 ## Starting the Gateway
 
 ```typescript
-import { NexusKernel, defineAgent } from '@kernova/core';
+import { KernovaKernel, defineAgent } from '@kernova/core';
 
-const kernel = new NexusKernel({ environment: 'production' });
+const kernel = new KernovaKernel({ environment: 'production' });
 await kernel.start();
 
 // Register your agents
@@ -23,12 +23,12 @@ const agent = defineAgent({
 });
 kernel.agentRegistry.register(agent.definition, agent.executor);
 
-// Start the HTTP server
-await kernel.gateway.start();
-console.log(`🚀 Kernova gateway running on http://localhost:3000`);
+// Start the HTTP server (a bearer token is required; KERNOVA_API_KEY also works)
+await kernel.gateway.start({ auth: { tokens: [process.env.GATEWAY_TOKEN!] } });
+console.log(`🚀 Kernova gateway running on http://127.0.0.1:3000`);
 ```
 
-Your agents are now accessible over HTTP.
+Your agents are now accessible over HTTP. The gateway listens on `127.0.0.1` by default; set `host: '0.0.0.0'` to accept connections from other machines. See the [API Gateway guide](/guides/gateway-api/) for every option.
 
 ## Endpoints
 
@@ -127,11 +127,10 @@ Receives external webhooks and routes them to agents. See the [Webhooks section 
 
 ```typescript
 // Configure auth tokens
-const gateway = new AgentGateway(kernel, kernel.events, {
+await kernel.gateway.start({
   port: 8080,
   auth: {
     tokens: ['sk-prod-key-1', 'sk-prod-key-2'],
-    allowAnonymous: false,
   },
 });
 ```
@@ -141,6 +140,8 @@ All requests must include:
 Authorization: Bearer sk-prod-key-1
 ```
 
+Without any token configured (and no `KERNOVA_API_KEY`), `start()` throws rather than serving an open API.
+
 ### Development Mode
 
 For local development, allow unauthenticated access:
@@ -148,24 +149,28 @@ For local development, allow unauthenticated access:
 auth: { allowAnonymous: true }
 ```
 
+Browser requests are still refused unless their origin is listed in `cors`, so other websites can't call your local gateway.
+
 :::caution
 Never use `allowAnonymous: true` in production. The [Security Auditor](/guides/security/) will flag this.
 :::
 
 ## Rate Limiting
 
-Rate limits are automatically enforced on all gateway requests through the kernel's Rate Limiter:
+Rate limits are enforced per intent owner through the kernel's Rate Limiter. By default each named owner gets 100 requests per minute; requests without an owner run as `system`, which is only limited by an explicit rule:
 
 ```typescript
-// Configure before starting the gateway
+// Configure before starting the gateway: 100 requests/minute for every owner, including "system"
 kernel.rateLimiter.addRule({
   id: 'api-limit',
-  scope: 'global',
+  scope: 'identity',
   key: '*',
   maxRequests: 100,
   windowMs: 60_000,
 });
 ```
+
+Change the defaults with `KernelConfig.rateLimits`, for example `rateLimits: { defaultMaxRequests: 30 }`.
 
 When rate limited, the gateway returns:
 ```json
@@ -174,12 +179,12 @@ When rate limited, the gateway returns:
 
 ## CORS
 
-CORS is enabled by default for browser-based clients:
+CORS is off by default. List the origins of browser apps that call the gateway:
 
 ```typescript
-// Disable if needed
-const gateway = new AgentGateway(kernel, kernel.events, {
-  cors: false,
+await kernel.gateway.start({
+  auth: { tokens: [process.env.GATEWAY_TOKEN!] },
+  cors: ['https://app.example.com'],
 });
 ```
 
@@ -188,7 +193,7 @@ const gateway = new AgentGateway(kernel, kernel.events, {
 ### Docker
 
 ```dockerfile
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --production

@@ -27,6 +27,14 @@ const KNOWN_SERVERS: Record<string, Omit<MCPServerConfig, 'name'>> = {
   google: { command: 'uvx', args: ['mcp-server-google-search'] },
 };
 
+/** Replace ${VAR} in .kernova/mcp.json env values with the process environment */
+function expandEnv(env: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(env).map(([key, value]) => [
+    key,
+    String(value).replace(/\$\{(\w+)\}/g, (_, name: string) => process.env[name] ?? ''),
+  ]));
+}
+
 export class MCPManager implements MCPRegistry {
   servers: Map<string, MCPServerConfig> = new Map();
 
@@ -118,7 +126,7 @@ export class MCPManager implements MCPRegistry {
               name,
               command: serverConfig.command,
               args: serverConfig.args || [],
-              env: serverConfig.env || {},
+              env: expandEnv(serverConfig.env || {}),
               autoApprove: serverConfig.autoApprove || [],
               autoStart: !serverConfig.disabled,
             });

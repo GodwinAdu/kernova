@@ -19,14 +19,14 @@ This creates:
 
 ```dockerfile
 # Multi-stage: build frontend + run agents
-FROM node:20-alpine AS frontend-build
+FROM node:24-alpine AS frontend-build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npx next build
 
-FROM node:20-alpine AS production
+FROM node:24-alpine AS production
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --production

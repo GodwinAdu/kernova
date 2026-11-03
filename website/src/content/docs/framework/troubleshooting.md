@@ -271,7 +271,7 @@ description: 'Search the knowledge base and return relevant articles. Use the ar
 kernova login --key kn_live_your_key_here
 ```
 
-Get a key from [cloud.kernova.app/dashboard/settings](https://cloud.kernova.app/dashboard/settings).
+Get a key from [kernova-cloud.vercel.app/dashboard/settings](https://kernova-cloud.vercel.app/dashboard/settings).
 
 ---
 
@@ -376,5 +376,5 @@ If your issue isn't listed here:
 
 1. Check the terminal output — most errors show clear messages
 2. Add `debug: true` to your `kernova.config.ts` for verbose logging
-3. Open an issue on [GitHub](https://github.com/kernova/kernova)
+3. Open an issue on [GitHub](https://github.com/GodwinAdu/kernova)
 4. Join our community Discord (coming soon)

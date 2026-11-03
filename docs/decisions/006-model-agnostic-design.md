@@ -14,7 +14,7 @@ Additionally, many providers now implement the OpenAI chat completions API forma
 
 ## Decision
 
-Nexus uses a three-tier provider architecture:
+Kernova uses a three-tier provider architecture:
 
 1. **ModelProvider interface** — The abstract contract all providers implement
 2. **Native providers** — First-class implementations for major providers (OpenAI, Anthropic, Gemini, Ollama)

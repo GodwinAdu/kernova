@@ -41,7 +41,7 @@ Create a `.env` file:
 
 ```env
 OPENAI_API_KEY=sk-...
-GATEWAY_PORT=8080           # HTTP API port for research requests
+GATEWAY_PORT=8080           # Port for the research HTTP endpoint
 REPORTS_DIR=./reports       # Directory for saved reports
 ```
 
@@ -54,6 +54,7 @@ REPORTS_DIR=./reports       # Directory for saved reports
 import { Kernova } from '@kernova/sdk';
 import { readFileSync, readdirSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { createServer, type ServerResponse } from 'node:http';
 
 const REPORTS_DIR = process.env.REPORTS_DIR || './reports';
 const GATEWAY_PORT = Number(process.env.GATEWAY_PORT) || 8080;
@@ -65,6 +66,7 @@ async function main() {
     dataDir: './research-data',
     builtInTools: {
       enabled: ['web-search', 'http-fetch', 'file-write', 'date-time'],
+      // web-search also needs a backend: webSearchProvider (see the Built-in Tools guide)
       sandboxDir: REPORTS_DIR,
     },
   });
@@ -306,41 +308,35 @@ SUGGESTIONS: (if revision needed)`,
     return { report: finalReport, review, durationMs };
   }
 
-  // ─── 8. API Gateway for accepting research requests ───────────
-  // Exposes an HTTP endpoint: POST /research { "topic": "...", "depth": "quick|thorough" }
+  // ─── 8. HTTP endpoint for research requests ───────────────────
+  // POST /research { "topic": "...", "depth": "quick|thorough" } and GET /reports.
+  // A plain Node server: kernel.gateway serves Kernova's built-in API, not custom routes.
   const kernel = app.getKernel();
-  kernel.gateway.expose({
-    port: GATEWAY_PORT,
-    routes: [
-      {
-        method: 'POST',
-        path: '/research',
-        handler: async (req) => {
-          const { topic, depth } = req.body as { topic: string; depth?: 'quick' | 'thorough' };
-          if (!topic) {
-            return { status: 400, body: { error: 'Missing "topic" field' } };
-          }
+  const json = (res: ServerResponse, status: number, body: unknown) => {
+    res.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
+  };
 
-          // Run research asynchronously and return a task ID
-          const taskId = await app.enqueue('research-job', { topic, depth: depth || 'thorough' });
-          return {
-            status: 202,
-            body: { taskId, message: `Research started: "${topic}"`, status: 'processing' },
-          };
-        },
-      },
-      {
-        method: 'GET',
-        path: '/reports',
-        handler: async () => {
-          const files = existsSync(REPORTS_DIR)
-            ? readdirSync(REPORTS_DIR).filter(f => f.endsWith('.md'))
-            : [];
-          return { status: 200, body: { reports: files, count: files.length } };
-        },
-      },
-    ],
-  });
+  createServer(async (req, res) => {
+    if (req.method === 'POST' && req.url === '/research') {
+      let raw = '';
+      for await (const chunk of req) raw += chunk;
+      const { topic, depth } = JSON.parse(raw || '{}') as { topic?: string; depth?: 'quick' | 'thorough' };
+      if (!topic) return json(res, 400, { error: 'Missing "topic" field' });
+
+      // Run research asynchronously and return a task ID
+      const taskId = await app.enqueue('research-job', { topic, depth: depth || 'thorough' });
+      return json(res, 202, { taskId, message: `Research started: "${topic}"`, status: 'processing' });
+    }
+
+    if (req.method === 'GET' && req.url === '/reports') {
+      const files = existsSync(REPORTS_DIR)
+        ? readdirSync(REPORTS_DIR).filter(f => f.endsWith('.md'))
+        : [];
+      return json(res, 200, { reports: files, count: files.length });
+    }
+
+    json(res, 404, { error: 'Not found' });
+  }).listen(GATEWAY_PORT, '127.0.0.1'); // add authentication before exposing it beyond localhost
 
   // ─── 9. Task queue handler for research jobs ──────────────────
   kernel.taskQueue.registerHandler('research-job', async (task) => {
@@ -350,7 +346,7 @@ SUGGESTIONS: (if revision needed)`,
 
   // ─── 10. Start the daemon ─────────────────────────────────────
   console.log('📚 Research Assistant starting...');
-  console.log(`   API Gateway on port ${GATEWAY_PORT}`);
+  console.log(`   HTTP endpoint on port ${GATEWAY_PORT}`);
   console.log(`   POST /research { "topic": "...", "depth": "quick|thorough" }`);
   console.log(`   GET  /reports`);
   console.log(`   Reports saved to: ${REPORTS_DIR}`);
@@ -394,11 +390,11 @@ echo "# Style Guide\nReports should be concise..." > docs/style-guide.md
 | Feature | Guide |
 |---------|-------|
 | RAG pipeline (document ingestion & retrieval) | [Context & Memory](/guides/context-memory#rag-pipeline) |
-| Built-in web-search tool | [Built-in Tools](/guides/tools#built-in-tools) |
+| Built-in web-search tool | [Built-in Tools](/concepts/tools) |
 | Plan-and-execute pattern | [Intelligence Modules](/guides/intelligence#plan-and-execute) |
 | Self-reflection for quality control | [Intelligence Modules](/guides/intelligence#self-reflection) |
 | Long-term memory for research findings | [Context & Memory](/guides/context-memory) |
-| File-write tool for saving reports | [Built-in Tools](/guides/tools#built-in-tools) |
-| API Gateway for HTTP access | [Gateway](/guides/gateway) |
-| Task queue for async job processing | [Task Queue](/guides/task-queue) |
+| File-write tool for saving reports | [Built-in Tools](/concepts/tools) |
+| HTTP endpoint (a plain Node server; see the Gateway for the built-in API) | [Gateway](/guides/gateway) |
+| Task queue for async job processing | [Task Queue](/guides/scheduler-queue-triggers) |
 | Multi-agent (researcher + reviewer) | [Building Agents](/guides/agents) |

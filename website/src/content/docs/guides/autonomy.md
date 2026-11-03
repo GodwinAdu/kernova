@@ -20,9 +20,9 @@ Kernova's autonomy layer gives your agents the ability to operate independently 
 Schedule agents to run tasks at specific times.
 
 ```typescript
-import { Nexus } from '@kernova/sdk';
+import { Kernova } from '@kernova/sdk';
 
-const app = await Nexus.create();
+const app = await Kernova.create();
 const kernel = app.getKernel();
 
 // Run a daily summary at 8am

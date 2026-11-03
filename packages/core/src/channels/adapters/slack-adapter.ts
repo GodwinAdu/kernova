@@ -1,7 +1,7 @@
 /**
  * Slack Channel Adapter
  *
- * Connects Nexus to Slack via the Web API and Events API.
+ * Connects Kernova to Slack via the Web API and Events API.
  * Uses native fetch for API calls and an HTTP server for incoming webhooks.
  */
 
@@ -10,6 +10,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { ChannelType, ConnectionState, OutboundMessage, DeliveryReceipt, SlackConfig } from '@kernova/types';
 import type { ChannelAdapter, MessageHandler, StateChangeHandler } from '../channel-adapter.js';
 import { now } from '../../utils.js';
+import { BodyTooLargeError, ReplyTargets, readBody } from '../inbound.js';
 
 const SLACK_API = 'https://slack.com/api';
 const DEFAULT_PORT = 3300;
@@ -21,7 +22,7 @@ export class SlackAdapter implements ChannelAdapter {
   private messageHandler?: MessageHandler;
   private stateHandler?: StateChangeHandler;
   private server?: Server;
-  private lastChannelId?: string;
+  private readonly targets = new ReplyTargets();
 
   constructor(private config: SlackConfig & { port?: number; defaultChannel?: string }) {}
 
@@ -58,12 +59,13 @@ export class SlackAdapter implements ChannelAdapter {
     this.setState('disconnected');
   }
 
-  async send(message: OutboundMessage): Promise<DeliveryReceipt> {
-    const channel = this.lastChannelId ?? this.config.defaultChannel;
-
-    if (!channel) {
-      return { success: false, timestamp: now(), error: 'No target channel available' };
+  /** Post to `recipient` (a channel ID, e.g. an inbound message's replyTo), else defaultChannel */
+  async send(message: OutboundMessage, recipient?: string): Promise<DeliveryReceipt> {
+    const resolved = this.targets.resolve(recipient, this.config.defaultChannel);
+    if ('error' in resolved) {
+      return { success: false, timestamp: now(), error: resolved.error };
     }
+    const channel = resolved.target;
 
     const body: Record<string, unknown> = { channel, text: message.content };
 
@@ -130,10 +132,8 @@ export class SlackAdapter implements ChannelAdapter {
       return;
     }
 
-    const chunks: Buffer[] = [];
-    req.on('data', (chunk: Buffer) => chunks.push(chunk));
-    req.on('end', () => {
-      const rawBody = Buffer.concat(chunks).toString('utf-8');
+    readBody(req).then((body) => {
+      const rawBody = body.toString('utf-8');
       const timestamp = req.headers['x-slack-request-timestamp'] as string | undefined;
       const signature = req.headers['x-slack-signature'] as string | undefined;
 
@@ -174,17 +174,21 @@ export class SlackAdapter implements ChannelAdapter {
           return;
         }
 
-        this.lastChannelId = event.channel;
+        if (event.channel) this.targets.remember(event.channel);
 
         this.messageHandler?.({
           sender: event.user ?? 'unknown',
           content: event.text ?? '',
-          timestamp: event.ts ?? now(),
+          // Slack's ts is "<seconds>.<sequence>"
+          timestamp: event.ts ? new Date(Number(event.ts) * 1000).toISOString() : now(),
           raw: payload,
+          ...(event.channel && { replyTo: event.channel }),
         });
       }
 
       res.writeHead(200).end();
+    }, (err) => {
+      res.writeHead(err instanceof BodyTooLargeError ? 413 : 400).end();
     });
   }
 

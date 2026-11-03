@@ -7,7 +7,7 @@
  * Every actor in the system has an identity.
  */
 
-import type { NexusId } from '@kernova/types';
+import type { KernovaId } from '@kernova/types';
 import { EventBus } from '../events/event-bus.js';
 import { ApiKeyManager, type ApiKey, type CreateKeyOptions } from './api-keys.js';
 import { PermissionEngine, type PermissionCheck, type PermissionResult, type Role } from './permission-engine.js';
@@ -20,11 +20,11 @@ export type ActorType = 'user' | 'agent' | 'service' | 'system';
 
 /** A registered identity */
 export interface RegisteredIdentity {
-  id: NexusId;
+  id: KernovaId;
   type: ActorType;
   name: string;
   email?: string;
-  organizationId?: NexusId;
+  organizationId?: KernovaId;
   createdAt: string;
   active: boolean;
   metadata: Record<string, unknown>;
@@ -32,10 +32,10 @@ export interface RegisteredIdentity {
 
 /** Organization */
 export interface Organization {
-  id: NexusId;
+  id: KernovaId;
   name: string;
   slug: string;
-  ownerId: NexusId;
+  ownerId: KernovaId;
   createdAt: string;
   settings: Record<string, unknown>;
 }
@@ -56,9 +56,9 @@ export interface IdentityManagerConfig {
  * Coordinates API keys, sessions, permissions, and organizations.
  */
 export class IdentityManager {
-  private identities: Map<NexusId, RegisteredIdentity> = new Map();
-  private organizations: Map<NexusId, Organization> = new Map();
-  private orgMembers: Map<NexusId, Set<NexusId>> = new Map(); // orgId → identityIds
+  private identities: Map<KernovaId, RegisteredIdentity> = new Map();
+  private organizations: Map<KernovaId, Organization> = new Map();
+  private orgMembers: Map<KernovaId, Set<KernovaId>> = new Map(); // orgId → identityIds
   private store: IdentityStore | null = null;
 
   readonly apiKeys: ApiKeyManager;
@@ -91,13 +91,21 @@ export class IdentityManager {
   }
 
   /**
+   * Close the persistent store. Identities stay available in memory; later changes are not persisted.
+   */
+  close(): void {
+    this.store?.close();
+    this.store = null;
+  }
+
+  /**
    * Register a new identity (user, agent, or service)
    */
   registerIdentity(options: {
     type: ActorType;
     name: string;
     email?: string;
-    organizationId?: NexusId;
+    organizationId?: KernovaId;
     roles?: string[];
   }): RegisteredIdentity {
     const identity: RegisteredIdentity = {
@@ -151,7 +159,7 @@ export class IdentityManager {
   /**
    * Get an identity by ID
    */
-  getIdentity(id: NexusId): RegisteredIdentity | undefined {
+  getIdentity(id: KernovaId): RegisteredIdentity | undefined {
     return this.identities.get(id);
   }
 
@@ -208,7 +216,7 @@ export class IdentityManager {
   /**
    * Revoke an API key by ID
    */
-  revokeApiKey(keyId: NexusId): boolean {
+  revokeApiKey(keyId: KernovaId): boolean {
     const revoked = this.apiKeys.revoke(keyId);
     if (revoked && this.store) {
       this.store.revokeKey(keyId);
@@ -243,7 +251,7 @@ export class IdentityManager {
   /**
    * Create an organization
    */
-  createOrganization(options: { name: string; slug: string; ownerId: NexusId }): Organization {
+  createOrganization(options: { name: string; slug: string; ownerId: KernovaId }): Organization {
     const org: Organization = {
       id: generateId('org'),
       name: options.name,
@@ -271,7 +279,7 @@ export class IdentityManager {
   /**
    * Add a member to an organization
    */
-  addOrgMember(orgId: NexusId, identityId: NexusId, role = 'developer'): void {
+  addOrgMember(orgId: KernovaId, identityId: KernovaId, role = 'developer'): void {
     const members = this.orgMembers.get(orgId) || new Set();
     members.add(identityId);
     this.orgMembers.set(orgId, members);
@@ -288,7 +296,7 @@ export class IdentityManager {
   /**
    * Get organization members
    */
-  getOrgMembers(orgId: NexusId): RegisteredIdentity[] {
+  getOrgMembers(orgId: KernovaId): RegisteredIdentity[] {
     const memberIds = this.orgMembers.get(orgId) || new Set();
     return Array.from(memberIds)
       .map(id => this.identities.get(id))
@@ -298,7 +306,7 @@ export class IdentityManager {
   /**
    * Get an organization by ID
    */
-  getOrganization(orgId: NexusId): Organization | undefined {
+  getOrganization(orgId: KernovaId): Organization | undefined {
     return this.organizations.get(orgId);
   }
 
@@ -313,7 +321,7 @@ export class IdentityManager {
   /**
    * Deactivate an identity
    */
-  deactivate(identityId: NexusId): boolean {
+  deactivate(identityId: KernovaId): boolean {
     const identity = this.identities.get(identityId);
     if (!identity) return false;
     identity.active = false;

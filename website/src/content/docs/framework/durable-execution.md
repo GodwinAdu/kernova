@@ -30,11 +30,12 @@ Step 3: Save to database ← CRASH
 ## Basic Usage
 
 ```typescript
+import Database from 'better-sqlite3';
 import { DurableExecutor, CheckpointStore } from '@kernova/core';
 
-// Create executor (store handles persistence)
-const store = new CheckpointStore(db);
-const executor = new DurableExecutor(store, eventBus);
+// Checkpoints live in a SQLite database (better-sqlite3), so a restart can resume
+const store = new CheckpointStore(new Database('./kernova-data/checkpoints.db'));
+const executor = new DurableExecutor(store, kernel.events); // the event bus is optional
 
 // Define a multi-step workflow
 const result = await executor.run('process-invoice', [

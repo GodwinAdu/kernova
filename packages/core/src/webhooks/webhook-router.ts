@@ -11,8 +11,8 @@
  */
 
 import type {
-  NexusId,
-  NexusEvent,
+  KernovaId,
+  KernovaEvent,
   WebhookRoute,
   WebhookTransform,
   WebhookTarget,
@@ -22,7 +22,10 @@ import type {
 import type { EventBus } from '../events/event-bus.js';
 import { generateId, now } from '../utils.js';
 import { ValidationError } from '../errors.js';
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+/** Header carrying the HMAC signature when a route has a secret but no signatureHeader */
+const DEFAULT_SIGNATURE_HEADER = 'x-kernova-signature';
 
 export interface WebhookRouterConfig {
   /** Maximum body size in bytes */
@@ -34,7 +37,7 @@ export interface WebhookRouterConfig {
 export class WebhookRouter {
   private readonly eventBus: EventBus;
   private readonly config: WebhookRouterConfig;
-  private routes: Map<NexusId, WebhookRoute> = new Map();
+  private routes: Map<KernovaId, WebhookRoute> = new Map();
   private recentEvents: WebhookEvent[] = [];
 
   constructor(eventBus: EventBus, config?: WebhookRouterConfig) {
@@ -64,7 +67,7 @@ export class WebhookRouter {
   /**
    * Remove a webhook route.
    */
-  remove(routeId: NexusId): boolean {
+  remove(routeId: KernovaId): boolean {
     return this.routes.delete(routeId);
   }
 
@@ -76,19 +79,21 @@ export class WebhookRouter {
     path: string;
     headers: Record<string, string>;
     body: unknown;
-  }): Promise<{ matched: boolean; routeId?: NexusId; error?: string }> {
+    /** The body exactly as received. Signatures are computed over these bytes. */
+    rawBody?: string;
+  }): Promise<{ matched: boolean; routeId?: KernovaId; error?: string }> {
     const route = this.findRoute(request.method, request.path);
     if (!route) {
       return { matched: false };
     }
 
-    // Verify signature if configured
-    if (route.secret && route.transform?.signatureHeader) {
+    // Verify the signature whenever the route has a secret
+    if (route.secret) {
       const valid = this.verifySignature(
         request.headers,
-        request.body,
+        request.rawBody ?? request.body,
         route.secret,
-        route.transform,
+        route.transform ?? {},
       );
       if (!valid) {
         return { matched: true, routeId: route.id, error: 'Signature verification failed' };
@@ -148,6 +153,14 @@ export class WebhookRouter {
 
   // ─── Private ───────────────────────────────────────────────
 
+  /**
+   * Whether a request to this route is authenticated by its signature.
+   * The gateway lets these through without a bearer token, since senders like GitHub can't send one.
+   */
+  isSignedRoute(method: string, path: string): boolean {
+    return Boolean(this.findRoute(method, path)?.secret);
+  }
+
   private findRoute(method: string, path: string): WebhookRoute | undefined {
     for (const route of this.routes.values()) {
       if (!route.enabled) continue;
@@ -172,19 +185,18 @@ export class WebhookRouter {
     secret: string,
     transform: WebhookTransform,
   ): boolean {
-    const headerName = transform.signatureHeader?.toLowerCase();
-    if (!headerName) return true;
+    const headerName = (transform.signatureHeader ?? DEFAULT_SIGNATURE_HEADER).toLowerCase();
 
     const signature = headers[headerName];
     if (!signature) return false;
 
     const algo = transform.signatureAlgorithm ?? 'sha256';
     const payload = typeof body === 'string' ? body : JSON.stringify(body);
-    const expected = createHmac(algo, secret).update(payload).digest('hex');
+    const expected = Buffer.from(createHmac(algo, secret).update(payload).digest('hex'));
 
     // Support "sha256=<hex>" format (GitHub style)
-    const normalized = signature.includes('=') ? signature.split('=').pop()! : signature;
-    return normalized === expected;
+    const normalized = Buffer.from(signature.includes('=') ? signature.split('=').pop()! : signature);
+    return normalized.length === expected.length && timingSafeEqual(normalized, expected);
   }
 
   private async routeToTarget(
@@ -228,7 +240,7 @@ export class WebhookRouter {
     }
   }
 
-  private emitEvent(eventType: string, subjectId: NexusId, data: Record<string, unknown>): void {
+  private emitEvent(eventType: string, subjectId: KernovaId, data: Record<string, unknown>): void {
     this.eventBus.publish({
       id: generateId('evt'),
       eventType,

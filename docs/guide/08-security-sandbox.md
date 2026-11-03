@@ -9,7 +9,7 @@ The Sandbox Manager restricts what agents can access during tool execution. It e
 ### Basic Usage
 
 ```typescript
-const kernel = new NexusKernel({ environment: 'production', dataDir: './data' });
+const kernel = new KernovaKernel({ environment: 'production', dataDir: './data' });
 await kernel.start();
 
 // Create a sandbox context for an agent
@@ -82,7 +82,7 @@ Protect your system from abuse with token-bucket rate limiting. Limits can be se
 ### Configuration
 
 ```typescript
-const kernel = new NexusKernel({ environment: 'production' });
+const kernel = new KernovaKernel({ environment: 'production' });
 await kernel.start();
 
 // Add rate limit rules
@@ -206,7 +206,7 @@ const key = kernel.authProfiles.getKey('openai');
 const result = await kernel.fallback.complete(request, {
   candidates: [
     { provider: 'openai', model: 'gpt-4o' },       // Uses profile rotation
-    { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
+    { provider: 'anthropic', model: 'claude-sonnet-5-5' },
     { provider: 'ollama', model: 'llama3' },        // Local fallback
   ],
   cooldownMs: 30_000,
@@ -246,7 +246,7 @@ defaults < file < environment < runtime
 
 ```typescript
 // Set defaults at startup
-const kernel = new NexusKernel({ environment: 'production' });
+const kernel = new KernovaKernel({ environment: 'production' });
 
 // Access the config manager
 const config = kernel.configManager;

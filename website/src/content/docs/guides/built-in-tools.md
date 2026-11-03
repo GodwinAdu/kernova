@@ -1,9 +1,9 @@
 ---
 title: "Built-in Tools"
-description: Six pre-packaged tools that ship with Kernova — HTTP fetch, file I/O, shell execution, date/time, and web search — all with sandbox enforcement.
+description: Twelve pre-packaged tools that ship with Kernova. The safe ones are on by default; tools that run code or touch files and databases are opt-in.
 ---
 
-Kernova ships six built-in tools that are automatically registered when the kernel starts. No external dependencies, no configuration files, no plugin installs — they're ready to use out of the box.
+Kernova ships twelve built-in tools. The safe ones are registered automatically when the kernel starts. Tools that run code or touch the file system or a database are **off by default**: a prompt injection in any page, file, or message an agent reads can make the model call any tool it has, so enable those only for agents whose input you trust.
 
 Agents can invoke tools in two ways:
 
@@ -16,34 +16,35 @@ Agents can invoke tools in two ways:
 
 ## The Twelve Built-in Tools
 
-| ID | Description |
-|----|-------------|
-| `http-fetch` | Make HTTP requests (GET, POST, PUT, DELETE, PATCH) |
-| `file-read` | Read files from the sandboxed filesystem |
-| `file-write` | Write or append to files in the sandboxed filesystem |
-| `shell-exec` | Execute shell commands within the sandbox |
-| `date-time` | Get current date, time, timezone, and formatting |
-| `web-search` | Search the web (pluggable provider pattern) |
-| `json-parse` | Parse JSON with dot-path extraction and transforms |
-| `math-eval` | Safe math expression evaluation (no eval()) |
-| `regex-match` | Pattern matching and replacement with ReDoS protection |
-| `image-describe` | Describe images using a vision-capable model |
-| `database-query` | Read-only SQL queries against SQLite |
-| `code-eval` | Sandboxed JavaScript execution with timeout |
+| ID | Default | Description |
+|----|---------|-------------|
+| `http-fetch` | On | Make HTTP requests (GET, POST, PUT, DELETE, PATCH). Private and internal addresses are blocked |
+| `date-time` | On | Get current date, time, timezone, and formatting |
+| `json-parse` | On | Parse JSON with dot-path extraction and transforms |
+| `math-eval` | On | Safe math expression evaluation (no eval()) |
+| `regex-match` | On | Pattern matching and replacement, with a hard timeout |
+| `image-describe` | On | Describe images using a vision-capable model |
+| `web-search` | When configured | Search the web; offered only when you set `webSearchProvider` |
+| `file-read` | Off | Read files inside the sandbox directory |
+| `file-write` | Off | Write or append to files inside the sandbox directory |
+| `shell-exec` | Off | Execute shell commands (not a sandbox, see below) |
+| `code-eval` | Off | Run JavaScript in an isolated process with a timeout |
+| `database-query` | Off | Read-only SQL queries against a SQLite database you specify |
+
+The off-by-default IDs are exported as `UNSAFE_BUILT_IN_TOOLS`, the defaults as `DEFAULT_BUILT_IN_TOOLS`.
 
 ### How They're Registered
 
-During `kernel.start()`, the `BuiltInToolRegistry` creates tool definitions and registers them into the `PluginRegistry`. This happens before any user-defined plugins load, so built-in tools are always available (unless explicitly disabled).
+During `kernel.start()`, the `BuiltInToolRegistry` applies the enabled/disabled configuration and registers the remaining tools into the `PluginRegistry` as one internal plugin.
 
 ```
 kernel.start()
-  → BuiltInToolRegistry.init(config)
-    → Creates 6 tool definitions
-    → Applies enabled/disabled filtering
-    → Registers surviving tools into PluginRegistry
-  → User plugins load
+  → BuiltInToolRegistry applies enabled/disabled filtering
+  → Registers enabled tools into PluginRegistry
   → Kernel ready
 ```
+
+Tool policies (`KernelConfig.toolPolicy` and `toolPolicy` in `defineAgent()`) can narrow the set further per agent.
 
 ---
 
@@ -53,21 +54,34 @@ Control which tools are available and how they behave via `BuiltInToolConfig`:
 
 ```typescript
 interface BuiltInToolConfig {
-  enabled?: string[];     // Whitelist — only these tools are available
-  disabled?: string[];    // Blacklist — these are removed (takes priority)
-  sandboxDir?: string;    // Root dir for file operations (default: dataDir)
-  shellTimeout?: number;  // Shell command timeout in ms (default: 30000)
+  enabled?: string[];       // Whitelist: only these tools (default: DEFAULT_BUILT_IN_TOOLS)
+  disabled?: string[];      // Blacklist: removed even if enabled
+  sandboxDir?: string;      // Root for file tools and shell cwd (default: <dataDir>/workspace)
+  shellTimeout?: number;    // shell-exec timeout and maximum, in ms (default: 30000)
+  shellEnv?: Record<string, string>;  // Extra environment variables for shell-exec
+  codeEvalTimeout?: number; // code-eval timeout and maximum, in ms (default: 5000)
+  databasePath?: string;    // SQLite file for database-query (required for that tool)
+  webSearchProvider?: WebSearchProvider; // Backend for web-search
+  httpFetch?: {
+    allowPrivateNetwork?: boolean; // Allow localhost/private/link-local targets (default: false)
+    maxResponseBytes?: number;     // Truncate longer bodies (default: 1,000,000)
+    timeoutMs?: number;            // Timeout and maximum, in ms (default: 30000)
+  };
 }
 ```
+
+Timeouts are ceilings: the model can ask for a shorter timeout, never a longer one.
 
 ### Via KernovaKernel (Core)
 
 ```typescript
-import { KernovaKernel } from '@kernova/core';
+import { KernovaKernel, DEFAULT_BUILT_IN_TOOLS } from '@kernova/core';
 
 const kernel = new KernovaKernel({
+  environment: 'development',
   builtInTools: {
-    disabled: ['shell-exec'],
+    // Keep the defaults and add file access, confined to ./workspace
+    enabled: [...DEFAULT_BUILT_IN_TOOLS, 'file-read', 'file-write'],
     sandboxDir: './workspace',
   },
 });
@@ -127,6 +141,16 @@ On failure:
 ### Error Handling
 
 Network errors and timeouts return an error object — they never throw. This means the LLM sees the error message in context and can decide how to recover (retry, try a different URL, or report the failure to the user).
+
+### Network Safety
+
+The URL comes from the model, so by default `http-fetch` refuses:
+
+- Hosts that resolve to loopback, private, link-local, or other internal addresses, including the cloud metadata service at `169.254.169.254`
+- Redirects to such addresses (every hop is checked)
+- Protocols other than `http` and `https`
+
+Responses larger than `maxResponseBytes` (default 1,000,000) are cut off and marked `truncated: true`. To call services on your own network, set `builtInTools.httpFetch.allowPrivateNetwork: true`.
 
 ### Examples
 
@@ -208,6 +232,8 @@ await tools.useTool('file-read', { path: './data.txt' });
 await tools.useTool('file-read', { path: '../../etc/passwd' });
 // → throws SandboxViolationError
 ```
+
+The check works on whole path segments, so a sibling folder such as `workspace-private` is outside a `workspace` sandbox. Symbolic links and junctions are followed, and a link that leads outside the sandbox is blocked too.
 
 ### Errors
 
@@ -362,13 +388,16 @@ await tools.useTool('shell-exec', { command: 'ls', cwd: '../../../' });
 
 ### Security Warning
 
-This tool executes **arbitrary shell commands**. In production, disable it unless you have a specific, controlled use case:
+This tool executes **arbitrary shell commands** and is **not a sandbox**. Only the starting directory is checked; a command can `cd ..` and do anything the user running Kernova can. It is off by default. Enable it only for agents whose input you fully trust, ideally inside a container:
 
 ```typescript
-builtInTools: { disabled: ['shell-exec'] }
+builtInTools: { enabled: [...DEFAULT_BUILT_IN_TOOLS, 'shell-exec'], shellTimeout: 10_000 }
 ```
 
-If you must keep it enabled, combine it with a strict `sandboxDir` and short `shellTimeout`.
+What it does enforce:
+
+- Commands get a minimal environment (`PATH`, `HOME`, temp directories and similar). API keys and other secrets in your process environment are not passed through; add what commands need with `shellEnv`
+- The timeout is a ceiling the model can't raise, and on timeout the command and every process it started are killed
 
 ### Examples
 
@@ -478,7 +507,7 @@ Search the web and return structured results.
   results: [
     {
       title: 'Kernova — Autonomous Agent Framework',
-      url: 'https://kernova.dev',
+      url: 'https://kernova2026.vercel.app',
       snippet: 'Build, deploy, and manage autonomous AI agents...',
     },
     // ... more results
@@ -498,12 +527,12 @@ When no provider is configured:
 
 ### Provider Pattern
 
-By default, `web-search` uses a `StubSearchProvider` that returns empty results. This is intentional — web search requires an API key, and Kernova doesn't force you to have one.
+Web search needs an API key, so Kernova doesn't ship a search backend. Until you configure one, `web-search` isn't offered to agents at all (so the model never wastes a call on a tool that returns nothing).
 
-To enable real search, implement the `WebSearchProvider` interface:
+To enable it, implement the `WebSearchProvider` interface and pass it as `builtInTools.webSearchProvider`:
 
 ```typescript
-import { createWebSearchTool } from '@kernova/core';
+import { createWebSearchTool, KernovaKernel } from '@kernova/core';
 import type { WebSearchProvider, SearchResult } from '@kernova/core';
 
 class BraveSearchProvider implements WebSearchProvider {
@@ -523,7 +552,13 @@ class BraveSearchProvider implements WebSearchProvider {
   }
 }
 
-// Register the custom provider
+// Give it to the kernel's built-in web-search tool
+const kernel = new KernovaKernel({
+  environment: 'production',
+  builtInTools: { webSearchProvider: new BraveSearchProvider() },
+});
+
+// Or build a standalone tool for your own plugin
 const searchTool = createWebSearchTool(new BraveSearchProvider());
 ```
 
@@ -633,7 +668,7 @@ const r3 = await tools.useTool('math-eval', { expression: '2^10' });
 
 ## Tool: regex-match
 
-Pattern matching and replacement with ReDoS (catastrophic backtracking) protection.
+Pattern matching and replacement. The regex runs in a worker thread that is stopped after 5 seconds, so a catastrophic-backtracking pattern (ReDoS) can't freeze the process. Results are capped at 10,000 matches.
 
 **ID:** `regex-match`
 
@@ -715,7 +750,9 @@ This tool is only available when a vision-capable model provider is configured. 
 
 ## Tool: database-query
 
-Execute read-only SQL queries against the Kernova SQLite database. Write operations are rejected.
+Execute read-only SQL queries against a SQLite database you choose. Write operations are rejected.
+
+Off by default. It needs both an entry in `enabled` and `builtInTools.databasePath`; there is no default database. Don't point it at Kernova's own `kernova.db`, which holds every user's memories and events.
 
 **ID:** `database-query`
 
@@ -764,7 +801,7 @@ This tool is only available when `builtInTools.databasePath` is configured. By d
 
 ## Tool: code-eval
 
-Execute JavaScript code in a sandboxed VM context with strict timeout and limited globals.
+Execute JavaScript in an isolated child process with a hard timeout. Off by default.
 
 **ID:** `code-eval`
 
@@ -772,20 +809,20 @@ Execute JavaScript code in a sandboxed VM context with strict timeout and limite
 
 | Param | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `code` | string | Yes | — | JavaScript code to execute |
-| `timeout` | number | No | 5000 | Execution timeout in ms |
+| `code` | string | Yes | — | JavaScript code to execute. The value of the last expression is returned |
+| `timeout` | number | No | 5000 | Execution timeout in ms (capped at `codeEvalTimeout`) |
 
 ### Returns
 
-`{ result: unknown, stdout: string, executionMs: number }`
+`{ result: unknown, stdout: string, executionMs: number }`. The result is passed through JSON, so functions and other non-JSON values come back as strings.
 
-### Available Globals
+### Isolation
 
-`console.log/warn/error` (captured), `JSON`, `Math`, `Date`, `parseInt`, `parseFloat`, `String`, `Number`, `Boolean`, `Array`, `Object`, `Map`, `Set`, `RegExp`, `Error`, `Promise`, `isNaN`, `isFinite`
+- The code runs in a fresh JavaScript context with only the language built-ins (`JSON`, `Math`, `Date`, `Array`, `Promise`, …) plus a captured `console.log/warn/error`. No host objects are shared, so there is no way back to Node's `process`
+- Promise callbacks count toward the timeout, so an async infinite loop is stopped too
+- The context runs in a separate Node process started with the permission model (no file system, child processes, or worker threads), an empty environment, and a 128 MB heap. The process is killed if it overruns
 
-### Blocked Globals
-
-`process`, `require`, `import`, `fs`, `child_process`, `Buffer`, `fetch`, `setTimeout`, `setInterval`, `global`, `globalThis`
+Network access isn't restricted by Node's permission model, so treat `code-eval` as trusted-input only.
 
 ### Examples
 
@@ -1054,19 +1091,19 @@ builtInTools: {
 Kernova emits events when tools are used. Monitor them to detect abuse or unexpected behavior:
 
 ```typescript
-kernel.events.on('tool.executed', (event) => {
-  console.log(`[tool] ${event.toolId} called by ${event.agentId}`);
-  if (event.toolId === 'shell-exec') {
-    // Log shell commands for audit
-    audit.log('shell-exec', event.params.command, event.agentId);
+kernel.events.subscribe('tool.executed', ({ data, correlationId }) => {
+  console.log(`[tool] ${data.toolId} ran in ${data.durationMs}ms`);
+  if (String(data.toolId).endsWith('shell-exec')) {
+    // Keep an audit trail of shell use
+    audit.log('shell-exec', correlationId);
   }
 });
 
-kernel.events.on('tool.failed', (event) => {
-  console.error(`[tool:error] ${event.toolId}: ${event.error.message}`);
-  if (event.error.code === 'SANDBOX_VIOLATION') {
+kernel.events.subscribe('tool.failed', ({ data }) => {
+  console.error(`[tool:error] ${data.toolId}: ${data.error}`);
+  if (/sandbox/i.test(String(data.error))) {
     // Alert on sandbox violation attempts
-    alerts.send('sandbox-violation', event);
+    alerts.send('sandbox-violation', data);
   }
 });
 ```

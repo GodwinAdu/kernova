@@ -1,0 +1,41 @@
+{
+  "name": "kernova",
+  "version": "1.0.0",
+  "description": "The Kernova CLI: run `npx kernova` to create, develop, and deploy AI agent apps",
+  "keywords": [
+    "kernova",
+    "cli",
+    "ai",
+    "agents",
+    "llm",
+    "framework",
+    "full-stack"
+  ],
+  "homepage": "https://kernova2026.vercel.app",
+  "bugs": {
+    "url": "https://github.com/GodwinAdu/kernova/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GodwinAdu/kernova.git",
+    "directory": "packages/kernova"
+  },
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "kernova": "./bin.js"
+  },
+  "files": [
+    "bin.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@kernova/cli": "^1.2.0"
+  }
+}

@@ -11,7 +11,7 @@
 
     <name>Kernova Java SDK</name>
     <description>HTTP client for the Kernova Gateway API</description>
-    <url>https://github.com/nexus-runtime/nexus</url>
+    <url>https://github.com/GodwinAdu/kernova</url>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>

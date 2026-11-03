@@ -34,7 +34,7 @@ For short-lived scripts, tests, or serverless functions, use the kernel directly
 
 ```typescript
 import { KernovaKernel } from '@kernova/core';
-import { DaemonRunner } from '@kernova/core/daemon';
+import { DaemonRunner } from '@kernova/core';
 
 const kernel = new KernovaKernel({
   ephemeral: false,
@@ -59,17 +59,22 @@ await daemon.start();
 
 ```bash
 # Start daemon with default settings
-kernova daemon
+kernova serve
 
 # Start with a specific config directory and hot-reload enabled
-kernova daemon --config ./agents/ --watch
+kernova serve --config ./agents/ --watch
 
 # Override shutdown timeout and heartbeat interval
-kernova daemon --config ./agents/ --watch --shutdown-timeout 15000 --heartbeat 30000
+kernova serve --config ./agents/ --watch --shutdown-timeout 15000 --heartbeat 30000
 
-# Specify data directory and port
-kernova daemon --config ./agents/ --data-dir /var/lib/kernova --port 8080
+# Specify data directory, and serve the HTTP gateway (needs KERNOVA_API_KEY)
+KERNOVA_API_KEY=secret kernova serve --config ./agents/ --data-dir /var/lib/kernova --port 8080
+
+# In a container: let the gateway accept connections from outside
+kernova serve --config ./agents/ --port 8080 --host 0.0.0.0
 ```
+
+The daemon starts the kernel if it isn't running yet, so `DaemonRunner` works with a kernel you haven't started.
 
 ---
 
@@ -83,8 +88,11 @@ interface DaemonConfig {
   /** Enable hot-reload of config files (default: false) */
   watch?: boolean;
 
-  /** Port for webhook/gateway listeners */
+  /** Serve the HTTP gateway (kernel.gateway) on this port; it needs a token */
   port?: number;
+
+  /** Interface the gateway binds to (default: 127.0.0.1) */
+  host?: string;
 
   /** Data directory override */
   dataDir?: string;
@@ -101,7 +109,8 @@ interface DaemonConfig {
 |--------|---------|-------------|
 | `configPath` | `undefined` | File or directory path to load agent configs from |
 | `watch` | `false` | Watch config files and re-register agents on change |
-| `port` | `undefined` | Port for webhook listeners (channels, gateways) |
+| `port` | `undefined` | Serve the [HTTP gateway](/guides/gateway-api) on this port. It needs `gateway.auth.tokens` or `KERNOVA_API_KEY` |
+| `host` | `127.0.0.1` | Interface the gateway binds to. Use `0.0.0.0` in containers |
 | `dataDir` | `undefined` | Override the kernel's data directory |
 | `shutdownTimeoutMs` | `30000` | Max time to wait for active intents during shutdown |
 | `heartbeatIntervalMs` | `60000` | Interval between heartbeat event emissions |
@@ -214,7 +223,7 @@ kernel.events.subscribe('daemon.agent.unregistered', (event) => {
 
 ## Heartbeat Events
 
-The daemon emits periodic heartbeat events on the kernel's EventBus. Use these for health monitoring, alerting, and dashboard metrics.
+The daemon emits a heartbeat event on the kernel's EventBus when it starts and then every `heartbeatIntervalMs`. Use these for health monitoring, alerting, and dashboard metrics (`kernova status` reads them).
 
 ### Event Shape
 
@@ -389,7 +398,7 @@ WantedBy=multi-user.target
 ```typescript
 // dist/server.ts
 import { KernovaKernel } from '@kernova/core';
-import { DaemonRunner } from '@kernova/core/daemon';
+import { DaemonRunner } from '@kernova/core';
 
 const kernel = new KernovaKernel({
   ephemeral: false,
@@ -410,7 +419,7 @@ await daemon.start();
 ### Docker
 
 ```dockerfile
-FROM node:20-slim AS runtime
+FROM node:24-slim AS runtime
 
 WORKDIR /app
 COPY dist/ ./dist/
@@ -471,7 +480,7 @@ module.exports = {
 ```typescript
 // dist/server.ts (PM2 variant)
 import { KernovaKernel } from '@kernova/core';
-import { DaemonRunner } from '@kernova/core/daemon';
+import { DaemonRunner } from '@kernova/core';
 
 const kernel = new KernovaKernel({
   ephemeral: false,

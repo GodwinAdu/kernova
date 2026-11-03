@@ -7,5 +7,5 @@ setup(
     python_requires=">=3.9",
     description="Kernova Python SDK — HTTP client for the Kernova AI agent platform",
     author="Kernova",
-    url="https://github.com/nexus-runtime/nexus",
+    url="https://github.com/GodwinAdu/kernova",
 )

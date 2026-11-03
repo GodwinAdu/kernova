@@ -1,15 +1,15 @@
-# Nexus API Reference
+# Kernova API Reference
 
-## @nexus/sdk
+## @kernova/sdk
 
-### `Nexus.create(config?)`
+### `Kernova.create(config?)`
 
-Create and start a Nexus instance.
+Create and start a Kernova instance.
 
 ```typescript
-const app = await Nexus.create({
+const app = await Kernova.create({
   env: 'development',      // 'development' | 'staging' | 'production'
-  dataDir: './nexus-data', // Persistence directory
+  dataDir: './kernova-data', // Persistence directory
   ephemeral: false,        // Disable persistence
   debug: false,            // Enable debug logging
 });
@@ -79,18 +79,18 @@ Shut down the runtime.
 
 ---
 
-## @nexus/core
+## @kernova/core
 
-### `NexusKernel`
+### `KernovaKernel`
 
 The runtime kernel. Lower-level API for full control.
 
 ```typescript
-import { NexusKernel, defineAgent } from '@nexus/core';
+import { KernovaKernel, defineAgent } from '@kernova/core';
 
-const kernel = new NexusKernel({
+const kernel = new KernovaKernel({
   environment: 'development',
-  dataDir: './nexus-data',
+  dataDir: './kernova-data',
   ephemeral: false,
   debug: true,
   providers: [...],          // Custom model providers
@@ -158,7 +158,7 @@ kernel.agentRegistry.register(agent.definition, agent.executor);
 Create a model provider from a preset.
 
 ```typescript
-import { createProvider } from '@nexus/core';
+import { createProvider } from '@kernova/core';
 
 const provider = createProvider('deepseek');
 const provider = createProvider('groq', { defaultModel: 'llama-3.1-8b-instant' });
@@ -169,13 +169,13 @@ Available presets: openai, anthropic, gemini, deepseek, groq, cerebras, sambanov
 
 ---
 
-## @nexus/cli
+## @kernova/cli
 
 | Command | Description |
 |---|---|
-| `nexus init [name]` | Create a new project |
-| `nexus dev` | Start dev runtime + hot reload + Studio |
-| `nexus agent create <name>` | Generate agent boilerplate |
-| `nexus agent list` | List registered agents |
-| `nexus status` | Show project/runtime status |
-| `nexus --version` | Show version |
+| `kernova init [name]` | Create a new project |
+| `kernova dev` | Start dev runtime + hot reload + Studio |
+| `kernova agent create <name>` | Generate agent boilerplate |
+| `kernova agent list` | List registered agents |
+| `kernova status` | Show project/runtime status |
+| `kernova --version` | Show version |

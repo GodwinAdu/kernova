@@ -6,7 +6,7 @@
  * 2. Return the correct types (`this` for chaining, Promise<T> for async)
  * 3. Can be chained in sequence
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { Kernova, ThreadHandle } from './kernova.js';
 import type { SDKChannelAdapter, InboundMessage, IntentResult, TriggerActionDef } from '@kernova/types';
 
@@ -42,6 +42,51 @@ describe('Kernova SDK Fluent API', () => {
     };
     const result = app.channel('webhook', mockAdapter);
     expect(result).toBe(app);
+  });
+
+  it('channel() starts the adapter listening, and close() stops it', async () => {
+    app = await Kernova.create({ ephemeral: true });
+    const calls: string[] = [];
+    const adapter: SDKChannelAdapter = {
+      id: 'listener',
+      type: 'webhook',
+      async connect() { calls.push('connect'); },
+      async disconnect() { calls.push('disconnect'); },
+      async send() { return { id: '1', status: 'sent', success: true, timestamp: new Date().toISOString() }; },
+      onMessage() {},
+    };
+    app.channel('webhook', adapter);
+    expect(calls).toEqual(['connect']);
+    await app.close();
+    expect(calls).toEqual(['connect', 'disconnect']);
+  });
+
+  it('accepts platform adapters and reply() answers the sender', async () => {
+    app = await Kernova.create({ ephemeral: true });
+    let deliver: ((raw: { sender: string; content: string; timestamp: string; replyTo?: string }) => void) | undefined;
+    const sent: Array<{ content: string; recipient?: string }> = [];
+    const slackLike = {
+      channelType: 'slack' as const,
+      state: 'connected' as const,
+      async connect() {},
+      async disconnect() {},
+      async send(message: { content: string }, recipient?: string) {
+        sent.push({ content: message.content, recipient });
+        return { success: true, timestamp: new Date().toISOString() };
+      },
+      onMessage(handler: typeof deliver) { deliver = handler; },
+      onStateChange() {},
+    };
+
+    const received: InboundMessage[] = [];
+    app.channel('support', slackLike).onMessage(async (msg) => {
+      received.push(msg);
+      await app.reply(msg, 'on it');
+    });
+
+    deliver!({ sender: 'U1', content: 'help', timestamp: new Date().toISOString(), replyTo: 'C42' });
+    await vi.waitFor(() => expect(sent).toEqual([{ content: 'on it', recipient: 'C42' }]));
+    expect(received[0]).toMatchObject({ connectorId: 'support', channel: 'slack', replyTo: 'C42', content: 'help' });
   });
 
   it('onMessage() returns this for chaining', async () => {

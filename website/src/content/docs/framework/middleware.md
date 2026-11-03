@@ -143,21 +143,46 @@ The `ctx` object contains:
 
 ```typescript
 interface MiddlewareContext {
-  agentName: string;          // Which agent is being called
-  input: string;              // The user's message
+  agentName: string;          // Which agent is being called (its route)
+  input: string;              // The user's message (before-middleware may rewrite it)
   threadId: string;           // Conversation thread ID
-  user?: { id: string };      // User info (if provided)
-  metadata: Record<string, unknown>; // Shared data between middleware
-  response?: {                // Only available in after-stage
+  user?: { id: string };      // `user` from the request body, as sent by the client
+  metadata: Record<string, unknown>; // Request details, plus shared data between middleware
+  response?: {                // Set once the agent has answered
     content: string;
     metadata?: Record<string, unknown>;
   };
 }
 ```
 
+`ctx.metadata` starts with:
+
+| Key | Value |
+|-----|-------|
+| `authorization` | The bearer token from the `Authorization` header (without `Bearer `) |
+| `clientIp` | The caller's IP address |
+| `headers` | All request headers |
+| …`context` | Every field of the request body's `context` object |
+
+`ctx.user` comes from the request body, so the client controls it: verify it (for example against your session store) before trusting it.
+
+## Rejecting Requests
+
+Throw to reject. The response uses the error's `status` (or `statusCode`) property, or 403:
+
+```typescript
+throw Object.assign(new Error('Invalid API key'), { status: 401 });
+```
+
+A before-middleware that returns without calling `next()` also rejects the request (403). Errors thrown by after-middleware are logged and don't change the response.
+
+## Streaming and WebSocket Requests
+
+Middleware runs for `POST /agents/:name`, `POST /agents/:name/stream`, and WebSocket messages. For streams, the reply is already sent when after-middleware runs, so changes to `ctx.response` only apply to non-streaming requests. WebSocket messages have no HTTP headers: `ctx.metadata` holds `{ source: 'websocket', clientId }`.
+
 ## Execution Order
 
-If you have multiple middleware:
+Middleware runs in file-name order, or in the order an agent's `middleware` list gives. `before` and `both` middleware wrap everything after them (Koa-style: code after `await next()` runs once the agent has answered); `after` middleware run once the agent has answered. With these files:
 
 ```
 middleware/auth.ts      (stage: before)

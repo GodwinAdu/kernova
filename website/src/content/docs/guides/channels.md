@@ -14,12 +14,12 @@ The channel system provides a unified interface for connecting Kernova to any me
 - **WebhookChannelAdapter** — HTTP POST-based ingestion for server-to-server integrations
 - **WebSocketChannelAdapter** — Persistent bidirectional connections for real-time communication
 
-**Five platform-specific adapters — fully implemented:**
+**Thirteen platform adapters** ([full list](#platform-adapters)), including:
 
 - **SlackAdapter** — Slack Web API + Events API with signature verification
 - **DiscordAdapter** — Discord Gateway WebSocket + REST API with heartbeat/resume
 - **TelegramAdapter** — Bot API with long-polling or webhook mode
-- **WhatsAppAdapter** — Meta Cloud API with webhook verification
+- **WhatsAppAdapter** — Meta Cloud API with the webhook subscription handshake
 - **EmailAdapter** — Raw SMTP sending + IMAP polling for receiving
 
 **SDK integration** is designed for minimal boilerplate:
@@ -40,28 +40,27 @@ External Platform ←→ Channel Adapter ←→ ConnectorRegistry ←→ EventBu
 ### Inbound Flow
 
 1. A message arrives at the platform (HTTP POST, WebSocket frame, Slack event, etc.)
-2. The channel adapter normalizes it into a standard `InboundMessage`
+2. The channel adapter checks that it really came from the platform (signature or token), then normalizes it into a standard `InboundMessage` with a `replyTo` address
 3. The `ConnectorRegistry` validates the message structure
-4. An event `channel.message.received` is emitted on the EventBus
-5. Registered message handlers are invoked
-6. Optionally, the message is submitted as an intent to the Kernel for agent processing
+4. An event `channel.message.received` is emitted on the EventBus (with the sender, not the content)
+5. Handlers registered with `kernel.channels.onMessage()` (or `app.onMessage()`) are invoked
+6. Your handler typically submits the content as an intent and answers with `reply()` — see [Receiving and Replying](#receiving-and-replying)
 
 ### Outbound Flow
 
 1. An agent produces a response (or the application sends one programmatically)
 2. The `ConnectorRegistry` routes the message to the correct adapter by connector ID
-3. The adapter's `send()` method serializes and delivers it to the platform
+3. The adapter's `send()` method delivers it to the `recipient` (an inbound message's `replyTo`) on the platform
 4. A `channel.message.sent` or `channel.message.failed` event is emitted
 
 ## Quick Start with SDK
 
 ```typescript
-import { Kernova } from '@kernova/sdk';
-import { WebhookChannelAdapter } from '@kernova/core';
+import { Kernova, WebhookChannelAdapter } from '@kernova/sdk';
 
 const app = await Kernova.create();
 
-// Register a webhook channel
+// Register a webhook channel (it starts listening right away)
 app.channel('incoming', new WebhookChannelAdapter({ port: 3100, path: '/hooks' }));
 
 // Handle all inbound messages
@@ -69,10 +68,10 @@ app.onMessage(async (msg) => {
   console.log(`[${msg.channel}] ${msg.sender}: ${msg.content}`);
 });
 
-await app.serve(); // Starts listening on configured ports
+await app.serve(); // Runs until SIGINT / SIGTERM
 ```
 
-That's it — messages POSTed to `http://localhost:3100/hooks` are normalized and delivered to your handler.
+That's it — messages POSTed to `http://localhost:3100/hooks` are normalized and delivered to your handler. Without a `secret` the adapter only accepts requests from this machine; add one before exposing it ([signing requests](#signing-requests)).
 
 ## WebhookChannelAdapter
 
@@ -84,36 +83,31 @@ The webhook adapter starts a lightweight HTTP server and accepts inbound message
 |--------|------|---------|-------------|
 | `port` | `number` | `3100` | HTTP server port |
 | `path` | `string` | `'/webhook'` | URL path to accept POST requests |
+| `secret` | `string` | — | Shared secret. Requests must carry the HMAC-SHA256 of their raw body (recommended) |
+| `signatureHeader` | `string` | `'x-kernova-signature'` | Header carrying the signature |
+| `host` | `string` | all interfaces with a `secret`, else `127.0.0.1` | Interface to listen on |
 | `id` | `string` | auto-generated | Unique connector identifier |
 
 ### Behavior
 
-- Starts an HTTP server bound to the configured port
-- Accepts **POST** requests at the configured path with a JSON body
+- Accepts **POST** requests at the configured path with a JSON body (up to 1 MB)
+- With a `secret`: requests without a valid signature get `401`. Without one, the server only listens on `127.0.0.1`, so nothing outside the machine can post (set `host` to override)
 - Responds immediately with `200 OK` and `{ received: true, messageId }` — processing is asynchronous
-- Returns `404` for non-POST methods or mismatched paths
-- Returns `400` for missing/invalid JSON body
+- Returns `404` for non-POST methods or mismatched paths, `400` for invalid JSON, `413` for bodies over 1 MB
 
 ### Usage
 
 ```typescript
-import { WebhookChannelAdapter } from '@kernova/core';
+import { WebhookChannelAdapter } from '@kernova/sdk';
 
-const webhook = new WebhookChannelAdapter({
+app.channel('webhooks', new WebhookChannelAdapter({
   port: 3100,
   path: '/incoming',
-});
-
-// Register with the core ConnectorRegistry
-kernel.channels.register({
-  channelType: 'webhook',
-  name: 'My Webhook',
-  config: { port: 3100, path: '/incoming' },
-});
-
-// Or use the SDK shorthand
-app.channel('webhooks', webhook);
+  secret: process.env.WEBHOOK_SECRET,
+}));
 ```
+
+The webhook and WebSocket adapters are used directly (`await adapter.connect()`) or through `app.channel()`; [`kernel.channels`](#connectorregistry-core-api) manages the platform adapters.
 
 ### Expected POST Body
 
@@ -131,22 +125,36 @@ app.channel('webhooks', webhook);
 | `content` | Yes | The message text |
 | `timestamp` | No | ISO 8601 timestamp (defaults to server time) |
 
-### Response
+### Signing Requests
 
-```json
-{
-  "received": true,
-  "messageId": "msg_a1b2c3d4"
-}
+The signature is the hex HMAC-SHA256 of the exact body bytes, sent as `sha256=<hex>`:
+
+```typescript
+import { createHmac } from 'node:crypto';
+
+const body = JSON.stringify({ sender: 'ci', content: 'Build failed on main' });
+const signature = createHmac('sha256', process.env.WEBHOOK_SECRET!).update(body).digest('hex');
+
+await fetch('https://hooks.example.com/incoming', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'x-kernova-signature': `sha256=${signature}` },
+  body,
+});
 ```
 
 ### Testing with cURL
 
 ```bash
+BODY='{"sender": "test-user", "content": "Hello from cURL"}'
+SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | sed 's/^.* //')
+
 curl -X POST http://localhost:3100/incoming \
   -H "Content-Type: application/json" \
-  -d '{"sender": "test-user", "content": "Hello from cURL"}'
+  -H "x-kernova-signature: sha256=$SIG" \
+  -d "$BODY"
 ```
+
+Without a `secret` (local testing), leave out the signature header.
 
 ## WebSocketChannelAdapter
 
@@ -159,47 +167,52 @@ The WebSocket adapter maintains persistent bidirectional connections — ideal f
 | `port` | `number` | `3200` | HTTP/WebSocket server port |
 | `path` | `string` | `'/ws'` | WebSocket upgrade path |
 | `keepaliveIntervalMs` | `number` | `30000` | Ping interval in milliseconds |
+| `token` | `string` | — | Clients must send `Authorization: Bearer <token>`, or `?token=<token>` in the URL (browsers can't set headers) |
+| `allowedOrigins` | `string[]` | — | Browser origins allowed to connect, e.g. `['https://app.example.com']` |
+| `host` | `string` | all interfaces with a `token`, else `127.0.0.1` | Interface to listen on |
 
 ### Behavior
 
 - Starts an HTTP server and upgrades connections to WebSocket at the configured path
+- **Who can connect:** with a `token`, clients without it get `401`. Browsers don't apply CORS to WebSockets, so a browser connection (one that sends an `Origin`) is refused (`403`) unless its origin is in `allowedOrigins`, or (without a list) it presents the token. Without a token the server listens on `127.0.0.1` only
 - Sends **ping** frames at the configured keepalive interval — terminates clients that don't respond with **pong**
-- Supports **multiple concurrent clients** (tracks all active connections)
-- `send()` broadcasts to all connected clients
-- Inbound messages are expected as JSON: `{ sender?, content }`
+- Inbound messages are JSON `{ sender?, content }` (up to 1 MB). Each message's `replyTo` is the sending client's ID
+- `send(message, recipient)` goes to that client; without a recipient it broadcasts to every client
 
 ### Usage
 
 ```typescript
-import { WebSocketChannelAdapter } from '@kernova/core';
+import { WebSocketChannelAdapter } from '@kernova/sdk';
 
-const ws = new WebSocketChannelAdapter({
+app.channel('realtime', new WebSocketChannelAdapter({
   port: 8080,
-  path: '/ws',
-  keepaliveIntervalMs: 30000,
-});
+  token: process.env.WS_TOKEN,
+  allowedOrigins: ['https://app.example.com'],
+}));
 
-app.channel('realtime', ws);
+// Answer each client on its own connection
+app.onMessage(async (msg) => {
+  const { answer } = await app.ask(msg.content, { threadId: msg.replyTo });
+  await app.reply(msg, answer);
+});
 ```
 
 ### Client-Side Connection
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8080/ws');
+const ws = new WebSocket(`wss://chat.example.com/ws?token=${encodeURIComponent(token)}`);
 
 ws.onopen = () => {
   ws.send(JSON.stringify({ sender: 'user-1', content: 'Hello!' }));
 };
 
 ws.onmessage = (event) => {
-  const response = JSON.parse(event.data);
-  console.log('Response:', response);
-};
-
-ws.onclose = () => {
-  console.log('Disconnected from server');
+  const response = JSON.parse(event.data); // { type: 'message', content, timestamp }
+  console.log('Response:', response.content);
 };
 ```
+
+A token in browser code is visible to that page's users: use it to keep strangers out, not as a per-user credential. For per-user auth, issue short-lived tokens from your backend.
 
 ### Keepalive & Connection Management
 
@@ -209,7 +222,7 @@ This ensures server resources are freed from zombie connections without manual i
 
 ## SDK Methods
 
-The SDK provides two primary methods for channel management:
+The SDK provides three methods for channel management:
 
 ### `app.channel(name, adapter)`
 
@@ -229,9 +242,19 @@ app.onMessage(async (msg) => {
 });
 ```
 
+### `app.reply(message, content)`
+
+Answers an inbound message on the adapter it came from, to its sender (`message.replyTo`). Returns the adapter's `DeliveryReceipt`.
+
+```typescript
+app.onMessage(async (msg) => {
+  await app.reply(msg, `Got it: ${msg.content}`);
+});
+```
+
 ### Chaining
 
-Both methods return the app instance, enabling fluent configuration:
+`channel()` and `onMessage()` return the app instance, enabling fluent configuration:
 
 ```typescript
 app
@@ -251,13 +274,13 @@ For advanced use cases that bypass the SDK, the `ConnectorRegistry` is available
 
 #### `register(input)`
 
-Registers a new channel adapter with configuration validation.
+Registers a platform connector (one of the [platform adapters](#platform-adapters)) with configuration validation. Returns the connector definition, whose `id` the other methods take.
 
 ```typescript
-kernel.channels.register({
-  channelType: 'webhook',
-  name: 'Production Webhook',
-  config: { port: 3100, path: '/hooks' },
+const slack = kernel.channels.register({
+  channelType: 'slack',
+  name: 'Support Slack',
+  config: { type: 'slack', botToken: process.env.SLACK_BOT_TOKEN!, signingSecret: process.env.SLACK_SIGNING_SECRET! },
 });
 ```
 
@@ -279,14 +302,23 @@ await kernel.channels.disconnect('connector_abc123');
 
 #### `send(request)`
 
-Sends an outbound message through the specified connector.
+Sends an outbound message through the specified connector, to `recipient` (an inbound message's `replyTo`).
 
 ```typescript
 await kernel.channels.send({
   connectorId: 'connector_abc123',
+  recipient: 'C024BE91L',            // e.g. a Slack channel ID
   message: { content: 'Hello from Kernova!' },
 });
 ```
+
+#### `onMessage(handler)`
+
+Handles inbound messages from every connector. Returns a function that removes the handler. A handler that throws emits `channel.handler.failed`.
+
+#### `reply(message, content)`
+
+Sends `content` (a string or an `OutboundMessage`) back on the message's connector, to its `replyTo`.
 
 #### `status()`
 
@@ -296,6 +328,37 @@ Returns all registered connectors with their current connection state.
 const connectors = kernel.channels.status();
 // [{ id, name, channelType, state: 'connected' | 'disconnected' | 'connecting' | 'failed' }]
 ```
+
+## Receiving and Replying
+
+Each inbound message has a `replyTo` address: the chat, channel, conversation, room, or phone number a reply should go to. Pass it back when you send, so concurrent conversations each get their own answers:
+
+```typescript
+// kernel.channels (platform adapters)
+kernel.channels.onMessage(async (msg) => {
+  const intent = await kernel.submit({
+    goal: msg.content,
+    owner: msg.sender,
+    metadata: { threadId: `${msg.connectorId}:${msg.replyTo}` }, // one conversation per chat
+  });
+  await kernel.channels.reply(msg, intent.result?.summary ?? 'Sorry, something went wrong.');
+});
+
+// Or explicitly
+await kernel.channels.send({ connectorId: msg.connectorId, recipient: msg.replyTo, message: { content: 'Hi!' } });
+```
+
+```typescript
+// SDK (webhook, WebSocket, or any SDKChannelAdapter)
+app.onMessage(async (msg) => {
+  const { answer } = await app.ask(msg.content, { threadId: `${msg.connectorId}:${msg.replyTo}` });
+  await app.reply(msg, answer);
+});
+```
+
+Without a recipient, an adapter sends to its configured default (`defaultChannel` for Slack, `defaultRecipient` for Email, the first room for Matrix, the first channel for IRC) or to the only conversation it has seen. Once several people are talking to the bot, a send without a recipient fails instead of guessing.
+
+---
 
 ## Message Types
 
@@ -312,6 +375,7 @@ interface InboundMessage {
   timestamp: string;    // ISO 8601 timestamp
   connectorId: string;  // Internal connector reference
   raw?: unknown;        // Original platform-specific payload (for advanced processing)
+  replyTo?: string;     // Where a reply goes (chat, channel, conversation, number); pass as `recipient`
 }
 ```
 
@@ -330,10 +394,10 @@ The `structured` field allows platform-specific rich content. Each adapter is re
 
 ```typescript
 interface DeliveryReceipt {
-  messageId: string;
-  delivered: boolean;
+  success: boolean;
+  platformMessageId?: string; // The platform's ID for the sent message
   timestamp: string;
-  error?: string;
+  error?: string;             // Why delivery failed (e.g. no recipient)
 }
 ```
 
@@ -375,25 +439,25 @@ disconnected → connecting → connected
 
 All platform adapters ship fully implemented with `@kernova/core`. No external dependencies needed — they use native `fetch`, `net`, `tls`, `crypto`, and the `ws` library (already bundled).
 
-| Platform | Status | Transport | Required Config |
-|----------|--------|-----------|-----------------|
-| Webhook | ✅ Production | HTTP POST receiver | `port`, `path` |
-| WebSocket | ✅ Production | WS server + keepalive | `port`, `path`, `keepaliveIntervalMs` |
-| Slack | ✅ Production | Web API + Events webhook | `botToken`, `signingSecret` |
-| Discord | ✅ Production | Gateway WebSocket + REST | `botToken`, `applicationId` |
-| Telegram | ✅ Production | Bot API (long-polling or webhook) | `botToken` |
-| WhatsApp | ✅ Production | Meta Cloud API + webhook | `accessToken`, `phoneNumberId`, `verifyToken` |
-| Email | ✅ Production | SMTP (send) + IMAP polling (receive) | `smtpHost`, `imapHost`, `username`, `password` |
-| Microsoft Teams | ✅ Production | Bot Framework webhook | `appId`, `appPassword` |
-| SMS (Twilio) | ✅ Production | Twilio REST API + webhook | `accountSid`, `authToken`, `fromNumber` |
-| Signal | ✅ Production | signal-cli binary + polling | `signalCliPath`, `phoneNumber` |
-| Matrix | ✅ Production | Client-Server API + /sync | `homeserverUrl`, `accessToken`, `userId` |
-| IRC | ✅ Production | TCP/TLS socket + PRIVMSG | `server`, `port`, `nick`, `channels` |
-| Voice (Twilio) | ✅ Production | REST API + TwiML webhook | `accountSid`, `authToken`, `fromNumber` |
-| Push (FCM/APNs) | ✅ Production | HTTP push (send-only) | `provider`, `fcmServerKey` or APNs creds |
-| RSS/Atom | ✅ Production | Feed polling (receive-only) | `feeds` array |
+| Platform | Transport | Inbound requests | Required Config |
+|----------|-----------|------------------|-----------------|
+| Webhook | HTTP POST receiver | ✅ HMAC-SHA256 with `secret` (localhost-only without one) | `port`, `path` |
+| WebSocket | WS server + keepalive | ✅ `token` and `allowedOrigins` (localhost-only without a token) | `port`, `path` |
+| Slack | Web API + Events webhook | ✅ Signing secret (HMAC-SHA256), 5-minute replay window | `botToken`, `signingSecret` |
+| Discord | Gateway WebSocket + REST | Outbound connection | `botToken`, `applicationId` |
+| Telegram | Bot API (long-polling or webhook) | Polling: outbound. Webhook: ✅ secret token (generated automatically) | `botToken` |
+| WhatsApp | Meta Cloud API + webhook | ✅ `X-Hub-Signature-256` with `appSecret` (required to receive) | `accessToken`, `phoneNumberId`, `verifyToken`, `appSecret` |
+| Email | SMTP (send) + IMAP polling (receive) | Outbound connection | `smtpHost`, `imapHost`, `username`, `password` |
+| Microsoft Teams | Bot Framework webhook | ✅ Bot Framework token (JWT, checked against Microsoft's keys) | `appId`, `appPassword` |
+| SMS (Twilio) | Twilio REST API + webhook | ✅ `X-Twilio-Signature` | `accountSid`, `authToken`, `fromNumber` |
+| Signal | signal-cli binary + polling | Outbound (local binary) | `signalCliPath`, `phoneNumber` |
+| Matrix | Client-Server API + /sync | Outbound connection | `homeserverUrl`, `accessToken`, `userId` |
+| IRC | TCP/TLS socket + PRIVMSG | Outbound connection | `server`, `port`, `nick`, `channels` |
+| Voice (Twilio) | REST API + TwiML webhook | ✅ `X-Twilio-Signature` | `accountSid`, `authToken`, `fromNumber` |
+| Push (FCM/APNs) | HTTP push (send-only) | — | `provider`, `fcmServerKey` or APNs creds |
+| RSS/Atom | Feed polling (receive-only) | Outbound connection | `feeds` array |
 
----
+Every adapter that runs a webhook server checks that requests really come from the platform, and rejects bodies over 1 MB. Twilio signs the exact public URL it calls: behind a proxy or tunnel, set `webhookUrl` to the URL configured in Twilio (otherwise it's rebuilt from `X-Forwarded-Proto`/`X-Forwarded-Host`/`Host`).
 
 ### Slack Adapter
 
@@ -517,9 +581,12 @@ const telegram = new TelegramAdapter({
 const telegramProd = new TelegramAdapter({
   type: 'telegram',
   botToken: process.env.TELEGRAM_BOT_TOKEN!,
-  webhookUrl: 'https://your-domain.com:443/telegram',
+  webhookUrl: 'https://your-domain.com/telegram',
+  webhookPort: 8443,  // Local port behind your proxy (default: the URL's port)
 });
 ```
+
+In webhook mode the adapter registers the webhook with a secret token (random per connect, or `secretToken`), and refuses updates that don't carry it in `X-Telegram-Bot-Api-Secret-Token`, as well as requests to other paths.
 
 **Setup steps:**
 1. Talk to [@BotFather](https://t.me/BotFather) on Telegram
@@ -570,9 +637,12 @@ const whatsapp = new WhatsAppAdapter({
   accessToken: process.env.WHATSAPP_ACCESS_TOKEN!,
   phoneNumberId: process.env.WHATSAPP_PHONE_ID!,
   verifyToken: 'my-custom-verify-token',  // You choose this — used for webhook verification
+  appSecret: process.env.WHATSAPP_APP_SECRET!, // App Dashboard → Settings → Basic; verifies each message
   webhookPort: 3400,  // Optional (default: 3400)
 });
 ```
+
+Meta signs each webhook POST with your app secret (`X-Hub-Signature-256`). Requests with a missing or wrong signature get `401`, and without `appSecret` the adapter refuses all incoming messages (`403`), because forged ones can't be told apart. Sending works without it.
 
 **Setup steps:**
 1. Create a Meta Business app at [developers.facebook.com](https://developers.facebook.com)
@@ -683,10 +753,13 @@ const teams = new TeamsAdapter({
   appId: process.env.TEAMS_APP_ID!,
   appPassword: process.env.TEAMS_APP_PASSWORD!,
   tenantId: process.env.TEAMS_TENANT_ID,  // Optional — multi-tenant if omitted
+  port: 3400,                              // Messaging endpoint port (default: 3400)
 });
 
 app.channel('teams', teams);
 ```
+
+Each activity must carry a Bot Framework token: a JWT signed with one of Microsoft's published keys, issued for your `appId`, unexpired, and for the activity's `serviceUrl`. Anything else gets `401`, so a forged request can't make the bot send its access token to another server. The adapter refreshes its own access token before it expires. For sovereign clouds, set `openIdMetadataUrl`.
 
 **Setup steps:**
 1. Register a bot at [dev.botframework.com](https://dev.botframework.com)
@@ -716,10 +789,13 @@ const sms = new SmsAdapter({
   authToken: process.env.TWILIO_AUTH_TOKEN!,
   fromNumber: '+15551234567',
   webhookPort: 3500,  // Optional (default: 3500)
+  webhookUrl: 'https://your-domain.com/sms', // The URL set in Twilio, when behind a proxy or tunnel
 });
 
 app.channel('sms', sms);
 ```
+
+Requests must carry a valid `X-Twilio-Signature` (computed with your auth token over the URL Twilio called); others get `403`.
 
 **Setup steps:**
 1. Create a Twilio account at [twilio.com](https://www.twilio.com)
@@ -851,10 +927,13 @@ const voice = new VoiceAdapter({
   fromNumber: '+15551234567',
   webhookPort: 3600,
   ttsVoice: 'alice',  // TTS voice (default: 'alice')
+  webhookUrl: 'https://your-domain.com/voice', // The URL set in Twilio, when behind a proxy or tunnel
 });
 
 app.channel('voice', voice);
 ```
+
+Requests must carry a valid `X-Twilio-Signature`, so nobody else can make the bot place calls on your Twilio account.
 
 **Setup steps:**
 1. Same Twilio account as SMS
@@ -990,20 +1069,13 @@ class MyCustomAdapter implements SDKChannelAdapter {
     console.log('Custom adapter disconnected');
   }
 
-  async send(message: OutboundMessage): Promise<DeliveryReceipt> {
-    // Deliver the message to your platform
-    const messageId = `msg_${Date.now()}`;
-
+  async send(message: OutboundMessage, recipient?: string): Promise<DeliveryReceipt> {
+    // Deliver the message to `recipient` (an inbound message's replyTo) on your platform
     try {
-      // ... your delivery logic here
-      return { messageId, delivered: true, timestamp: new Date().toISOString() };
+      const platformMessageId = await myPlatform.post(recipient, message.content);
+      return { success: true, platformMessageId, timestamp: new Date().toISOString() };
     } catch (error) {
-      return {
-        messageId,
-        delivered: false,
-        timestamp: new Date().toISOString(),
-        error: String(error),
-      };
+      return { success: false, timestamp: new Date().toISOString(), error: String(error) };
     }
   }
 
@@ -1049,11 +1121,11 @@ The channel system emits events on the kernel's EventBus at every significant li
 ### Subscribing to Events
 
 ```typescript
-kernel.events.on('channel.message.received', (data) => {
+kernel.events.subscribe('channel.message.received', ({ data }) => {
   console.log(`New message from ${data.sender} via ${data.channelType}`);
 });
 
-kernel.events.on('channel.connection.failed', (data) => {
+kernel.events.subscribe('channel.connection.failed', ({ data }) => {
   console.error(`Channel "${data.name}" failed: ${data.reason}`);
   // Alert your monitoring system
 });
@@ -1068,9 +1140,11 @@ kernel.events.on('channel.connection.failed', (data) => {
 
 ### Security
 
-- **Validate sender identity** in production. Raw webhook payloads can be spoofed — verify signatures, tokens, or IP allowlists.
-- **Use HTTPS (TLS)** in front of webhook adapters. Deploy behind a reverse proxy (nginx, Caddy) or load balancer that terminates TLS.
-- **Authenticate WebSocket connections** via a token in the initial handshake or first message. Don't assume all connected clients are trusted.
+- **Inbound requests are verified.** Every adapter with a webhook server checks the platform's signature or token (see the [table](#platform-adapters)). Configure the secret each one needs (`secret`, `appSecret`, `signingSecret`, `authToken`) and keep it out of source control.
+- **Use HTTPS (TLS)** in front of webhook adapters. Deploy behind a reverse proxy (nginx, Caddy) or load balancer that terminates TLS. For Twilio, set `webhookUrl` to the public URL.
+- **Authenticate WebSocket connections** with `token`, and list browser origins in `allowedOrigins`.
+- **Reply with `replyTo`.** `reply(msg, …)` or `send(…, msg.replyTo)` keeps each conversation's answers in that conversation.
+- **Treat `sender` as a label.** It comes from the platform (or, for the generic webhook and WebSocket adapters, from the client), so check it against your own user records before granting anything.
 
 ### Reliability
 

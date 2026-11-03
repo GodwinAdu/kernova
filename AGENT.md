@@ -1,4 +1,4 @@
-# Nexus — Agent Instructions
+# Kernova — Agent Instructions
 
 > This file defines how AI coding agents (Kiro, Copilot, Cursor, etc.) should work on this project.
 > It ensures consistency across sessions, developers, and years of development.
@@ -7,30 +7,30 @@
 
 ## Project Identity
 
-- **Name:** Nexus
+- **Name:** Kernova
 - **Type:** Intelligent Systems Runtime
 - **Tagline:** "The runtime for intelligent software"
 - **Version:** 0.1.0 (Foundation Phase)
 - **Language:** TypeScript (core), Rust (performance-critical modules, future)
-- **Runtime:** Node.js 20+
+- **Runtime:** Node.js 22+
 - **Package Manager:** npm with workspaces
 - **Build System:** Turborepo + TypeScript compiler
 - **Longevity Target:** 20-50 years
 
 ---
 
-## What Is Nexus?
+## What Is Kernova?
 
-Nexus is a runtime that provides the execution environment for intelligent software — the same way Node.js provides it for JavaScript applications.
+Kernova is a runtime that provides the execution environment for intelligent software — the same way Node.js provides it for JavaScript applications.
 
 ```
 Node.js   = Runtime for JavaScript
 Docker    = Runtime for Containers
 Kubernetes = Runtime for Services
-Nexus     = Runtime for Intelligent Systems
+Kernova     = Runtime for Intelligent Systems
 ```
 
-**Core insight:** AI models change every year. The infrastructure around them (identity, memory, events, governance, workflows, trust) is a permanent need. Nexus owns that infrastructure layer.
+**Core insight:** AI models change every year. The infrastructure around them (identity, memory, events, governance, workflows, trust) is a permanent need. Kernova owns that infrastructure layer.
 
 ---
 
@@ -40,9 +40,9 @@ Nexus     = Runtime for Intelligent Systems
 ┌─────────────────────────────────────────────┐
 │           Developer Application              │
 ├─────────────────────────────────────────────┤
-│           @nexus/sdk                         │
+│           @kernova/sdk                         │
 ├─────────────────────────────────────────────┤
-│           @nexus/core (Runtime Kernel)       │
+│           @kernova/core (Runtime Kernel)       │
 │  ┌──────────┐ ┌──────────┐ ┌────────────┐  │
 │  │  Intent  │ │  Agent   │ │  Workflow   │  │
 │  │  Engine  │ │ Registry │ │  Engine     │  │
@@ -77,12 +77,11 @@ Every feature MUST belong to exactly one pillar. If it doesn't fit, reject it.
 ## Monorepo Structure
 
 ```
-nexus/
+kernova/
 ├── docs/                          ← Project Atlas (documentation)
-│   ├── VISION.md                  ← Why Nexus exists (never changes)
+│   ├── VISION.md                  ← Why Kernova exists (never changes)
 │   ├── PROGRESS.md                ← Current status and what's next
 │   ├── ARCHITECTURE.md            ← Technical architecture overview
-│   ├── CONTRIBUTING.md            ← How to contribute
 │   ├── decisions/                 ← Architecture Decision Records (ADRs)
 │   │   ├── 001-typescript-first.md
 │   │   ├── 002-intent-as-first-class.md
@@ -91,14 +90,14 @@ nexus/
 │   │   ├── intent-system.md
 │   │   ├── memory-engine.md
 │   │   └── ...
-│   └── protocols/                 ← Nexus Protocol specs (future public standard)
+│   └── protocols/                 ← Kernova Protocol specs (future public standard)
 │       ├── NP-001-intent.md
 │       └── ...
 │
 ├── packages/
 │   ├── types/                     ← Universal Object Model
 │   │   └── src/
-│   │       ├── base.ts            ← NexusObject, Temporal, Evidence
+│   │       ├── base.ts            ← KernovaObject, Temporal, Evidence
 │   │       ├── intent.ts          ← Intent system types
 │   │       ├── agent.ts           ← Agent types
 │   │       ├── event.ts           ← Event system types
@@ -109,7 +108,7 @@ nexus/
 │   │
 │   ├── core/                      ← Runtime Kernel
 │   │   └── src/
-│   │       ├── kernel.ts          ← NexusKernel (the heart)
+│   │       ├── kernel.ts          ← KernovaKernel (the heart)
 │   │       ├── define-agent.ts    ← Developer API for creating agents
 │   │       ├── utils.ts           ← Shared utilities
 │   │       ├── agents/            ← Pillar 5: Execution
@@ -160,7 +159,7 @@ Every source file MUST follow this structure:
 // Imports (external, then internal, then types)
 import { something } from 'node:module';
 import { internal } from '../utils.js';
-import type { SomeType } from '@nexus/types';
+import type { SomeType } from '@kernova/types';
 
 // Constants
 const MAX_RETRIES = 3;
@@ -180,19 +179,19 @@ function helperFn() { ... }
 | Thing | Convention | Example |
 |-------|-----------|---------|
 | Files | kebab-case | `event-bus.ts` |
-| Classes | PascalCase | `NexusKernel` |
+| Classes | PascalCase | `KernovaKernel` |
 | Interfaces | PascalCase | `AgentDefinition` |
 | Type aliases | PascalCase | `IntentStatus` |
 | Functions | camelCase | `generateId()` |
 | Constants | UPPER_SNAKE | `MAX_RETRIES` |
 | Directories | kebab-case | `memory-engine/` |
-| Packages | @nexus/name | `@nexus/core` |
+| Packages | @kernova/name | `@kernova/core` |
 
 ### Import Rules
 
 1. Use `.js` extensions in all relative imports (ESM requirement)
 2. Import types with `import type { ... }` when possible
-3. Import from package names (`@nexus/types`) not relative paths across packages
+3. Import from package names (`@kernova/types`) not relative paths across packages
 4. Order: node builtins → external packages → internal packages → relative
 
 ### Error Handling
@@ -286,7 +285,7 @@ npm run build
 ## What NOT To Do
 
 - Do NOT add features without a spec document
-- Do NOT create new object types without adding them to `@nexus/types`
+- Do NOT create new object types without adding them to `@kernova/types`
 - Do NOT bypass the event system (everything emits events)
 - Do NOT store context as a single document (always compute it)
 - Do NOT couple to a specific AI model (always go through abstraction)

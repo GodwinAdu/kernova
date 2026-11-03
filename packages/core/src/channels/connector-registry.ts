@@ -6,8 +6,8 @@
  */
 
 import type {
-  NexusId,
-  NexusEvent,
+  KernovaId,
+  KernovaEvent,
   ChannelType,
   ConnectionState,
   ChannelConfig,
@@ -62,15 +62,16 @@ const RECONNECT_INITIAL_DELAY = 1000;
 const RECONNECT_MAX_DELAY = 60_000;
 
 export class ConnectorRegistry {
-  private definitions: Map<NexusId, ConnectorDef> = new Map();
-  private adapters: Map<NexusId, ChannelAdapter> = new Map();
-  private reconnectTimers: Map<NexusId, ReturnType<typeof setTimeout>> = new Map();
-  private reconnectDelays: Map<NexusId, number> = new Map();
-  private explicitDisconnects: Set<NexusId> = new Set();
+  private definitions: Map<KernovaId, ConnectorDef> = new Map();
+  private adapters: Map<KernovaId, ChannelAdapter> = new Map();
+  private reconnectTimers: Map<KernovaId, ReturnType<typeof setTimeout>> = new Map();
+  private reconnectDelays: Map<KernovaId, number> = new Map();
+  private explicitDisconnects: Set<KernovaId> = new Set();
   private running = false;
 
   private readonly deliveryTimeout: number;
   private readonly onInboundMessage?: (message: InboundMessage) => Promise<void>;
+  private readonly messageHandlers = new Set<(message: InboundMessage) => Promise<void> | void>();
 
   constructor(
     private eventBus: EventBus,
@@ -143,7 +144,7 @@ export class ConnectorRegistry {
   /**
    * Connect a registered connector.
    */
-  async connect(connectorId: NexusId): Promise<void> {
+  async connect(connectorId: KernovaId): Promise<void> {
     const adapter = this.adapters.get(connectorId);
     const def = this.definitions.get(connectorId);
     if (!adapter || !def) {
@@ -175,7 +176,7 @@ export class ConnectorRegistry {
   /**
    * Disconnect a registered connector.
    */
-  async disconnect(connectorId: NexusId): Promise<void> {
+  async disconnect(connectorId: KernovaId): Promise<void> {
     const adapter = this.adapters.get(connectorId);
     const def = this.definitions.get(connectorId);
     if (!adapter || !def) {
@@ -196,6 +197,28 @@ export class ConnectorRegistry {
   /**
    * Send a message through a connector.
    */
+  /**
+   * Handle messages from every connector. Returns a function that removes the handler.
+   *
+   *   kernel.channels.onMessage(async (msg) => {
+   *     const intent = await kernel.submit({ goal: msg.content, owner: msg.sender });
+   *     await kernel.channels.reply(msg, intent.result?.summary ?? '');
+   *   });
+   */
+  onMessage(handler: (message: InboundMessage) => Promise<void> | void): () => void {
+    this.messageHandlers.add(handler);
+    return () => this.messageHandlers.delete(handler);
+  }
+
+  /** Answer an inbound message on the connector it came from, to its replyTo address */
+  async reply(message: InboundMessage, content: string | OutboundMessage): Promise<OutboundMessageResult> {
+    return this.send({
+      connectorId: message.connectorId,
+      recipient: message.replyTo,
+      message: typeof content === 'string' ? { content } : content,
+    });
+  }
+
   async send(request: OutboundMessageRequest): Promise<OutboundMessageResult> {
     const { connectorId, message } = request;
 
@@ -212,7 +235,7 @@ export class ConnectorRegistry {
     const messageId = generateId('msg');
 
     try {
-      const receipt = await this.sendWithTimeout(adapter, message);
+      const receipt = await this.sendWithTimeout(adapter, message, request.recipient);
 
       if (receipt.success) {
         this.emitEvent('channel.message.sent', connectorId, def.channelType, {
@@ -436,7 +459,7 @@ export class ConnectorRegistry {
     }
   }
 
-  private handleInboundMessage(connectorId: NexusId, channelType: ChannelType, raw: RawInboundMessage): void {
+  private handleInboundMessage(connectorId: KernovaId, channelType: ChannelType, raw: RawInboundMessage): void {
     // Validate inbound message
     if (!raw.sender || raw.sender.length > 256) {
       this.emitEvent('channel.message.invalid', connectorId, channelType, {
@@ -468,6 +491,7 @@ export class ConnectorRegistry {
       timestamp: raw.timestamp,
       connectorId,
       raw: raw.raw,
+      ...(raw.replyTo && { replyTo: raw.replyTo }),
     };
 
     this.emitEvent('channel.message.received', connectorId, channelType, {
@@ -481,9 +505,19 @@ export class ConnectorRegistry {
         // Intent submission failure is logged but does not affect message flow
       });
     }
+    for (const handler of this.messageHandlers) {
+      Promise.resolve()
+        .then(() => handler(message))
+        .catch((error) => {
+          this.emitEvent('channel.handler.failed', connectorId, channelType, {
+            messageId: message.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+    }
   }
 
-  private handleStateChange(connectorId: NexusId, state: ConnectionState): void {
+  private handleStateChange(connectorId: KernovaId, state: ConnectionState): void {
     const def = this.definitions.get(connectorId);
     if (def) {
       def.state = state;
@@ -496,13 +530,13 @@ export class ConnectorRegistry {
     return !isNaN(date.getTime());
   }
 
-  private async sendWithTimeout(adapter: ChannelAdapter, message: OutboundMessage): Promise<{ success: boolean; timestamp: string; error?: string }> {
+  private async sendWithTimeout(adapter: ChannelAdapter, message: OutboundMessage, recipient?: string): Promise<{ success: boolean; timestamp: string; error?: string }> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(new Error('DELIVERY_TIMEOUT'));
       }, this.deliveryTimeout);
 
-      adapter.send(message)
+      adapter.send(message, recipient)
         .then(receipt => {
           clearTimeout(timer);
           resolve({
@@ -518,7 +552,7 @@ export class ConnectorRegistry {
     });
   }
 
-  private scheduleReconnect(connectorId: NexusId): void {
+  private scheduleReconnect(connectorId: KernovaId): void {
     if (!this.running) return;
     if (this.explicitDisconnects.has(connectorId)) return;
 
@@ -557,12 +591,12 @@ export class ConnectorRegistry {
     this.reconnectTimers.set(connectorId, timer);
   }
 
-  private resetReconnect(connectorId: NexusId): void {
+  private resetReconnect(connectorId: KernovaId): void {
     this.reconnectDelays.delete(connectorId);
     this.cancelReconnect(connectorId);
   }
 
-  private cancelReconnect(connectorId: NexusId): void {
+  private cancelReconnect(connectorId: KernovaId): void {
     const timer = this.reconnectTimers.get(connectorId);
     if (timer) {
       clearTimeout(timer);
@@ -570,7 +604,7 @@ export class ConnectorRegistry {
     }
   }
 
-  private async disconnectAdapter(id: NexusId, adapter: ChannelAdapter): Promise<void> {
+  private async disconnectAdapter(id: KernovaId, adapter: ChannelAdapter): Promise<void> {
     try {
       await adapter.disconnect();
     } catch {
@@ -580,11 +614,11 @@ export class ConnectorRegistry {
 
   private emitEvent(
     eventType: string,
-    connectorId: NexusId,
+    connectorId: KernovaId,
     channelType: ChannelType,
     data: Record<string, unknown>,
   ): void {
-    const event: NexusEvent = {
+    const event: KernovaEvent = {
       id: generateId('evt'),
       eventType,
       category: 'system',

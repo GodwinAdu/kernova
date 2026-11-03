@@ -1,7 +1,7 @@
 /**
  * WhatsApp Channel Adapter
  *
- * Connects Nexus to WhatsApp Business via the Meta Cloud API.
+ * Connects Kernova to WhatsApp Business via the Meta Cloud API.
  * Uses an HTTP webhook server for inbound messages and native fetch for outbound.
  */
 
@@ -9,6 +9,7 @@ import { createServer, type Server, type IncomingMessage, type ServerResponse } 
 import type { ChannelType, ConnectionState, OutboundMessage, DeliveryReceipt, WhatsAppConfig } from '@kernova/types';
 import type { ChannelAdapter, MessageHandler, StateChangeHandler } from '../channel-adapter.js';
 import { now } from '../../utils.js';
+import { BodyTooLargeError, ReplyTargets, header, readBody, safeEqual, verifyHmacSha256 } from '../inbound.js';
 
 const GRAPH_API_BASE = 'https://graph.facebook.com/v18.0';
 const DEFAULT_WEBHOOK_PORT = 3400;
@@ -19,7 +20,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
   private messageHandler?: MessageHandler;
   private stateHandler?: StateChangeHandler;
   private server?: Server;
-  private lastSender?: string;
+  private readonly targets = new ReplyTargets();
 
   constructor(private config: WhatsAppConfig & { webhookPort?: number }) {}
 
@@ -57,11 +58,13 @@ export class WhatsAppAdapter implements ChannelAdapter {
     this.setState('disconnected');
   }
 
-  async send(message: OutboundMessage): Promise<DeliveryReceipt> {
-    const recipient = this.lastSender;
-    if (!recipient) {
-      return { success: false, timestamp: now(), error: 'No recipient — no inbound message received yet' };
+  /** Send to `to` (a WhatsApp number, e.g. an inbound message's replyTo) */
+  async send(message: OutboundMessage, to?: string): Promise<DeliveryReceipt> {
+    const resolved = this.targets.resolve(to);
+    if ('error' in resolved) {
+      return { success: false, timestamp: now(), error: resolved.error };
     }
+    const recipient = resolved.target;
 
     const url = `${GRAPH_API_BASE}/${this.config.phoneNumberId}/messages`;
     const res = await fetch(url, {
@@ -135,7 +138,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
     const token = url.searchParams.get('hub.verify_token');
     const challenge = url.searchParams.get('hub.challenge');
 
-    if (mode === 'subscribe' && token === this.config.verifyToken) {
+    if (mode === 'subscribe' && token !== null && safeEqual(token, this.config.verifyToken)) {
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       res.end(challenge ?? '');
     } else {
@@ -144,15 +147,24 @@ export class WhatsAppAdapter implements ChannelAdapter {
   }
 
   private handleIncomingMessage(req: IncomingMessage, res: ServerResponse): void {
-    const chunks: Buffer[] = [];
+    // Meta signs every webhook POST with the app secret (X-Hub-Signature-256); without the
+    // secret there's no way to tell real messages from forged ones, so none are accepted
+    if (!this.config.appSecret) {
+      res.writeHead(403).end('Set appSecret to receive WhatsApp messages');
+      return;
+    }
 
-    req.on('data', (chunk: Buffer) => chunks.push(chunk));
-    req.on('end', () => {
+    readBody(req).then((raw) => {
+      if (!verifyHmacSha256(this.config.appSecret!, raw, header(req, 'x-hub-signature-256'))) {
+        res.writeHead(401).end();
+        return;
+      }
+
       // Respond immediately per WhatsApp webhook requirements
       res.writeHead(200).end();
 
       try {
-        const body = JSON.parse(Buffer.concat(chunks).toString());
+        const body = JSON.parse(raw.toString());
         const message = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 
         if (!message || message.type !== 'text') return;
@@ -163,17 +175,20 @@ export class WhatsAppAdapter implements ChannelAdapter {
           ? new Date(Number(message.timestamp) * 1000).toISOString()
           : now();
 
-        this.lastSender = sender;
+        this.targets.remember(sender);
 
         this.messageHandler?.({
           sender,
           content,
           timestamp,
           raw: body,
+          replyTo: sender,
         });
       } catch {
         // Malformed payload — already responded 200, nothing more to do
       }
+    }, (err) => {
+      res.writeHead(err instanceof BodyTooLargeError ? 413 : 400).end();
     });
   }
 }

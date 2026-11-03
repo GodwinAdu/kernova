@@ -1,7 +1,7 @@
 /**
  * Email Channel Adapter
  *
- * Connects Nexus to email via raw SMTP (sending) and IMAP (receiving).
+ * Connects Kernova to email via raw SMTP (sending) and IMAP (receiving).
  * Uses Node.js native net/tls modules — no external dependencies.
  *
  * NOTE: This is a minimal implementation for basic email connectivity.
@@ -13,6 +13,7 @@ import * as tls from 'node:tls';
 import type { ChannelType, ConnectionState, OutboundMessage, DeliveryReceipt, EmailConfig } from '@kernova/types';
 import type { ChannelAdapter, MessageHandler, StateChangeHandler } from '../channel-adapter.js';
 import { now } from '../../utils.js';
+import { ReplyTargets } from '../inbound.js';
 
 const CRLF = '\r\n';
 const DEFAULT_POLL_INTERVAL = 60_000;
@@ -24,7 +25,7 @@ export class EmailAdapter implements ChannelAdapter {
   private messageHandler?: MessageHandler;
   private stateHandler?: StateChangeHandler;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
-  private lastSenderEmail: string | null = null;
+  private readonly targets = new ReplyTargets();
 
   constructor(private config: EmailConfig) {}
 
@@ -63,10 +64,16 @@ export class EmailAdapter implements ChannelAdapter {
     this.setState('disconnected');
   }
 
-  async send(message: OutboundMessage): Promise<DeliveryReceipt> {
-    const recipient = this.lastSenderEmail ?? this.config.defaultRecipient;
-    if (!recipient) {
-      return { success: false, timestamp: now(), error: 'No recipient available' };
+  /** Send to `to` (an address, e.g. an inbound message's replyTo), else defaultRecipient */
+  async send(message: OutboundMessage, to?: string): Promise<DeliveryReceipt> {
+    const resolved = this.targets.resolve(to, this.config.defaultRecipient);
+    if ('error' in resolved) {
+      return { success: false, timestamp: now(), error: resolved.error };
+    }
+    const recipient = resolved.target;
+    // A plain address only: anything else could inject SMTP commands or headers
+    if (!/^[^\s<>@,;"]+@[^\s<>@,;"]+$/.test(recipient)) {
+      return { success: false, timestamp: now(), error: `Invalid recipient address: ${recipient}` };
     }
 
     try {
@@ -123,7 +130,13 @@ export class EmailAdapter implements ChannelAdapter {
       await this.smtpCommand(socket, `RCPT TO:<${to}>`, 250);
       await this.smtpCommand(socket, 'DATA', 354);
 
-      // Message body (RFC 2822 format)
+      // Message body (RFC 5321/5322): CRLF line endings, and lines starting with "." doubled
+      // so the text can't end the message early and inject SMTP commands
+      const safeBody = body
+        .replace(/\r\n|\r|\n/g, CRLF)
+        .split(CRLF)
+        .map(line => (line.startsWith('.') ? `.${line}` : line))
+        .join(CRLF);
       const emailContent = [
         `From: ${this.config.username}`,
         `To: ${to}`,
@@ -132,7 +145,7 @@ export class EmailAdapter implements ChannelAdapter {
         `MIME-Version: 1.0`,
         `Content-Type: text/plain; charset=UTF-8`,
         '',
-        body,
+        safeBody,
         '.',
       ].join(CRLF);
 
@@ -237,12 +250,13 @@ export class EmailAdapter implements ChannelAdapter {
 
         const parsed = this.parseImapMessage(fetchResult);
         if (parsed && this.messageHandler) {
-          this.lastSenderEmail = parsed.from;
+          this.targets.remember(parsed.from);
           this.messageHandler({
             sender: parsed.from,
             content: parsed.body,
             timestamp: parsed.date ?? new Date().toISOString(),
             raw: { subject: parsed.subject, uid },
+            replyTo: parsed.from,
           });
         }
 

@@ -1,27 +1,57 @@
 {
     "name": "@kernova/cli",
-    "version": "1.1.4",
+    "version": "1.2.0",
     "description": "Kernova CLI - Developer tools for the Intelligent Systems Runtime",
+    "keywords": [
+        "kernova",
+        "cli",
+        "ai",
+        "agents",
+        "llm",
+        "developer-tools",
+        "deploy"
+    ],
+    "homepage": "https://kernova2026.vercel.app",
+    "bugs": {
+        "url": "https://github.com/GodwinAdu/kernova/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/GodwinAdu/kernova.git",
+        "directory": "packages/cli"
+    },
+    "license": "MIT",
+    "type": "module",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
-    "type": "module",
     "bin": {
         "kernova": "./dist/bin.js"
     },
+    "files": [
+        "dist",
+        "studio",
+        "README.md"
+    ],
+    "engines": {
+        "node": ">=22.0.0"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
     "scripts": {
-        "build": "tsc",
+        "build": "node ../../scripts/clean.mjs dist && tsc && node scripts/copy-studio.mjs",
         "dev": "tsc --watch",
-        "clean": "rimraf dist"
+        "clean": "node ../../scripts/clean.mjs dist studio",
+        "prepublishOnly": "npm run build"
     },
     "dependencies": {
-        "@kernova/core": "^1.0.0",
-        "@kernova/types": "^1.0.0",
-        "better-sqlite3": "^12.11.1"
+        "@kernova/core": "^2.0.0",
+        "@kernova/types": "^1.1.0",
+        "better-sqlite3": "^13.0.3"
     },
     "devDependencies": {
-        "typescript": "^5.5.0",
-        "@types/better-sqlite3": "^7.6.13",
+        "@types/better-sqlite3": "^9.6.0",
         "@types/node": "^22.0.0",
-        "rimraf": "^6.0.0"
+        "typescript": "^6.0.3"
     }
 }

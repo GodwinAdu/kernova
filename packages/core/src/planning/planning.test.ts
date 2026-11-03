@@ -11,7 +11,7 @@ import { AgentPlanner } from './agent-planner.js';
 import { EventBus } from '../events/event-bus.js';
 import { ModelRouter } from '../models/model-router.js';
 import { MockModelProvider } from '../testing/mock-model-provider.js';
-import type { NexusEvent } from '@kernova/types';
+import type { KernovaEvent } from '@kernova/types';
 
 describe('AgentPlanner - Planning Enhancement', () => {
   let eventBus: EventBus;
@@ -38,7 +38,7 @@ describe('AgentPlanner - Planning Enhancement', () => {
 
   describe('Task 7.1: Step Events', () => {
     it('should emit plan.step.started for each executed step', async () => {
-      const events: NexusEvent[] = [];
+      const events: KernovaEvent[] = [];
       eventBus.subscribe(['plan.step.started'], (evt) => {
         events.push(evt);
       });
@@ -53,7 +53,7 @@ describe('AgentPlanner - Planning Enhancement', () => {
     });
 
     it('should emit plan.step.completed for each successfully executed step', async () => {
-      const events: NexusEvent[] = [];
+      const events: KernovaEvent[] = [];
       eventBus.subscribe(['plan.step.completed'], (evt) => {
         events.push(evt);
       });
@@ -68,7 +68,7 @@ describe('AgentPlanner - Planning Enhancement', () => {
     });
 
     it('should emit plan.step.started before plan.step.completed for the same step', async () => {
-      const events: NexusEvent[] = [];
+      const events: KernovaEvent[] = [];
       eventBus.subscribe(['plan.step.*'], (evt) => {
         events.push(evt);
       });
@@ -89,7 +89,7 @@ describe('AgentPlanner - Planning Enhancement', () => {
     });
 
     it('should include step description in plan.step.started event', async () => {
-      const events: NexusEvent[] = [];
+      const events: KernovaEvent[] = [];
       eventBus.subscribe(['plan.step.started'], (evt) => {
         events.push(evt);
       });
@@ -105,8 +105,8 @@ describe('AgentPlanner - Planning Enhancement', () => {
         adaptiveReplanning: false,
       });
 
-      const startedEvents: NexusEvent[] = [];
-      const completedEvents: NexusEvent[] = [];
+      const startedEvents: KernovaEvent[] = [];
+      const completedEvents: KernovaEvent[] = [];
       eventBus.subscribe(['plan.step.started'], (evt) => { startedEvents.push(evt); });
       eventBus.subscribe(['plan.step.completed'], (evt) => { completedEvents.push(evt); });
 
@@ -130,7 +130,7 @@ describe('AgentPlanner - Planning Enhancement', () => {
       mockProvider.setResponse('alternative steps', '["Alt step A", "Alt step B"]');
       mockProvider.setResponse('failed', '["Alt step A", "Alt step B"]');
 
-      const replanEvents: NexusEvent[] = [];
+      const replanEvents: KernovaEvent[] = [];
       eventBus.subscribe(['plan.replanned'], (evt) => { replanEvents.push(evt); });
 
       const plan = await planner.plan('Do something');
@@ -177,7 +177,7 @@ describe('AgentPlanner - Planning Enhancement', () => {
     });
 
     it('should respect maxReplanAttempts limit', async () => {
-      const replanEvents: NexusEvent[] = [];
+      const replanEvents: KernovaEvent[] = [];
       eventBus.subscribe(['plan.replanned'], (evt) => { replanEvents.push(evt); });
 
       // Planner with maxReplanAttempts = 1
@@ -287,7 +287,7 @@ describe('AgentPlanner - Planning Enhancement', () => {
       // than the original limit. We simulate this by manually adding extra steps.
       mockProvider.setDefaultResponse('["S1","S2","S3"]');
 
-      const maxStepsEvents: NexusEvent[] = [];
+      const maxStepsEvents: KernovaEvent[] = [];
       eventBus.subscribe(['plan.maxStepsReached'], (evt) => { maxStepsEvents.push(evt); });
 
       const limitedPlanner = new AgentPlanner(eventBus, modelRouter, { maxSteps: 3 });

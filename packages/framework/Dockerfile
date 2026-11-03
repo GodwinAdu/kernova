@@ -4,7 +4,7 @@
 # Usage: docker build -t kernova/runtime .
 # The user's project code is mounted/added at /app
 
-FROM node:20-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 

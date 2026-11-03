@@ -17,8 +17,8 @@ import type {
   DeadLetterItem,
   DeadLetterAttempt,
   DeadLetterFilter,
-  NexusId,
-  NexusEvent,
+  KernovaId,
+  KernovaEvent,
   Priority,
 } from '@kernova/types';
 import type { EventBus } from '../events/event-bus.js';
@@ -66,10 +66,10 @@ export class TaskQueue {
   private readonly handlers: Map<string, TaskHandler> = new Map();
 
   // Concurrency tracking (semaphore)
-  private readonly inFlight: Set<NexusId> = new Set();
+  private readonly inFlight: Set<KernovaId> = new Set();
 
   // Timeout control per task
-  private readonly abortControllers: Map<NexusId, AbortController> = new Map();
+  private readonly abortControllers: Map<KernovaId, AbortController> = new Map();
 
   // Processing loop state
   private running = false;
@@ -209,7 +209,7 @@ export class TaskQueue {
   /**
    * Replay a dead-lettered item back into the queue.
    */
-  replay(deadLetterId: NexusId): TaskItem {
+  replay(deadLetterId: KernovaId): TaskItem {
     return this.deadLetterManager.replayFromDeadLetter(deadLetterId, this.store);
   }
 
@@ -357,8 +357,8 @@ export class TaskQueue {
 
   // ─── Event Emission ──────────────────────────────────────────
 
-  private emitEvent(eventType: string, subjectId: NexusId, data: Record<string, unknown>): void {
-    const event: NexusEvent = {
+  private emitEvent(eventType: string, subjectId: KernovaId, data: Record<string, unknown>): void {
+    const event: KernovaEvent = {
       id: generateId('evt'),
       eventType,
       category: 'system',

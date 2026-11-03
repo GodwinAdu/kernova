@@ -8,7 +8,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { NexusId } from '@kernova/types';
+import type { KernovaId } from '@kernova/types';
 import type { ApiKey } from './api-keys.js';
 
 export interface IdentityStoreConfig {
@@ -56,13 +56,13 @@ export class IdentityStore {
   }
 
   /** List keys by owner */
-  listKeysByOwner(ownerId: NexusId): ApiKey[] {
+  listKeysByOwner(ownerId: KernovaId): ApiKey[] {
     const rows = this.db.prepare('SELECT * FROM api_keys WHERE owner_id = ?').all(ownerId) as KeyRow[];
     return rows.map(r => this.rowToKey(r));
   }
 
   /** Revoke a key */
-  revokeKey(keyId: NexusId): void {
+  revokeKey(keyId: KernovaId): void {
     this.db.prepare('UPDATE api_keys SET active = 0 WHERE id = ?').run(keyId);
   }
 
@@ -83,7 +83,7 @@ export class IdentityStore {
   }
 
   /** Get identity by ID */
-  getIdentity(id: NexusId): { id: string; type: string; name: string; email?: string; organizationId?: string; active: boolean; createdAt: string } | null {
+  getIdentity(id: KernovaId): { id: string; type: string; name: string; email?: string; organizationId?: string; active: boolean; createdAt: string } | null {
     const row = this.db.prepare('SELECT * FROM identities WHERE id = ?').get(id) as IdentityRow | undefined;
     if (!row) return null;
     return {

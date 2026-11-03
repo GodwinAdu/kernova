@@ -10,8 +10,8 @@ The gateway (from `packages/core/src/gateway/agent-gateway.ts`) provides:
 - **OpenAI-compatible chat endpoint** — Drop-in replacement for `POST /v1/chat/completions`
 - **Native intent API** — Submit intents with full control over type, priority, and metadata
 - **Webhook routing** — Forward incoming webhooks to registered handlers
-- **Bearer token authentication** — Protect endpoints with token-based auth
-- **CORS support** — Pre-configured for browser-based clients
+- **Bearer token authentication** — Required by default; the gateway won't start without a token unless you opt into anonymous access
+- **Safe defaults** — Listens on `127.0.0.1` and sends no CORS headers until you allow specific origins
 
 ---
 
@@ -19,31 +19,40 @@ The gateway (from `packages/core/src/gateway/agent-gateway.ts`) provides:
 
 ### Start the Gateway
 
+The kernel already has a gateway at `kernel.gateway`. Configure it through `KernelConfig.gateway`, or pass settings to `start()`:
+
 ```typescript
 import { KernovaKernel } from '@kernova/core';
-import { AgentGateway } from '@kernova/core/gateway';
 
 const kernel = new KernovaKernel({
   ephemeral: false,
   dataDir: './data',
   environment: 'production',
+  gateway: {
+    port: 3000,
+    auth: { tokens: [process.env.GATEWAY_TOKEN!] },
+  },
 });
 await kernel.start();
 
-const gateway = new AgentGateway(kernel, kernel.events, {
-  port: 3000,
-  host: '0.0.0.0',
-  auth: {
-    tokens: ['sk-my-secret-token'],
-    allowAnonymous: false,
-  },
-  cors: true,
-  maxBodyBytes: 1_048_576, // 1MB
-});
-
-await gateway.start();
-console.log(`Gateway listening on port ${gateway.port}`);
+await kernel.gateway.start();
+console.log(`Gateway listening on port ${kernel.gateway.port}`);
 ```
+
+If neither `auth.tokens` nor the `KERNOVA_API_KEY` environment variable is set, `start()` throws instead of serving an open API.
+
+### Configuration
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `port` | `3000` | Port to listen on |
+| `host` | `'127.0.0.1'` | Interface to bind. Use `'0.0.0.0'` to accept connections from other machines (put a TLS proxy in front) |
+| `auth.tokens` | `[KERNOVA_API_KEY]` if set | Bearer tokens that grant access |
+| `auth.allowAnonymous` | `false` | Skip authentication. For local development only |
+| `cors` | `false` | `false` sends no CORS headers, an array allows those origins, `true` allows any origin |
+| `maxBodyBytes` | `1_048_576` | Request body size limit |
+
+You can also construct a separate gateway with `new AgentGateway(kernel, kernel.events, config)`.
 
 ### Make Requests
 
@@ -75,7 +84,7 @@ curl -X POST http://localhost:3000/v1/chat/completions \
 
 ### GET /health
 
-Returns the current state of the kernel. No authentication required when `allowAnonymous` is true.
+Returns the current state of the kernel. Requires a token like every other endpoint, unless `allowAnonymous` is true.
 
 **Response:**
 
@@ -202,10 +211,12 @@ Forward incoming webhooks to the kernel's `WebhookRouter`. The `:path` segment i
 ```bash
 curl -X POST http://localhost:3000/hooks/github/push \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-my-secret-token" \
+  -H "X-Hub-Signature-256: sha256=<hmac of the body>" \
   -H "X-GitHub-Event: push" \
   -d '{"ref": "refs/heads/main", "commits": [...]}'
 ```
+
+Routes registered with a `secret` are authenticated by their signature, so services like GitHub can call them without a bearer token. Routes without a secret need the token like any other endpoint.
 
 **Response (matched):**
 
@@ -280,15 +291,14 @@ The `model` field is accepted but ignored — the kernel routes to whichever age
 
 ## Authentication
 
-The gateway supports bearer token authentication. Tokens are validated against the `auth.tokens` array in the gateway config.
+Every endpoint requires a bearer token by default. Tokens come from `auth.tokens`, or from the `KERNOVA_API_KEY` environment variable when `auth.tokens` isn't set. The gateway refuses to start with no token at all.
 
 ### Configuration
 
 ```typescript
-const gateway = new AgentGateway(kernel, kernel.events, {
+await kernel.gateway.start({
   auth: {
     tokens: ['sk-prod-token-1', 'sk-prod-token-2'],
-    allowAnonymous: false,
   },
 });
 ```
@@ -297,20 +307,23 @@ const gateway = new AgentGateway(kernel, kernel.events, {
 
 1. The gateway reads the `Authorization` header from each request
 2. It expects the format `Bearer <token>`
-3. The token is checked against the `tokens` array
+3. The token is compared (in constant time) against the configured tokens
 4. If matched, the request proceeds; otherwise, a `401 Unauthorized` response is returned
+
+Anyone holding a token can run agents and pass any `owner`, so treat tokens as server-side credentials, not end-user keys.
 
 ### Development Mode
 
-For local development, set `allowAnonymous: true` to skip authentication entirely:
+For local development, set `allowAnonymous: true` to skip authentication:
 
 ```typescript
-const gateway = new AgentGateway(kernel, kernel.events, {
+await kernel.gateway.start({
   auth: { allowAnonymous: true },
+  cors: ['http://localhost:4200'], // e.g. Kernova Studio
 });
 ```
 
-When `allowAnonymous` is true, requests without an `Authorization` header are accepted. Requests with an invalid token are still rejected — the flag only permits *missing* auth, not wrong auth.
+Anonymous mode accepts every request from programs such as `curl`. Requests from web browsers carry an `Origin` header, and the gateway refuses them unless that origin is allowed by `cors`. This stops any web page you visit from calling your local gateway, including through DNS rebinding. Keep the default `host: '127.0.0.1'` in this mode.
 
 ### Multiple Tokens
 
@@ -322,7 +335,6 @@ auth: {
     process.env.GATEWAY_TOKEN_PRIMARY!,
     process.env.GATEWAY_TOKEN_SECONDARY!, // Rotate without downtime
   ],
-  allowAnonymous: false,
 }
 ```
 
@@ -330,29 +342,29 @@ auth: {
 
 ## CORS Configuration
 
-CORS is enabled by default. When active, the gateway adds the following headers to every response:
-
-```
-Access-Control-Allow-Origin: *
-Access-Control-Allow-Methods: GET, POST, OPTIONS
-Access-Control-Allow-Headers: Content-Type, Authorization
-```
-
-Preflight `OPTIONS` requests receive a `204 No Content` response with these headers.
-
-### Disabling CORS
-
-If the gateway sits behind a reverse proxy that handles CORS, disable it at the gateway level:
+CORS is off by default: the gateway sends no CORS headers, so browsers on other origins can't read its responses. To let a web app call the gateway, list its origins:
 
 ```typescript
-const gateway = new AgentGateway(kernel, kernel.events, {
-  cors: false,
+await kernel.gateway.start({
+  auth: { tokens: [process.env.GATEWAY_TOKEN!] },
+  cors: ['https://app.example.com'],
 });
 ```
 
+For allowed origins, responses include:
+
+```
+Access-Control-Allow-Origin: https://app.example.com
+Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization
+Vary: Origin
+```
+
+Preflight `OPTIONS` requests receive a `204 No Content` response. `cors: true` allows any origin; avoid it unless every endpoint requires a token.
+
 ### Custom CORS via Reverse Proxy
 
-For production deployments with specific origin requirements, disable gateway CORS and configure your reverse proxy:
+You can also leave gateway CORS off and handle it in your reverse proxy:
 
 ```nginx
 # nginx.conf
@@ -390,28 +402,24 @@ Webhook routes are registered through agent configs or programmatically:
 ```typescript
 kernel.webhooks.register({
   path: '/hooks/github/push',
-  agentId: 'deploy-agent',
-  transform: (payload) => ({
-    goal: `Process push to ${payload.ref}`,
-    metadata: { commits: payload.commits },
-  }),
+  method: 'POST',
+  secret: process.env.GITHUB_WEBHOOK_SECRET,
+  transform: { signatureHeader: 'x-hub-signature-256' },
+  target: { type: 'agent', agentName: 'deploy-agent', goal: 'Process the push' },
+  enabled: true,
 });
 ```
 
-### Header Forwarding
+### Signature Verification
 
-All request headers are forwarded to the webhook handler. Use this for signature verification:
+When a route has a `secret`, every request must carry an HMAC signature of the body. Requests with a missing or wrong signature are rejected with `400`.
 
-```typescript
-kernel.webhooks.register({
-  path: '/hooks/stripe/invoice',
-  agentId: 'billing-agent',
-  verify: (headers, body) => {
-    const signature = headers['stripe-signature'];
-    return verifyStripeSignature(body, signature, webhookSecret);
-  },
-});
-```
+- The signature is computed over the raw request body, exactly as received
+- The header is `transform.signatureHeader`, or `x-kernova-signature` if not set
+- Both `<hex>` and GitHub's `sha256=<hex>` formats are accepted; `transform.signatureAlgorithm` can be `'sha256'` (default) or `'sha1'`
+- Comparison is constant-time
+
+Signed routes don't need a bearer token, since senders like GitHub can't add one.
 
 ### Path Matching
 
@@ -434,16 +442,14 @@ The gateway integrates cleanly with the Kernova daemon and process managers.
 When using the daemon, pass the gateway port in the daemon config:
 
 ```typescript
-import { KernovaKernel } from '@kernova/core';
-import { DaemonRunner } from '@kernova/core/daemon';
-import { AgentGateway } from '@kernova/core/gateway';
+import { KernovaKernel, DaemonRunner, AgentGateway } from '@kernova/core';
 
 const kernel = new KernovaKernel({ ephemeral: false, environment: 'production' });
 await kernel.start();
 
 const gateway = new AgentGateway(kernel, kernel.events, {
   port: 3000,
-  auth: { tokens: [process.env.GATEWAY_TOKEN!], allowAnonymous: false },
+  auth: { tokens: [process.env.GATEWAY_TOKEN!] },
 });
 await gateway.start();
 
@@ -454,7 +460,7 @@ const daemon = new DaemonRunner(kernel, {
 });
 
 // Stop gateway on daemon shutdown
-kernel.events.subscribe('daemon.stopping', async () => {
+kernel.events.subscribe(['daemon.stopping'], async () => {
   await gateway.stop();
 });
 
@@ -471,7 +477,7 @@ The gateway emits events on the kernel's EventBus:
 | `gateway.stopped` | `{}` | Server has closed |
 
 ```typescript
-kernel.events.subscribe('gateway.started', (event) => {
+kernel.events.subscribe(['gateway.started'], (event) => {
   console.log(`Gateway ready on ${event.data.host}:${event.data.port}`);
 });
 ```
@@ -554,7 +560,7 @@ If a request exceeds the limit, the body parser returns `null` and the endpoint 
 
 ```typescript
 // Log all gateway activity via events
-kernel.events.subscribe('gateway.*', (event) => {
+kernel.events.subscribe(['gateway.*'], (event) => {
   console.log(`[gateway] ${event.eventType}`, event.data);
 });
 ```
@@ -576,19 +582,19 @@ interface GatewayConfig {
   /** Port to listen on (default: 3000) */
   port?: number;
 
-  /** Host to bind to (default: '0.0.0.0') */
+  /** Host to bind to (default: '127.0.0.1'; '0.0.0.0' accepts connections from other machines) */
   host?: string;
 
-  /** Authentication configuration */
+  /** Authentication configuration. start() throws unless a token is set or allowAnonymous is true */
   auth?: {
-    /** Bearer tokens that grant access */
+    /** Bearer tokens that grant access (default: KERNOVA_API_KEY, if set) */
     tokens?: string[];
-    /** Allow unauthenticated requests (default: false in production) */
+    /** Allow unauthenticated requests (default: false) */
     allowAnonymous?: boolean;
   };
 
-  /** Enable CORS headers (default: true) */
-  cors?: boolean;
+  /** Origins allowed to call the gateway from a browser, or true for any (default: false, no CORS headers) */
+  cors?: boolean | string[];
 
   /** Max request body size in bytes (default: 1,048,576 = 1MB) */
   maxBodyBytes?: number;

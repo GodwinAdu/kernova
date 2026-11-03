@@ -50,21 +50,19 @@ The chat page is the heart of Aura. It needs streaming responses, conversation h
 
 ```tsx
 'use client';
-import { useChat } from '@kernova/framework/react';
+import { useAgentStream } from '@kernova/framework/react';
 import { useState, useEffect, useRef } from 'react';
 
 export default function ChatPage() {
-  const { messages, input, setInput, sendMessage, isLoading } = useChat({
-    agent: 'assistant',
-    threadId: 'main-chat',
-    onMessage: (msg) => {
-      // Auto-scroll to bottom
-      scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
-    },
-  });
-
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [input, setInput] = useState('');
   const [notification, setNotification] = useState<string | null>(null);
+
+  const { messages, send, isStreaming, streamingContent } = useAgentStream('assistant', {
+    threadId: 'main-chat',
+    // Auto-scroll to bottom when a reply finishes
+    onComplete: () => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }),
+  });
 
   // Poll for trigger notifications
   useEffect(() => {
@@ -107,22 +105,22 @@ export default function ChatPage() {
             </div>
           </div>
         ))}
-        {isLoading && (
+        {isStreaming && (
           <div className="flex justify-start">
-            <div className="bg-gray-100 rounded-2xl px-4 py-2 animate-pulse">Thinking...</div>
+            <div className="bg-gray-100 rounded-2xl px-4 py-2">{streamingContent || "Thinking..."}</div>
           </div>
         )}
         <div ref={scrollRef} />
       </div>
 
       {/* Input */}
-      <form onSubmit={(e) => { e.preventDefault(); sendMessage(input); setInput(''); }}
+      <form onSubmit={(e) => { e.preventDefault(); void send(input); setInput(''); }}
             className="border-t p-4">
         <div className="flex gap-2">
           <input value={input} onChange={(e) => setInput(e.target.value)}
                  placeholder="Message Aura..."
                  className="flex-1 rounded-full border px-4 py-2 focus:outline-none focus:ring-2" />
-          <button type="submit" disabled={isLoading || !input.trim()}
+          <button type="submit" disabled={isStreaming || !input.trim()}
                   className="bg-blue-600 text-white rounded-full px-6 py-2 disabled:opacity-50">
             Send
           </button>
@@ -135,9 +133,9 @@ export default function ChatPage() {
 
 ### Streaming Responses (SSE)
 
-The `useChat` hook from `@kernova/framework/react` handles Server-Sent Events automatically. Each token streams in real-time — the user sees Aura typing word by word.
+The `useAgentStream` hook from `@kernova/framework/react` handles Server-Sent Events: `streamingContent` grows token by token while `isStreaming` is true, so the user sees Aura typing word by word. The finished reply is added to `messages`.
 
-Under the hood, it POSTs to `/api/kernova/agents/assistant` and reads the SSE stream.
+Under the hood, it POSTs to `/api/agents/assistant/stream` (proxied to the agent server) and reads the SSE stream.
 
 ## The Memory Page
 
@@ -302,7 +300,7 @@ Update your frontend's rewrite to point to the Railway URL instead of localhost.
 ### Option 3: Self-Hosted (Docker)
 
 ```dockerfile
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --production

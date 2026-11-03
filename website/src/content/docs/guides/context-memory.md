@@ -183,10 +183,13 @@ const result = await kernel.submit({
 For testing or custom pipelines, compute context directly:
 
 ```typescript
-const context = await kernel.contextEngine.computeContext({
+import { ContextEngine } from '@kernova/core';
+
+const engine = new ContextEngine(kernel.memoryEngine);
+const context = await engine.compute({
   intentId: 'intent-abc-123',
   goal: 'Optimize the database queries',
-  owner: 'user-123',
+  ownerId: 'user-123',
 });
 console.log(`${context.memories.length} memories, ~${context.estimatedTokens} tokens`);
 ```
@@ -307,6 +310,8 @@ Use the default engine unless you need external vector stores (Pinecone, Weaviat
 
 The `ConversationManager` provides named threads with sliding-window management and LLM-powered summarization — conversational continuity without unbounded context growth.
 
+Intents join a thread through `metadata.threadId` (`app.ask(goal, { threadId })` in the SDK). The agent then sees the thread's summary and recent turns, and each successful exchange is added to the thread. Intents without a `threadId` are independent: nothing is shared between them, which keeps different users' conversations apart.
+
 ### Creating and Using Threads
 
 ```typescript
@@ -365,13 +370,11 @@ const threads = kernel.conversation.listThreads();
 // Archive (preserves data, removes from active context)
 kernel.conversation.archive('support-ticket-123');
 
-// Delete entirely
-kernel.conversation.delete('old-thread-456');
-
-// Get metadata
-const info = kernel.conversation.getThreadInfo('support-ticket-123');
-console.log(info.messageCount);  // 24
-console.log(info.hasSummary);    // true
+// Inspect a thread
+const thread = kernel.conversation.retrieve('support-ticket-123');
+console.log(thread?.messages.length);   // 24
+console.log(thread?.summaries.length);  // 1 once older messages were summarized
+console.log(thread?.status);            // 'active' | 'archived'
 ```
 
 ### Multi-Thread Patterns
@@ -464,11 +467,14 @@ const result = await kernel.submit({ goal: 'How do I deploy to production?', own
 ### RAG Pipeline Management
 
 ```typescript
-const stats = await kernel.rag.getStats();
-console.log(`Documents: ${stats.documentCount}, Chunks: ${stats.chunkCount}`);
+const stats = kernel.rag.stats();
+console.log(`Documents: ${stats.documents}, Chunks: ${stats.chunks}`);
 
-await kernel.rag.remove('outdated-doc.md');  // Remove a document
-await kernel.rag.clear();                     // Clear all documents
+// Remove a document by ID (ingest() returns it; listDocuments() lists them)
+const outdated = kernel.rag.listDocuments().find(d => d.source === 'outdated-doc.md');
+if (outdated) kernel.rag.remove(outdated.id);
+
+kernel.rag.clear();  // Clear all documents
 ```
 
 ---
@@ -540,6 +546,7 @@ const result = await kernel.submit({
 The `@kernova/sdk` provides streamlined access to memory and context:
 
 ```typescript
+import { readFileSync } from 'node:fs';
 import { Kernova } from '@kernova/sdk';
 const app = await Kernova.create();
 
@@ -554,13 +561,14 @@ await thread.addMessage('user', 'How do I set up auth?');
 await thread.addMessage('assistant', 'I recommend JWT...');
 const context = thread.getContext(); // { summary, messages }
 
-// --- RAG ---
-await app.ingest('./docs/getting-started.md');
-const results = await app.retrieve('How do webhooks work?', { topK: 3 });
+// --- RAG (through the kernel) ---
+const rag = app.getKernel().rag;
+await rag.ingest(readFileSync('./docs/getting-started.md', 'utf8'), 'getting-started.md');
+const results = await rag.retrieve('How do webhooks work?', { topK: 3 });
 
-// --- Combined: full context assembled automatically ---
+// --- Combined: memories and matching documents are added to every ask ---
 await app.remember('Building a SaaS billing system', 'session');
-await app.ingest(billingDocs, { category: 'domain' });
+await rag.ingest(billingDocs, 'billing.md', { category: 'domain' });
 const { answer } = await app.ask('What about prorated charges?');
 ```
 
@@ -662,7 +670,7 @@ const testKernel = new KernovaKernel({ ephemeral: true, environment: 'developmen
 | Issue | Check |
 |-------|-------|
 | Memories not in context | Verify `owner` matches intent owner; check relevance scores (decayed memories may be filtered) |
-| RAG returning irrelevant results | Try `recursive` chunking; reduce chunk size; verify ingestion via `kernel.rag.getStats()` |
+| RAG returning irrelevant results | Try `recursive` chunking; reduce chunk size; verify ingestion via `kernel.rag.stats()` |
 | Summaries seem off | Summarization quality depends on LLM; check window size isn't too small |
 | Context exceeding budget | Store fewer working/session memories; reduce RAG `topK`; use specific tags |
 | Vector search not working | Ensure embedding model is configured in ModelRouter; set `ephemeral: false` |

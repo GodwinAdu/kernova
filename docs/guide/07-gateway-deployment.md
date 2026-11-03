@@ -5,9 +5,9 @@ The Agent Gateway turns your Kernova agents into a production HTTP service. It e
 ## Quick Start
 
 ```typescript
-import { NexusKernel, defineAgent } from '@kernova/core';
+import { KernovaKernel, defineAgent } from '@kernova/core';
 
-const kernel = new NexusKernel({ environment: 'production' });
+const kernel = new KernovaKernel({ environment: 'production' });
 await kernel.start();
 
 // Register an agent
@@ -31,7 +31,7 @@ await kernel.gateway.start();
 import { AgentGateway } from '@kernova/core';
 
 // The gateway is auto-created with the kernel, but you can configure it:
-const kernel = new NexusKernel({ environment: 'production' });
+const kernel = new KernovaKernel({ environment: 'production' });
 await kernel.start();
 
 // Access the gateway (auto-configured with defaults)

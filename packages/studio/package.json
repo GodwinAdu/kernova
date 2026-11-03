@@ -5,11 +5,10 @@
   "scripts": {
     "dev": "next dev -p 4200",
     "build": "next build",
-    "start": "next start -p 4200",
-    "lint": "next lint"
+    "start": "node ../cli/dist/bin.js studio --port 4200"
   },
   "dependencies": {
-    "next": "16.2.10",
+    "next": "16.4.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -19,6 +18,6 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "tailwindcss": "^4.3.2",
-    "typescript": "^5.5.0"
+    "typescript": "^6.0.3"
   }
 }

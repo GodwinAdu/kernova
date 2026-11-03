@@ -32,7 +32,7 @@ Every Kernova project has a configuration file at its root:
     },
     "fallback": {
       "provider": "anthropic",
-      "model": "claude-sonnet-4-20250514"
+      "model": "claude-sonnet-5-5"
     }
   },
   "providers": [],

@@ -70,9 +70,11 @@ export class PushAdapter implements ChannelAdapter {
     this.setState('disconnected');
   }
 
-  async send(message: OutboundMessage): Promise<DeliveryReceipt> {
-    if (!this.lastDeviceToken) {
-      return { success: false, timestamp: now(), error: 'No device token set — call setDeviceToken() or use structured.data.deviceToken' };
+  /** Push to `recipient` (a device token), else the token set with setDeviceToken() */
+  async send(message: OutboundMessage, recipient?: string): Promise<DeliveryReceipt> {
+    const deviceToken = recipient ?? this.lastDeviceToken;
+    if (!deviceToken) {
+      return { success: false, timestamp: now(), error: 'No device token: pass the recipient or call setDeviceToken()' };
     }
 
     // Extract title/body/data from structured content if available
@@ -80,9 +82,9 @@ export class PushAdapter implements ChannelAdapter {
     const data = (message.structured as Record<string, unknown> | undefined)?.data as Record<string, unknown> | undefined;
 
     if (this.config.provider === 'fcm') {
-      return this.sendFcm(this.lastDeviceToken, message.content, title, data);
+      return this.sendFcm(deviceToken, message.content, title, data);
     } else {
-      return this.sendApns(this.lastDeviceToken, message.content, title, data);
+      return this.sendApns(deviceToken, message.content, title, data);
     }
   }
 

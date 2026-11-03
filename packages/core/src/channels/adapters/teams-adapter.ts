@@ -2,17 +2,21 @@
  * Microsoft Teams Channel Adapter
  *
  * Connects Kernova to Microsoft Teams via Bot Framework.
- * Uses native fetch for API calls and an HTTP server for webhook callbacks.
+ * Uses native fetch for API calls and an HTTP server for the bot's messaging endpoint.
+ * Every inbound activity must carry a valid Bot Framework token for this bot's app ID.
  */
 
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { ChannelType, ConnectionState, OutboundMessage, DeliveryReceipt, TeamsConfig } from '@kernova/types';
 import type { ChannelAdapter, MessageHandler, StateChangeHandler } from '../channel-adapter.js';
 import { now } from '../../utils.js';
+import { BodyTooLargeError, BotFrameworkTokenVerifier, ReplyTargets, header, readBody } from '../inbound.js';
 
 const BOT_FRAMEWORK_TOKEN_URL = 'https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token';
 const BOT_FRAMEWORK_API = 'https://smba.trafficmanager.net/teams';
 const DEFAULT_PORT = 3400;
+/** Refresh the access token this long before it expires */
+const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000;
 
 export class TeamsAdapter implements ChannelAdapter {
   readonly channelType: ChannelType = 'teams';
@@ -21,10 +25,17 @@ export class TeamsAdapter implements ChannelAdapter {
   private stateHandler?: StateChangeHandler;
   private server?: Server;
   private accessToken?: string;
-  private lastServiceUrl?: string;
-  private lastConversationId?: string;
+  private accessTokenExpiresAt = 0;
+  /** Conversation ID → the service URL Bot Framework gave for it (from verified activities only) */
+  private readonly conversations = new ReplyTargets<string>();
+  private readonly verifier: BotFrameworkTokenVerifier;
 
-  constructor(private config: TeamsConfig & { port?: number }) {}
+  constructor(private config: TeamsConfig & { port?: number }) {
+    this.verifier = new BotFrameworkTokenVerifier({
+      appId: config.appId,
+      openIdMetadataUrl: config.openIdMetadataUrl,
+    });
+  }
 
   get state(): ConnectionState {
     return this._state;
@@ -36,7 +47,7 @@ export class TeamsAdapter implements ChannelAdapter {
 
     try {
       await this.authenticate();
-      this.startWebhookServer();
+      await this.startWebhookServer();
       this.setState('connected');
     } catch (err) {
       this.setState('failed');
@@ -47,16 +58,19 @@ export class TeamsAdapter implements ChannelAdapter {
   async disconnect(): Promise<void> {
     await this.stopWebhookServer();
     this.accessToken = undefined;
+    this.accessTokenExpiresAt = 0;
     this.setState('disconnected');
   }
 
-  async send(message: OutboundMessage): Promise<DeliveryReceipt> {
-    if (!this.accessToken || !this.lastConversationId) {
-      return { success: false, timestamp: now(), error: 'No conversation context available' };
+  /** Send to `recipient` (a conversation ID, e.g. an inbound message's replyTo) */
+  async send(message: OutboundMessage, recipient?: string): Promise<DeliveryReceipt> {
+    const resolved = this.conversations.resolve(recipient);
+    if ('error' in resolved) {
+      return { success: false, timestamp: now(), error: resolved.error };
     }
-
-    const serviceUrl = this.lastServiceUrl ?? BOT_FRAMEWORK_API;
-    const url = `${serviceUrl}/v3/conversations/${this.lastConversationId}/activities`;
+    const conversationId = resolved.target;
+    const serviceUrl = (this.conversations.get(conversationId) ?? BOT_FRAMEWORK_API).replace(/\/$/, '');
+    const url = `${serviceUrl}/v3/conversations/${encodeURIComponent(conversationId)}/activities`;
 
     const body: Record<string, unknown> = {
       type: 'message',
@@ -72,10 +86,11 @@ export class TeamsAdapter implements ChannelAdapter {
     }
 
     try {
+      const token = await this.getAccessToken();
       const res = await fetch(url, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${this.accessToken}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
@@ -104,6 +119,14 @@ export class TeamsAdapter implements ChannelAdapter {
 
   // ─── Auth ───────────────────────────────────────────────────
 
+  /** The access token for outbound calls, refreshed shortly before it expires (about hourly) */
+  private async getAccessToken(): Promise<string> {
+    if (!this.accessToken || Date.now() > this.accessTokenExpiresAt - TOKEN_REFRESH_MARGIN_MS) {
+      await this.authenticate();
+    }
+    return this.accessToken!;
+  }
+
   private async authenticate(): Promise<void> {
     const params = new URLSearchParams({
       grant_type: 'client_credentials',
@@ -122,16 +145,20 @@ export class TeamsAdapter implements ChannelAdapter {
       throw new Error(`Teams auth failed: ${res.status} ${await res.text()}`);
     }
 
-    const data = (await res.json()) as { access_token: string };
+    const data = (await res.json()) as { access_token: string; expires_in?: number };
     this.accessToken = data.access_token;
+    this.accessTokenExpiresAt = Date.now() + (data.expires_in ?? 3600) * 1000;
   }
 
   // ─── Webhook Server ─────────────────────────────────────────
 
-  private startWebhookServer(): void {
+  private startWebhookServer(): Promise<void> {
     const port = this.config.port ?? DEFAULT_PORT;
-    this.server = createServer((req, res) => this.handleRequest(req, res));
-    this.server.listen(port);
+    this.server = createServer((req, res) => void this.handleRequest(req, res));
+    return new Promise((resolve, reject) => {
+      this.server!.once('error', reject);
+      this.server!.listen(port, () => resolve());
+    });
   }
 
   private stopWebhookServer(): Promise<void> {
@@ -141,32 +168,37 @@ export class TeamsAdapter implements ChannelAdapter {
     });
   }
 
-  private handleRequest(req: IncomingMessage, res: ServerResponse): void {
+  private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     if (req.method !== 'POST') { res.writeHead(405).end(); return; }
 
-    const chunks: Buffer[] = [];
-    req.on('data', (chunk: Buffer) => chunks.push(chunk));
-    req.on('end', () => {
-      try {
-        const body = JSON.parse(Buffer.concat(chunks).toString('utf-8')) as TeamsActivity;
+    let activity: TeamsActivity;
+    try {
+      activity = JSON.parse((await readBody(req)).toString('utf-8')) as TeamsActivity;
+    } catch (err) {
+      res.writeHead(err instanceof BodyTooLargeError ? 413 : 400).end();
+      return;
+    }
 
-        if (body.type === 'message' && body.text) {
-          this.lastServiceUrl = body.serviceUrl;
-          this.lastConversationId = body.conversation?.id;
+    // Only Bot Framework can issue tokens for this bot; without this check anyone could post
+    // activities, and a forged serviceUrl would receive the bot's access token on reply
+    if (!(await this.verifier.verify(header(req, 'authorization'), activity))) {
+      res.writeHead(401).end();
+      return;
+    }
 
-          this.messageHandler?.({
-            sender: body.from?.name ?? body.from?.id ?? 'unknown',
-            content: body.text,
-            timestamp: body.timestamp ?? now(),
-            raw: body,
-          });
-        }
+    const conversationId = activity.conversation?.id;
+    if (activity.type === 'message' && activity.text && conversationId) {
+      if (activity.serviceUrl) this.conversations.remember(conversationId, activity.serviceUrl);
+      this.messageHandler?.({
+        sender: activity.from?.name ?? activity.from?.id ?? 'unknown',
+        content: activity.text,
+        timestamp: activity.timestamp ?? now(),
+        raw: activity,
+        replyTo: conversationId,
+      });
+    }
 
-        res.writeHead(200).end();
-      } catch {
-        res.writeHead(400).end('Invalid JSON');
-      }
-    });
+    res.writeHead(200).end();
   }
 
   private setState(state: ConnectionState): void {
@@ -180,6 +212,7 @@ interface TeamsActivity {
   text?: string;
   timestamp?: string;
   serviceUrl?: string;
+  channelId?: string;
   from?: { id?: string; name?: string };
   conversation?: { id?: string };
 }

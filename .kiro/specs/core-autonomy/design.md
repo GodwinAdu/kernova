@@ -4,7 +4,7 @@
 
 The Core Autonomy feature adds five modules to the Kernova runtime that enable agents to operate independently: **Scheduler**, **BackgroundLoop**, **TaskQueue**, **ProactiveTriggerEngine**, and **ConnectorRegistry**. Together they allow agents to execute tasks on a schedule, monitor conditions continuously, process queued work with priorities, react to runtime events, and communicate through external channels.
 
-Each module follows the established Kernova module pattern (constructor receives EventBus + config, exposes `start()`/`stop()` lifecycle). All state is persisted via SQLite using better-sqlite3 in the same style as the existing `EventStore`. The NexusKernel is extended with getter properties to expose each module.
+Each module follows the established Kernova module pattern (constructor receives EventBus + config, exposes `start()`/`stop()` lifecycle). All state is persisted via SQLite using better-sqlite3 in the same style as the existing `EventStore`. The KernovaKernel is extended with getter properties to expose each module.
 
 ### Design Rationale
 
@@ -21,7 +21,7 @@ Each module follows the established Kernova module pattern (constructor receives
 
 ```mermaid
 graph TB
-    subgraph NexusKernel
+    subgraph KernovaKernel
         EB[EventBus]
         ME[MemoryEngine]
         AR[AgentRegistry]
@@ -35,11 +35,11 @@ graph TB
         end
     end
 
-    SCH -->|submit intent| NexusKernel
-    BGL -->|submit intent| NexusKernel
-    TQ -->|execute handlers| NexusKernel
-    PTE -->|submit intent| NexusKernel
-    CR -->|submit intent| NexusKernel
+    SCH -->|submit intent| KernovaKernel
+    BGL -->|submit intent| KernovaKernel
+    TQ -->|execute handlers| KernovaKernel
+    PTE -->|submit intent| KernovaKernel
+    CR -->|submit intent| KernovaKernel
 
     SCH -->|emit events| EB
     BGL -->|emit events| EB
@@ -65,7 +65,7 @@ graph TB
 
 ```mermaid
 sequenceDiagram
-    participant K as NexusKernel
+    participant K as KernovaKernel
     participant EB as EventBus
     participant S as Scheduler
     participant B as BackgroundLoop
@@ -118,7 +118,7 @@ packages/core/src/
 │       ├── whatsapp-adapter.ts
 │       ├── telegram-adapter.ts
 │       └── email-adapter.ts
-└── kernel.ts                 # Extended NexusKernel
+└── kernel.ts                 # Extended KernovaKernel
 
 packages/types/src/
 ├── autonomy.ts               # All autonomy-related type definitions
@@ -154,20 +154,20 @@ export class Scheduler {
   register(job: ScheduledJobInput): ScheduledJob;
 
   /** Remove a scheduled job by ID */
-  remove(jobId: NexusId): void;
+  remove(jobId: KernovaId): void;
 
   /** List all registered jobs */
   list(): ScheduledJob[];
 
   /** Get a specific job by ID */
-  get(jobId: NexusId): ScheduledJob | undefined;
+  get(jobId: KernovaId): ScheduledJob | undefined;
 }
 ```
 
 **Internal Mechanics**:
 - Uses `setTimeout` chaining to schedule each job's next tick (not `setInterval`).
 - After each execution (or on startup), calculates the next cron match and schedules a timer.
-- Maintains a `Map<NexusId, NodeJS.Timeout>` of active timers.
+- Maintains a `Map<KernovaId, NodeJS.Timeout>` of active timers.
 - Tracks `lastExecutionAt` and a `running` flag per job to detect overlaps and missed runs.
 - Cron parsing delegated to `cron-parser` library (the `cron-parser` npm package).
 
@@ -194,13 +194,13 @@ export class BackgroundLoopModule {
   register(input: BackgroundLoopInput): BackgroundLoopDef;
 
   /** Pause an active loop */
-  pause(loopId: NexusId): void;
+  pause(loopId: KernovaId): void;
 
   /** Resume a paused loop */
-  resume(loopId: NexusId): void;
+  resume(loopId: KernovaId): void;
 
   /** Remove a loop entirely */
-  remove(loopId: NexusId): void;
+  remove(loopId: KernovaId): void;
 
   /** List all registered loops */
   list(): BackgroundLoopDef[];
@@ -209,7 +209,7 @@ export class BackgroundLoopModule {
 
 **Internal Mechanics**:
 - Each loop has its own `setTimeout` chain (not `setInterval`) so drift is avoided.
-- The previous monitor return value is stored in a `Map<NexusId, unknown>` and passed to each invocation.
+- The previous monitor return value is stored in a `Map<KernovaId, unknown>` and passed to each invocation.
 - On error in the monitor function, the loop logs, emits an error event, and schedules the next tick normally.
 - Serializes loop metadata (id, interval, state) to SQLite but NOT the monitor function reference (functions are re-registered on startup by the application).
 
@@ -249,7 +249,7 @@ export class TaskQueue {
   deadLetters(filter?: DeadLetterFilter): DeadLetterItem[];
 
   /** Replay a dead-lettered item */
-  replay(taskId: NexusId): TaskItem;
+  replay(taskId: KernovaId): TaskItem;
 }
 ```
 
@@ -267,7 +267,7 @@ export class TaskQueue {
 ```typescript
 // packages/core/src/triggers/trigger-engine.ts
 
-export type TriggerCondition = (event: NexusEvent) => boolean;
+export type TriggerCondition = (event: KernovaEvent) => boolean;
 export type TriggerAction = { goal: string; metadata?: Record<string, unknown> };
 
 export interface TriggerEngineConfig {
@@ -284,13 +284,13 @@ export class ProactiveTriggerEngine {
   register(input: TriggerRuleInput): TriggerRule;
 
   /** Remove a trigger rule */
-  remove(ruleId: NexusId): void;
+  remove(ruleId: KernovaId): void;
 
   /** Enable a disabled rule */
-  enable(ruleId: NexusId): void;
+  enable(ruleId: KernovaId): void;
 
   /** Disable a rule without removing */
-  disable(ruleId: NexusId): void;
+  disable(ruleId: KernovaId): void;
 
   /** List all rules */
   list(): TriggerRule[];
@@ -299,8 +299,8 @@ export class ProactiveTriggerEngine {
 
 **Internal Mechanics**:
 - On `start()`, loads persisted rules from SQLite and subscribes to the EventBus for each enabled rule's pattern.
-- Stores a `Map<NexusId, string>` of subscription IDs so rules can be individually unsubscribed.
-- Cooldown tracking: `Map<NexusId, number>` storing `lastFiredAt` timestamps. Events within cooldown are silently dropped.
+- Stores a `Map<KernovaId, string>` of subscription IDs so rules can be individually unsubscribed.
+- Cooldown tracking: `Map<KernovaId, number>` storing `lastFiredAt` timestamps. Events within cooldown are silently dropped.
 - Condition functions are NOT serialized to SQLite (same approach as BackgroundLoop). Only rule metadata is persisted; the application re-registers conditions on startup.
 
 ### 5. ConnectorRegistry
@@ -325,10 +325,10 @@ export class ConnectorRegistry {
   register(input: ConnectorInput): ConnectorDef;
 
   /** Start a specific connector */
-  async connect(connectorId: NexusId): Promise<void>;
+  async connect(connectorId: KernovaId): Promise<void>;
 
   /** Stop a specific connector */
-  async disconnect(connectorId: NexusId): Promise<void>;
+  async disconnect(connectorId: KernovaId): Promise<void>;
 
   /** Send an outbound message */
   async send(request: OutboundMessageRequest): OutboundMessageResult;
@@ -376,12 +376,12 @@ export interface ChannelAdapter {
 ### Type Definitions (`@kernova/types/src/autonomy.ts`)
 
 ```typescript
-import type { NexusId, Timestamp, Priority } from './base.js';
+import type { KernovaId, Timestamp, Priority } from './base.js';
 
 // ─── Scheduler ───────────────────────────────────────────────
 
 export interface ScheduledJob {
-  id: NexusId;
+  id: KernovaId;
   name: string;
   cronExpression: string;
   target: ScheduleTarget;
@@ -400,7 +400,7 @@ export interface ScheduledJobInput {
 
 export interface ScheduleTarget {
   type: 'intent' | 'agent';
-  id?: NexusId;                    // agent ID if type is 'agent'
+  id?: KernovaId;                    // agent ID if type is 'agent'
   goal: string;                    // intent goal
   metadata?: Record<string, unknown>;
 }
@@ -408,7 +408,7 @@ export interface ScheduleTarget {
 // ─── Background Loop ─────────────────────────────────────────
 
 export interface BackgroundLoopDef {
-  id: NexusId;
+  id: KernovaId;
   name: string;
   intervalMs: number;              // 1000–86_400_000
   state: LoopState;
@@ -419,7 +419,7 @@ export interface BackgroundLoopDef {
 export type LoopState = 'active' | 'paused' | 'removed';
 
 export interface BackgroundLoopInput {
-  id?: NexusId;                    // optional caller-provided ID
+  id?: KernovaId;                    // optional caller-provided ID
   name: string;
   intervalMs: number;
   monitor: MonitorFunction;
@@ -429,7 +429,7 @@ export interface BackgroundLoopInput {
 // ─── Task Queue ──────────────────────────────────────────────
 
 export interface TaskItem {
-  id: NexusId;
+  id: KernovaId;
   priority: Priority;
   status: TaskStatus;
   payload: unknown;
@@ -459,8 +459,8 @@ export interface QueueStats {
 }
 
 export interface DeadLetterItem {
-  id: NexusId;
-  taskId: NexusId;
+  id: KernovaId;
+  taskId: KernovaId;
   payload: unknown;
   handler: string;
   errorMessage: string;
@@ -485,7 +485,7 @@ export interface DeadLetterFilter {
 // ─── Proactive Triggers ──────────────────────────────────────
 
 export interface TriggerRule {
-  id: NexusId;
+  id: KernovaId;
   name: string;
   eventPattern: string;            // EventBus wildcard pattern, max 256 chars
   condition?: string;              // serialized condition description
@@ -521,7 +521,7 @@ export type ChannelType = 'slack' | 'discord' | 'whatsapp' | 'telegram' | 'email
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'failed';
 
 export interface ConnectorDef {
-  id: NexusId;
+  id: KernovaId;
   channelType: ChannelType;
   name: string;
   state: ConnectionState;
@@ -581,19 +581,19 @@ export interface EmailConfig {
 }
 
 export interface ConnectorStatus {
-  id: NexusId;
+  id: KernovaId;
   channelType: ChannelType;
   name: string;
   state: ConnectionState;
 }
 
 export interface InboundMessage {
-  id: NexusId;
+  id: KernovaId;
   sender: string;              // max 256 chars
   channel: ChannelType;
   content: string;             // max 32_000 chars
   timestamp: Timestamp;
-  connectorId: NexusId;
+  connectorId: KernovaId;
   raw?: unknown;               // original platform payload
 }
 
@@ -628,14 +628,14 @@ export interface Embed {
 }
 
 export interface OutboundMessageRequest {
-  connectorId: NexusId;
+  connectorId: KernovaId;
   recipient?: string;
   message: OutboundMessage;
 }
 
 export interface OutboundMessageResult {
-  messageId: NexusId;
-  connectorId: NexusId;
+  messageId: KernovaId;
+  connectorId: KernovaId;
   deliveredAt?: Timestamp;
   status: 'sent' | 'failed' | 'partial';
 }
@@ -1111,7 +1111,7 @@ export function createTestEventBus(): EventBus;
 export function createTestDataDir(): { path: string; cleanup: () => void };
 
 /** Collect events emitted on an EventBus */
-export function collectEvents(bus: EventBus, pattern: string): NexusEvent[];
+export function collectEvents(bus: EventBus, pattern: string): KernovaEvent[];
 
 /** Fast-check arbitrary for valid 5-field cron expressions */
 export const arbCronExpression: fc.Arbitrary<string>;

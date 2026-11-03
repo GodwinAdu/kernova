@@ -9,7 +9,7 @@ The Kernova CLI is your primary interface for creating, developing, running, and
 
 ## Installation
 
-Kernova requires **Node.js 20+** as its runtime. Once Node.js is installed, the CLI is available via npm:
+Kernova requires **Node.js 22+** as its runtime. Once Node.js is installed, the CLI is available via npm:
 
 ```bash
 # Global install (recommended — makes "kernova" command available everywhere)
@@ -35,13 +35,15 @@ After installation, the `kernova` command is available globally.
 | Command | Purpose |
 |---------|---------|
 | `kernova init [name]` | Scaffold a new project |
-| `kernova dev` | Start development runtime with hot-reload + Studio |
-| `kernova serve` | Start production daemon (persistent mode) |
+| `kernova dev` | Start development runtime with hot-reload + development dashboard |
+| `kernova serve` | Start production daemon (persistent mode), optionally with the HTTP gateway |
+| `kernova studio` | Open the Studio dashboard for a running gateway |
 | `kernova agent <action>` | Create, list, or inspect agents |
 | `kernova schedule <action>` | Manage scheduled jobs (list, enable, disable) |
 | `kernova queue <action>` | Manage the task queue (status, replay) |
 | `kernova triggers <action>` | Manage proactive trigger rules (list, enable, disable) |
 | `kernova status` | Show project + runtime status |
+| `kernova doctor` | Test every configured AI provider |
 | `kernova deploy [target]` | Generate production deployment artifacts |
 | `kernova --version` | Show CLI version |
 | `kernova --help` | Show help |
@@ -84,7 +86,7 @@ name: my-assistant
 instructions: |
   You are a helpful assistant powered by Kernova.
   Help users with their tasks and answer questions clearly.
-model: gpt-4o
+# model: gpt-4o   # optional; default: the model of the first provider with an API key
 tools:
   - http-fetch
   - date-time
@@ -168,8 +170,11 @@ kernova serve [options]
 |------|-------|-------------|---------|
 | `--config <path>` | `-c` | Path to agent config file or directory | (none) |
 | `--watch` | `-w` | Hot-reload agent configs on file change | `false` |
-| `--port <number>` | `-p` | Port for webhook/gateway listeners | (system default) |
-| `--data-dir <path>` | `-d` | Data directory for SQLite persistence | `./kernova-data` |
+| `--port <number>` | `-p` | Serve the HTTP gateway on this port (needs `KERNOVA_API_KEY`) | (no gateway) |
+| `--host <address>` | | Interface the gateway binds to | `127.0.0.1` |
+| `--data-dir <path>` | `-d` | Data directory for SQLite persistence | `$KERNOVA_DATA_DIR` or `./kernova-data` |
+| `--shutdown-timeout <ms>` | | How long to wait for active intents on shutdown | `30000` |
+| `--heartbeat <ms>` | | Heartbeat event interval | `60000` |
 
 ### Examples
 
@@ -183,11 +188,11 @@ kernova serve --config ./agents/ --watch
 # Specify a single agent config file
 kernova serve --config ./my-agent.agent.yaml
 
-# Custom data directory and port
-kernova serve --config ./agents/ --port 3100 --data-dir /var/kernova/data
+# Custom data directory, plus the HTTP gateway on port 3100
+KERNOVA_API_KEY=secret kernova serve --config ./agents/ --port 3100 --data-dir /var/kernova/data
 
 # Production deployment with all options
-kernova serve -c /etc/kernova/agents/ -d /var/lib/kernova -p 8080
+KERNOVA_API_KEY=secret kernova serve -c /etc/kernova/agents/ -d /var/lib/kernova -p 8080 --host 0.0.0.0
 ```
 
 ### What it does
@@ -198,8 +203,9 @@ kernova serve -c /etc/kernova/agents/ -d /var/lib/kernova -p 8080
    - **Directory**: Scans for all agent config files and registers each one
 3. If `--watch` is enabled: monitors config files for changes and hot-reloads agents without restart
 4. Starts all autonomy modules: scheduler, task queue, trigger engine, background loops
-5. Emits `daemon.heartbeat` events every 60 seconds
-6. Handles SIGINT/SIGTERM for graceful shutdown (waits up to 30s for active intents to finish)
+5. With `--port`: serves the [HTTP gateway](/guides/gateway-api) (it refuses to start without a token)
+6. Emits a `daemon.heartbeat` event at start and then every 60 seconds
+7. Handles SIGINT/SIGTERM for graceful shutdown (waits up to 30s for active intents to finish)
 
 ### Agent config file format
 
@@ -212,7 +218,7 @@ description: Monitors system health and responds to incidents
 instructions: |
   You are an operations monitoring agent.
   Check system health metrics and alert on anomalies.
-model: gpt-4o
+# model: gpt-4o   # optional; default: the model of the first provider with an API key
 tools:
   - http-fetch
   - shell-exec
@@ -248,6 +254,70 @@ Use `kernova serve` for:
 - **Declarative agent management** — define agents in YAML, no code needed
 - **Scheduled automation** — agents that run on cron schedules
 - **Event-driven workflows** — agents that react to triggers
+
+---
+
+## `kernova studio`
+
+Opens the Studio dashboard for a running [gateway](/guides/gateway-api). Studio listens on `localhost` and forwards its API calls to the gateway with the token, so the token never reaches the browser.
+
+### Usage
+
+```bash
+kernova studio [options]
+```
+
+### Options
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--port <number>` | `-p` | Studio port | `4200` |
+| `--gateway <url>` | `-g` | Gateway URL | `http://localhost:3000` |
+| `--token <token>` | `-t` | Gateway token | `$KERNOVA_API_KEY` |
+
+### Example
+
+```bash
+export KERNOVA_API_KEY=pick-a-long-random-token
+kernova serve --config ./agents --port 3000   # terminal 1
+kernova studio                                # terminal 2 → http://localhost:4200
+```
+
+See the [Studio guide](/guides/studio).
+
+---
+
+## `kernova doctor`
+
+Checks every AI provider Kernova finds: providers set up in environment variables (also read from `.env.local` and `.env`) and a local Ollama server, if one is running. Each one gets a chat completion, a tool call, a stream, and an embedding, sent through the same provider classes the kernel uses, so Azure, Bedrock, and Vertex AI sign-in is checked too.
+
+### Usage
+
+```bash
+kernova doctor [options]
+```
+
+### Options
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--provider <ids>` | | Check only these providers (comma-separated or repeated), e.g. `bedrock,vertex` |
+| `--verbose` | `-v` | Show why each check failed, also for providers whose chat failed |
+
+### Example
+
+```bash
+$ kernova doctor
+  ✓   OpenAI (gpt-4o): working (412ms)
+
+  Provider             Chat  Tools  Stream  Embed
+  ─────────────────────────────────────────────────
+  OpenAI               ✓     ✓      ✓       ✓
+
+  1/1 providers working.
+```
+
+Bedrock isn't auto-detected from plain AWS credentials; when doctor finds some, it suggests `kernova doctor --provider bedrock`. The command exits with code 1 when no provider works.
 
 ---
 
@@ -359,7 +429,7 @@ kernova schedule list --data-dir /var/kernova/data
 
 ### `kernova schedule enable <id>`
 
-Re-enable a disabled scheduled job.
+Re-enable a disabled scheduled job. Give the full ID, an ID prefix (the list shortens IDs), or the job name.
 
 ```bash
 kernova schedule enable job_a1b2c3
@@ -368,7 +438,7 @@ kernova schedule enable job_a1b2c3
 
 ### `kernova schedule disable <id>`
 
-Disable a scheduled job (it won't fire until re-enabled).
+Disable a scheduled job (it won't fire until re-enabled). Accepts an ID, ID prefix, or name.
 
 ```bash
 kernova schedule disable job_a1b2c3
@@ -474,7 +544,7 @@ kernova triggers list --data-dir /var/kernova/data
 
 ### `kernova triggers enable <id>`
 
-Enable a disabled trigger rule.
+Enable a disabled trigger rule. Give the full ID, an ID prefix (the list shortens IDs), or the rule name.
 
 ```bash
 kernova triggers enable trig_g7h8i9
@@ -483,7 +553,7 @@ kernova triggers enable trig_g7h8i9
 
 ### `kernova triggers disable <id>`
 
-Disable a trigger rule (it won't fire until re-enabled).
+Disable a trigger rule (it won't fire until re-enabled). Accepts an ID, ID prefix, or name.
 
 ```bash
 kernova triggers disable trig_a1b2c3
@@ -571,7 +641,10 @@ Generate production deployment artifacts.
 
 ### `kernova deploy docker`
 
-Generates a `Dockerfile`, `.dockerignore`, and `src/production.ts` entry point.
+Generates a `Dockerfile` and `.dockerignore` (Node 24, the whole project copied in):
+
+- **Framework projects** (`kernova.config.ts`): runs `kernova start` (port 3000 with a frontend, 4555 with `--agents-only` or no `app/`)
+- **Core projects** (`kernova.config.json`): runs your `build` script, then `npm start`. To serve agent config files, add `@kernova/cli` and set `"start": "kernova serve --config ./agents --port 3000 --host 0.0.0.0"` (with `KERNOVA_API_KEY` in the container environment)
 
 ```bash
 kernova deploy docker
@@ -579,13 +652,11 @@ kernova deploy docker
 
 ```
   ✓ Generated Dockerfile
-  ✓ Generated src/production.ts
   ✓ Generated .dockerignore
 
   → Build and run:
-    npm run build
     docker build -t my-app .
-    docker run -p 4200:4200 --env-file .env my-app
+    docker run --env-file .env my-app
 ```
 
 ### `kernova deploy node`
@@ -632,7 +703,8 @@ The CLI respects these environment variables:
 | `GEMINI_API_KEY` | Google Gemini provider authentication |
 | `DEEPSEEK_API_KEY` | DeepSeek provider authentication |
 | `GROQ_API_KEY` | Groq provider authentication |
-| `KERNOVA_DATA_DIR` | Override default data directory |
+| `KERNOVA_DATA_DIR` | Default data directory for `serve`, `status`, `schedule`, `queue`, and `triggers` (instead of `./kernova-data`) |
+| `KERNOVA_API_KEY` | Gateway token: required by `serve --port`, and sent by `studio` |
 
 Set at least one model provider key for AI functionality.
 
@@ -666,7 +738,7 @@ mkdir agents/
 cat > agents/monitor.agent.yaml << 'EOF'
 name: monitor
 instructions: You monitor system health.
-model: gpt-4o
+# model: gpt-4o   # optional; default: the model of the first provider with an API key
 tools:
   - http-fetch
   - date-time

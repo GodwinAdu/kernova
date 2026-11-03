@@ -1,12 +1,12 @@
-# Nexus Protocol — Overview
+# Kernova Protocol — Overview
 
 **Version:** 0.1.0  
 **Status:** Draft  
 **Date:** July 2026
 
-## What Is the Nexus Protocol?
+## What Is the Kernova Protocol?
 
-The Nexus Protocol (NP) is an open specification for building, operating, and governing intelligent systems. It defines how intents, agents, memory, events, tools, and workflows communicate and interoperate.
+The Kernova Protocol (NP) is an open specification for building, operating, and governing intelligent systems. It defines how intents, agents, memory, events, tools, and workflows communicate and interoperate.
 
 Think of it as HTTP for intelligent systems — a standard that anyone can implement.
 

@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createHttpFetchTool } from './http-fetch.js';
 
 describe('http-fetch tool', () => {
-  const tool = createHttpFetchTool();
+  // Resolve every host to a public address so no test touches real DNS
+  const tool = createHttpFetchTool({ lookup: async () => [{ address: '93.184.216.34', family: 4 }] });
 
   it('has correct id, name, and description', () => {
     expect(tool.id).toBe('http-fetch');

@@ -8,7 +8,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import Database from 'better-sqlite3';
-import { info, warn } from '../ui.js';
+import { info, warn, defaultDataDir } from '../ui.js';
 
 interface StatusOptions {
   dataDir: string;
@@ -24,7 +24,7 @@ interface HeartbeatRow {
 
 function parseArgs(args: string[]): StatusOptions {
   const options: StatusOptions = {
-    dataDir: resolve(process.cwd(), 'kernova-data'),
+    dataDir: defaultDataDir(),
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -61,16 +61,18 @@ function formatDuration(seconds: number): string {
 /**
  * Count .agent.yaml files in the project directory as a fallback for agent count.
  */
+/** Agent definitions in the project: agents/*.agent.{yaml,yml,json}, src/agents/*.ts, and a root .agent.yaml */
 function countAgentFiles(projectRoot: string): number {
-  const agentsDir = join(projectRoot, 'agents');
-  if (!existsSync(agentsDir)) return 0;
-
-  try {
-    const files = readdirSync(agentsDir);
-    return files.filter(f => f.endsWith('.agent.yaml') || f.endsWith('.agent.yml')).length;
-  } catch {
-    return 0;
-  }
+  const count = (dir: string, match: (file: string) => boolean) => {
+    try {
+      return existsSync(dir) ? readdirSync(dir).filter(match).length : 0;
+    } catch {
+      return 0;
+    }
+  };
+  return count(join(projectRoot, 'agents'), f => /\.agent\.(ya?ml|json)$/.test(f))
+    + count(join(projectRoot, 'src', 'agents'), f => f.endsWith('.ts') && !f.endsWith('.d.ts'))
+    + count(projectRoot, f => /^\.agent\.(ya?ml|json)$/.test(f));
 }
 
 export async function handleStatus(args: string[]): Promise<void> {
@@ -155,7 +157,7 @@ function printDaemonHealth(db: Database.Database): void {
 
   try {
     const row = db.prepare(
-      `SELECT timestamp FROM events WHERE type = 'daemon.heartbeat' ORDER BY timestamp DESC LIMIT 1`
+      `SELECT timestamp FROM events WHERE event_type = 'daemon.heartbeat' ORDER BY timestamp DESC LIMIT 1`
     ).get() as HeartbeatRow | undefined;
 
     if (!row) {

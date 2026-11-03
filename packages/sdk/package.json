@@ -1,16 +1,7 @@
 {
     "name": "@kernova/sdk",
-    "version": "1.1.0",
+    "version": "2.0.0",
     "description": "Kernova SDK - High-level API for building intelligent applications",
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.ts",
-    "type": "module",
-    "license": "MIT",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/kernova/kernova",
-        "directory": "packages/sdk"
-    },
     "keywords": [
         "kernova",
         "ai",
@@ -19,22 +10,41 @@
         "intelligent-systems",
         "llm"
     ],
+    "homepage": "https://kernova2026.vercel.app",
+    "bugs": {
+        "url": "https://github.com/GodwinAdu/kernova/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/GodwinAdu/kernova.git",
+        "directory": "packages/sdk"
+    },
+    "license": "MIT",
+    "type": "module",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
     "files": [
         "dist",
         "README.md"
     ],
+    "engines": {
+        "node": ">=22.0.0"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
     "scripts": {
-        "build": "tsc",
+        "build": "node ../../scripts/clean.mjs dist && tsc",
         "dev": "tsc --watch",
-        "clean": "rimraf dist"
+        "clean": "node ../../scripts/clean.mjs dist",
+        "prepublishOnly": "npm run build"
     },
     "dependencies": {
-        "@kernova/core": "^1.0.0",
-        "@kernova/types": "^1.0.0"
+        "@kernova/core": "^2.0.0",
+        "@kernova/types": "^1.1.0"
     },
     "devDependencies": {
-        "typescript": "^5.5.0",
         "@types/node": "^22.0.0",
-        "rimraf": "^6.0.0"
+        "typescript": "^6.0.3"
     }
 }

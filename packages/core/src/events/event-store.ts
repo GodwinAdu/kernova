@@ -18,7 +18,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { NexusEvent, NexusId, EventCategory, EventSeverity } from '@kernova/types';
+import type { KernovaEvent, KernovaId, EventCategory, EventSeverity } from '@kernova/types';
 
 export interface EventStoreConfig {
   /** Path to the SQLite database file */
@@ -45,13 +45,13 @@ export interface EventQuery {
   severity?: EventSeverity;
 
   /** Filter by subject ID */
-  subjectId?: NexusId;
+  subjectId?: KernovaId;
 
   /** Filter by actor ID */
-  actorId?: NexusId;
+  actorId?: KernovaId;
 
   /** Filter by correlation ID */
-  correlationId?: NexusId;
+  correlationId?: KernovaId;
 
   /** Events after this timestamp */
   after?: string;
@@ -71,7 +71,7 @@ export interface EventQuery {
 
 export class EventStore {
   private db: Database.Database;
-  private buffer: NexusEvent[] = [];
+  private buffer: KernovaEvent[] = [];
   private batchSize: number;
   private flushIntervalMs: number;
   private flushTimer: ReturnType<typeof setInterval> | null = null;
@@ -124,7 +124,7 @@ export class EventStore {
   /**
    * Append an event to the store (buffered for performance)
    */
-  append(event: NexusEvent): void {
+  append(event: KernovaEvent): void {
     if (this.closed) return;
 
     this.buffer.push(event);
@@ -143,7 +143,7 @@ export class EventStore {
     const events = this.buffer;
     this.buffer = [];
 
-    const insertMany = this.db.transaction((evts: NexusEvent[]) => {
+    const insertMany = this.db.transaction((evts: KernovaEvent[]) => {
       for (const event of evts) {
         this.insertStmt.run({
           id: event.id,
@@ -168,7 +168,7 @@ export class EventStore {
   /**
    * Query events with filters
    */
-  query(params: EventQuery = {}): NexusEvent[] {
+  query(params: EventQuery = {}): KernovaEvent[] {
     // Flush pending events first so query sees latest data
     this.flush();
 
@@ -243,7 +243,7 @@ export class EventStore {
   /**
    * Get the timeline for a specific object (all events about it)
    */
-  getTimeline(subjectId: NexusId, limit = 100): NexusEvent[] {
+  getTimeline(subjectId: KernovaId, limit = 100): KernovaEvent[] {
     return this.query({
       subjectId,
       limit,
@@ -254,7 +254,7 @@ export class EventStore {
   /**
    * Get events by correlation ID (trace a full request flow)
    */
-  getCorrelated(correlationId: NexusId, limit = 100): NexusEvent[] {
+  getCorrelated(correlationId: KernovaId, limit = 100): KernovaEvent[] {
     return this.query({
       correlationId,
       limit,
@@ -415,8 +415,8 @@ interface EventRow {
   metadata: string;
 }
 
-/** Convert a database row to a NexusEvent */
-function rowToEvent(row: EventRow): NexusEvent {
+/** Convert a database row to a KernovaEvent */
+function rowToEvent(row: EventRow): KernovaEvent {
   return {
     id: row.id,
     eventType: row.event_type,

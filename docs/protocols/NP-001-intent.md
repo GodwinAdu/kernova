@@ -5,7 +5,7 @@
 
 ## Abstract
 
-Defines the Intent object — the fundamental unit of work in the Nexus Protocol. An intent represents a structured goal that can be submitted, tracked, and fulfilled.
+Defines the Intent object — the fundamental unit of work in the Kernova Protocol. An intent represents a structured goal that can be submitted, tracked, and fulfilled.
 
 ## Intent Object
 

@@ -12,8 +12,6 @@
  */
 
 import Database from 'better-sqlite3';
-import { mkdirSync, existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 import type {
   TaskItem,
   QueueTaskStatus,
@@ -21,11 +19,12 @@ import type {
   DeadLetterItem,
   DeadLetterAttempt,
   DeadLetterFilter,
-  NexusId,
+  KernovaId,
   Timestamp,
   Priority,
 } from '@kernova/types';
 import { generateId, now } from '../utils.js';
+import { resolveStorePath } from '../storage/store-path.js';
 
 // ─── Priority Helpers ────────────────────────────────────────
 
@@ -116,16 +115,8 @@ export class QueueStore {
   private getDeadLetterByIdStmt: Database.Statement;
 
   constructor(config: QueueStoreConfig) {
-    const dbPath = join(config.dataDir, 'kernova.db');
-
-    // Ensure directory exists
-    const dir = dirname(dbPath);
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-    }
-
-    // Open database
-    this.db = new Database(dbPath);
+    // Open database (in memory when dataDir is ':memory:')
+    this.db = new Database(resolveStorePath(config.dataDir));
 
     // Configure for performance
     this.db.pragma('journal_mode = WAL');
@@ -200,7 +191,7 @@ export class QueueStore {
    * Update the status of a task item.
    */
   updateStatus(
-    taskId: NexusId,
+    taskId: KernovaId,
     status: QueueTaskStatus,
     attempt?: number,
     scheduledAt?: Timestamp,
@@ -298,14 +289,14 @@ export class QueueStore {
   /**
    * Mark a dead-letter item as replayed.
    */
-  markReplayed(deadLetterId: NexusId): void {
+  markReplayed(deadLetterId: KernovaId): void {
     this.markReplayedStmt.run({ id: deadLetterId });
   }
 
   /**
    * Get a single dead-letter item by ID.
    */
-  getDeadLetterById(id: NexusId): DeadLetterItem | null {
+  getDeadLetterById(id: KernovaId): DeadLetterItem | null {
     const row = this.getDeadLetterByIdStmt.get({ id }) as DeadLetterRow | undefined;
     if (!row) return null;
     return this.rowToDeadLetterItem(row);

@@ -64,7 +64,7 @@ import {
 } from '@kernova/core';
 
 import type {
-  NexusEvent,
+  KernovaEvent,
   Intent,
   IntentResult,
 } from '@kernova/types';
@@ -80,9 +80,8 @@ const kernel = new KernovaKernel({
   // Model routing with purpose-based overrides
   models: {
     default: { provider: 'openai', model: 'gpt-4o' },
-    purposes: {
-      summarization: { provider: 'openai', model: 'gpt-4o-mini' },
-      embedding: { provider: 'openai', model: 'text-embedding-3-small' },
+    overrides: {
+      classification: { provider: 'openai', model: 'gpt-4o-mini' },
     },
   },
 
@@ -96,19 +95,14 @@ const kernel = new KernovaKernel({
 
 // ─── 2. Identity & Budget Constraints ───────────────────────────────────────
 
-// Create a user identity with permissions
-kernel.identity.register({
-  id: 'pipeline-user',
-  name: 'Data Pipeline Service',
-  type: 'service',
-  permissions: ['intent:submit', 'memory:write', 'memory:read'],
-});
+// Register a service identity (its ID is generated) and grant it permissions
+const pipeline = kernel.identity.registerIdentity({ type: 'service', name: 'Data Pipeline Service' });
+for (const permission of ['intent:submit', 'memory:write', 'memory:read']) {
+  kernel.identity.permissions.grantPermission(pipeline.id, permission);
+}
 
-// Set a daily token budget
-kernel.budget.setBudget('pipeline-user', {
-  dailyTokenLimit: 100_000,
-  alertThreshold: 0.8, // warn at 80% usage
-});
+// Cap its token use per day; checked on every intent it owns
+kernel.budget.setIdentityBudget(pipeline.id, { maxTokensPerDay: 100_000 });
 
 // ─── 3. Plugin Registration with Middleware ─────────────────────────────────
 
@@ -255,17 +249,17 @@ kernel.agentRegistry.register(dataAnalyzer.definition, dataAnalyzer.executor);
 // ─── 5. Direct EventBus Subscriptions ───────────────────────────────────────
 
 // Subscribe to all intent lifecycle events
-kernel.events.subscribe(['intent.*'], (event: NexusEvent) => {
+kernel.events.subscribe(['intent.*'], (event: KernovaEvent) => {
   console.log(`[event] ${event.eventType} — ${JSON.stringify(event.data)}`);
 });
 
 // Subscribe to custom pipeline events
-kernel.events.subscribe(['pipeline.*'], (event: NexusEvent) => {
+kernel.events.subscribe(['pipeline.*'], (event: KernovaEvent) => {
   console.log(`[pipeline] ${event.eventType}:`, event.data);
 });
 
 // Subscribe to model usage for cost tracking
-kernel.events.subscribe(['model.*'], (event: NexusEvent) => {
+kernel.events.subscribe(['model.*'], (event: KernovaEvent) => {
   if (event.eventType === 'model.completion') {
     const tokens = event.data.totalTokens as number;
     console.log(`[cost] ${tokens} tokens consumed`);
@@ -400,7 +394,7 @@ async function main() {
       goal: 'Ingest and validate the latest sales data CSV',
       intentType: 'action',
       priority: 'high',
-      owner: 'pipeline-user',
+      owner: pipeline.id,
       metadata: { source: 'scheduled-pipeline' },
     });
 
@@ -452,8 +446,8 @@ The same operations expressed both ways:
 | Schedule job | `app.schedule('name', cron, fn)` | `kernel.scheduler.register({ name, cronExpression, target })` |
 | Enqueue task | `await app.enqueue('handler', payload)` | `kernel.taskQueue.enqueue({ handler, payload, priority })` |
 | Subscribe events | (not exposed) | `kernel.events.subscribe(['pattern.*'], handler)` |
-| Set budget | (not exposed) | `kernel.budget.setBudget(owner, config)` |
-| Create identity | (not exposed) | `kernel.identity.register({ id, name, type, permissions })` |
+| Set budget | `app.getKernel().budget.setGlobalBudget(config)` | `kernel.budget.setIdentityBudget(owner, config)` |
+| Create identity | (not exposed) | `kernel.identity.registerIdentity({ type, name, roles })` |
 | Direct completion | (not exposed) | `await kernel.models.complete({ messages })` |
 | Generate embedding | (not exposed) | `await kernel.models.embed('text')` |
 | Run workflow | `await app.runWorkflow(id, input)` | `await kernel.workflows.execute(id, input)` |
@@ -523,8 +517,8 @@ const prodKernel = new KernovaKernel({
   environment: 'production',
   dataDir: './data/production',
   models: {
-    default: { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
-    fallback: ['openai', 'gemini'],
+    default: { provider: 'anthropic', model: 'claude-sonnet-5-5' },
+    fallback: { provider: 'openai', model: 'gpt-4o' },
   },
   reflection: { enabled: true, threshold: 0.9 },
 });
@@ -640,8 +634,8 @@ export class SupportFramework {
     this.kernel.agentRegistry.register(triageAgent.definition, triageAgent.executor);
 
     // Set up org-level budget
-    this.kernel.budget.setBudget(this.config.orgId, {
-      dailyTokenLimit: 500_000,
+    this.kernel.budget.setIdentityBudget(this.config.orgId, {
+      maxTokensPerDay: 500_000,
     });
   }
 

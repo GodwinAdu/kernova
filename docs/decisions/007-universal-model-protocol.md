@@ -19,7 +19,7 @@ Maintaining a list of provider integrations is a losing strategy. Every new prov
 
 ## Decision
 
-Nexus implements a **Universal Model Protocol** — a layered abstraction that automatically supports any model that exists now or will exist in the future.
+Kernova implements a **Universal Model Protocol** — a layered abstraction that automatically supports any model that exists now or will exist in the future.
 
 ### Architecture
 
@@ -53,7 +53,7 @@ Any model, anywhere
 ### How a new provider gets supported
 
 Scenario A: New provider uses OpenAI-compatible API
-→ Developer adds to nexus.config.json. Zero code needed. Works immediately.
+→ Developer adds to kernova.config.json. Zero code needed. Works immediately.
 
 Scenario B: New provider has a unique API format
 → Developer writes a small adapter (~50 lines). Drops it in. Works.

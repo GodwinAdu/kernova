@@ -16,7 +16,7 @@ In this tutorial, you'll build a **customer support bot** from scratch — a rea
 By the end, you'll have a working app deployed at `https://your-app.kernova.app`.
 
 **Prerequisites:**
-- Node.js 20+ installed
+- Node.js 22+ installed
 - An OpenAI API key ([get one here](https://platform.openai.com/api-keys))
 - Basic familiarity with React and TypeScript
 

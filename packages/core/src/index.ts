@@ -74,17 +74,33 @@ export type { GeminiConfig } from './models/gemini-provider.js';
 export { OllamaProvider } from './models/ollama-provider.js';
 export type { OllamaConfig } from './models/ollama-provider.js';
 export { OpenAICompatibleProvider } from './models/openai-compatible-provider.js';
-export type { OpenAICompatibleConfig } from './models/openai-compatible-provider.js';
+export type { OpenAICompatibleConfig, ReasoningFormat } from './models/openai-compatible-provider.js';
+export { AzureOpenAIProvider } from './models/azure-provider.js';
+export type { AzureOpenAIConfig } from './models/azure-provider.js';
+export { BedrockProvider } from './models/bedrock-provider.js';
+export type { BedrockConfig } from './models/bedrock-provider.js';
+export { VertexAIProvider } from './models/vertex-provider.js';
+export type { VertexAIConfig } from './models/vertex-provider.js';
+export { GoogleAuth } from './models/google-auth.js';
+export type { GoogleAuthConfig, GoogleCredentials } from './models/google-auth.js';
+export { AwsCredentialChain } from './models/aws-credentials.js';
+export type { AwsCredentialsConfig } from './models/aws-credentials.js';
+export { signRequest as signAwsRequest } from './models/aws-sigv4.js';
+export type { AwsCredentials } from './models/aws-sigv4.js';
 export {
   createProvider,
   detectAvailableProviders,
+  getEnvKeyForProvider,
   listPresets,
 } from './models/presets.js';
 export type { ProviderPreset } from './models/presets.js';
 export {
   createProviderFromConfig,
   createProvidersFromConfig,
+  detectProvidersFromCatalog,
   PROVIDER_CATALOG,
+  PROVIDER_ALIASES,
+  resolveProviderAlias,
 } from './models/adapter-registry.js';
 
 export { defineAgent } from './define-agent.js';
@@ -104,7 +120,7 @@ export type { StudioServerConfig } from './studio/studio-server.js';
 export { PluginRegistry } from './plugins/plugin-registry.js';
 export type {
   KernovaPlugin,
-  NexusPlugin,
+  NexusPlugin, // deprecated alias of KernovaPlugin
   ToolDefinition,
   MiddlewareHook,
   MiddlewareContext,
@@ -189,7 +205,9 @@ export type {
   ContextEnginePlugin,
   ContextEngineInfo,
   ContextMessage,
+  AssembleParams,
   AssembleResult,
+  CompactParams,
   CompactResult,
   IngestResult,
   BootstrapResult,
@@ -225,13 +243,44 @@ export {
 } from './config-manager/index.js';
 export type { AgentConfigLoadResult, AgentConfigLoaderOptions } from './config-manager/index.js';
 
-export { WebhookChannelAdapter } from './channels/adapters/webhook-adapter.js';
-export type { WebhookAdapterConfig } from './channels/adapters/webhook-adapter.js';
-export { WebSocketChannelAdapter } from './channels/adapters/websocket-adapter.js';
-export type { WebSocketAdapterConfig } from './channels/adapters/websocket-adapter.js';
+export {
+  ConnectorRegistry,
+  WebhookChannelAdapter,
+  WebSocketChannelAdapter,
+  SlackAdapter,
+  DiscordAdapter,
+  WhatsAppAdapter,
+  TelegramAdapter,
+  EmailAdapter,
+  TeamsAdapter,
+  SmsAdapter,
+  SignalAdapter,
+  MatrixAdapter,
+  IrcAdapter,
+  VoiceAdapter,
+  PushAdapter,
+  RssAdapter,
+} from './channels/index.js';
+export type {
+  ConnectorRegistryConfig,
+  ChannelAdapter,
+  MessageHandler,
+  StateChangeHandler,
+  WebhookAdapterConfig,
+  WebSocketAdapterConfig,
+} from './channels/index.js';
 
-export { BuiltInToolRegistry } from './built-in-tools/index.js';
-export type { BuiltInToolConfig } from './built-in-tools/index.js';
+export { Scheduler, SchedulerStore, isValidCron, getNextCronDate } from './scheduler/index.js';
+export type { SchedulerConfig, SchedulerStoreConfig } from './scheduler/index.js';
+export { BackgroundLoopModule, LoopStore } from './background-loop/index.js';
+export type { BackgroundLoopConfig, LoopStoreConfig } from './background-loop/index.js';
+export { ApprovalManager } from './approval/index.js';
+export type { ApprovalRequest, ApprovalStatus, ApprovalConfig } from './approval/index.js';
+export { DurableExecutor, CheckpointStore } from './durability/index.js';
+export type { Checkpoint, DurableTaskState, DurableOptions } from './durability/index.js';
+
+export { BuiltInToolRegistry, DEFAULT_BUILT_IN_TOOLS, UNSAFE_BUILT_IN_TOOLS } from './built-in-tools/index.js';
+export type { BuiltInToolConfig, HttpFetchOptions } from './built-in-tools/index.js';
 export { SandboxViolationError } from './built-in-tools/sandbox-error.js';
 export { createWebSearchTool, StubSearchProvider } from './built-in-tools/web-search.js';
 export type { WebSearchProvider, SearchResult } from './built-in-tools/web-search.js';

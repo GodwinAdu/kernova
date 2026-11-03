@@ -33,8 +33,14 @@ export interface DaemonConfig {
   /** Enable hot-reload of config files */
   watch?: boolean;
 
-  /** Port for webhook/gateway listeners */
+  /**
+   * Serve the HTTP gateway (kernel.gateway) on this port. The gateway needs a token
+   * (KernelConfig.gateway.auth.tokens or KERNOVA_API_KEY) unless anonymous access is enabled.
+   */
   port?: number;
+
+  /** Interface the gateway binds to when `port` is set (default: the gateway's, 127.0.0.1) */
+  host?: string;
 
   /** Data directory override */
   dataDir?: string;
@@ -76,7 +82,8 @@ export class DaemonRunner {
 
   /**
    * Start the daemon.
-   * Registers signal handlers and begins heartbeat emission.
+   * Starts the kernel (if it isn't running) and the gateway (if `port` is set),
+   * registers signal handlers, and begins heartbeat emission.
    * Returns a promise that resolves when the daemon stops.
    */
   async start(): Promise<void> {
@@ -84,9 +91,24 @@ export class DaemonRunner {
 
     this.running = true;
 
-    // Load agent config files if configPath is specified
-    if (this.config.configPath) {
-      await this.loadConfigs(this.config.configPath);
+    try {
+      if (!this.kernel.getStatus().running) await this.kernel.start();
+
+      // Load agent config files if configPath is specified
+      if (this.config.configPath) {
+        await this.loadConfigs(this.config.configPath);
+      }
+
+      if (this.config.port !== undefined) {
+        await this.kernel.gateway.start({
+          port: this.config.port,
+          ...(this.config.host && { host: this.config.host }),
+        });
+      }
+    } catch (error) {
+      this.running = false;
+      await this.kernel.stop();
+      throw error;
     }
 
     // Start hot-reload watching if --watch is set and configPath provided
@@ -101,9 +123,10 @@ export class DaemonRunner {
     this.registerSignalHandlers();
 
     // Emit daemon started event
-    this.emitEvent('daemon.started', { 
+    this.emitEvent('daemon.started', {
       heartbeatIntervalMs: this.config.heartbeatIntervalMs,
       shutdownTimeoutMs: this.config.shutdownTimeoutMs,
+      ...(this.config.port !== undefined && { port: this.config.port }),
     });
 
     // Return a promise that resolves when the daemon stops
@@ -195,7 +218,7 @@ export class DaemonRunner {
    * Start emitting heartbeat events at the configured interval.
    */
   private startHeartbeat(): void {
-    this.heartbeatTimer = setInterval(() => {
+    const beat = () => {
       if (this.running) {
         const status = this.kernel.getStatus();
         this.emitEvent('daemon.heartbeat', {
@@ -205,7 +228,10 @@ export class DaemonRunner {
           running: status.running,
         });
       }
-    }, this.config.heartbeatIntervalMs);
+    };
+    // One right away, so `kernova status` sees a running daemon before the first interval
+    beat();
+    this.heartbeatTimer = setInterval(beat, this.config.heartbeatIntervalMs);
 
     // Allow the process to exit even if heartbeat timer is active
     if (this.heartbeatTimer && typeof this.heartbeatTimer.unref === 'function') {
@@ -293,6 +319,8 @@ export class DaemonRunner {
       ],
       tools: (config.tools || []).map((toolId) => ({ toolId, name: toolId, purpose: 'Configured via agent config file', required: false })),
       instructions: config.instructions,
+      // Sent to the kernel's default provider
+      ...(config.model && { model: { model: config.model } }),
     });
 
     // Override the generated ID with a stable, deterministic ID for hot-reload

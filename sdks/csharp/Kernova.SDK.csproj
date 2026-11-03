@@ -9,7 +9,7 @@
     <Version>0.1.0</Version>
     <Description>Kernova C# SDK — HTTP client for the Kernova Gateway API</Description>
     <Authors>Kernova</Authors>
-    <PackageProjectUrl>https://github.com/nexus-runtime/nexus</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/GodwinAdu/kernova</PackageProjectUrl>
   </PropertyGroup>
 
 </Project>

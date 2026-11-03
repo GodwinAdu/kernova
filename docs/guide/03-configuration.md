@@ -1,8 +1,8 @@
 # Configuration
 
-## nexus.config.json
+## kernova.config.json
 
-Every Nexus project has a `nexus.config.json` at its root:
+Every Kernova project has a `kernova.config.json` at its root:
 
 ```json
 {
@@ -59,7 +59,7 @@ Local providers (Ollama, LM Studio, vLLM) don't require API keys.
 
 ## Custom Providers
 
-Add any OpenAI-compatible provider in `nexus.config.json`:
+Add any OpenAI-compatible provider in `kernova.config.json`:
 
 ```json
 {
@@ -78,14 +78,14 @@ Add any OpenAI-compatible provider in `nexus.config.json`:
 
 ## Data Directory
 
-Nexus stores persistent data (events, memory, embeddings) in `./nexus-data/` by default. Configure with:
+Kernova stores persistent data (events, memory, embeddings) in `./kernova-data/` by default. Configure with:
 
 ```typescript
-new NexusKernel({ dataDir: '/custom/path' });
+new KernovaKernel({ dataDir: '/custom/path' });
 ```
 
 Or disable persistence entirely:
 
 ```typescript
-new NexusKernel({ ephemeral: true });
+new KernovaKernel({ ephemeral: true });
 ```

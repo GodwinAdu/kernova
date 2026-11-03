@@ -12,7 +12,7 @@ We welcome contributions! Whether it's bug fixes, new features, documentation im
 The Kernova ecosystem is a monorepo:
 
 ```
-nexus/
+kernova/
 ├── packages/
 │   ├── core/           # @kernova/core — Agent runtime engine
 │   ├── types/          # @kernova/types — Shared type definitions
@@ -33,7 +33,7 @@ nexus/
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - npm 10+
 - Git
 
@@ -41,7 +41,7 @@ nexus/
 
 ```bash
 # Clone the repo
-git clone https://github.com/kernova/kernova.git
+git clone https://github.com/GodwinAdu/kernova.git
 cd kernova
 
 # Install dependencies
@@ -119,7 +119,7 @@ Push your branch and open a PR against `main`. Include:
 
 ### Bug Fixes
 
-Found a bug? Check [existing issues](https://github.com/kernova/kernova/issues) first, then:
+Found a bug? Check [existing issues](https://github.com/GodwinAdu/kernova/issues) first, then:
 
 1. Create a minimal reproduction
 2. Open an issue describing the bug

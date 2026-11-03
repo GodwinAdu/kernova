@@ -149,7 +149,6 @@ export class PostgresMemoryProvider implements MemoryProvider {
           entry.updatedAt || new Date().toISOString(),
         ]
       );
-      console.log(`[PostgresMemory] ✓ Stored: "${entry.content?.slice(0, 50)}..." (id: ${entry.id})`);
     } catch (err: any) {
       console.error(`[PostgresMemory] ✗ Store failed:`, err.message);
       console.error(`[PostgresMemory]   Entry ID: ${entry.id}, Content length: ${entry.content?.length}`);

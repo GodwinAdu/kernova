@@ -83,7 +83,7 @@ This is the display name — used in logs and the dashboard. It doesn't affect t
 Which AI model to use. Options include:
 - `gpt-4o` — Best for general use (recommended)
 - `gpt-4o-mini` — Faster and cheaper, slightly less capable
-- `claude-sonnet-4-20250514` — If you have an Anthropic key
+- `claude-sonnet-5-5` — If you have an Anthropic key
 
 ### `instructions`
 This is the **system prompt**. It shapes everything about how the agent behaves. Tips for writing good instructions:

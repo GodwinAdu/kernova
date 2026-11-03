@@ -76,7 +76,7 @@ When you call `app.ask('What is the capital of France?')`:
 
 If you don't provide a custom `execute` function, Kernova uses its default LLM executor. This executor:
 
-- Combines the agent's `instructions` (as system prompt) + the intent `goal` + any relevant context memories
+- Combines the agent's `instructions` (as system prompt) + earlier turns of the intent's thread (when `metadata.threadId` is set) + the intent `goal` + any relevant context memories and retrieved documents
 - Checks if tools are registered — if yes, uses `completeWithTools` (multi-turn tool loop); if no, uses plain `complete`
 - Returns the LLM response wrapped in a structured `IntentResult`
 
@@ -122,7 +122,8 @@ export default defineAgent({
 | `name` | `string` | Yes | Unique identifier. Used for delegation (`tools.delegate('code-reviewer', ...)`) |
 | `description` | `string` | Yes | What the agent does. Used in agent selection scoring — goal keywords are matched against this |
 | `capabilities` | `Capability[]` | Yes | Array of skills with confidence scores. Drives selection and routing |
-| `tools` | `ToolReference[]` | Yes | Which registered tools this agent can access (pass `[]` for no tools) |
+| `tools` | `ToolReference[]` | Yes | The tools this agent is meant to use (descriptive; pass `[]` if none). To restrict what the agent can call, use `toolPolicy` |
+| `toolPolicy` | `{ allow?, deny? }` | No | Which tools this agent may call, on top of `KernelConfig.toolPolicy`. Matches tool IDs such as `'http-fetch'`; `*` globs supported |
 | `instructions` | `string` | Yes | The system prompt. This is the single most important field for agent quality |
 | `execute` | `Function` | No | Custom executor. If omitted, the default LLM executor is used |
 | `reflection` | `object` | No | Per-agent quality control config (overrides global settings) |
@@ -325,7 +326,7 @@ The event type is automatically prefixed with `agent.` when published.
 
 #### `tools.log(message)`
 
-Structured console output with the agent's name prefix.
+Log a message. It's always published as an `agent.log` event (visible in Studio), and printed to the console with the agent's name prefix when the kernel runs with `debug: true`.
 
 ```typescript
 tools.log('Processing 5 files...');
@@ -760,7 +761,9 @@ app.agent('quick-responder', {
 
 1. If the agent has `reflection` config → use it
 2. Else → use global `KernelConfig.reflection`
-3. If neither is set → reflection is enabled with defaults (threshold: 0.7, maxAttempts: 2)
+3. If neither is set → reflection is off. When enabled, the defaults are threshold 0.7 and maxAttempts 2
+
+Each reflection costs at least one extra model call per answer, plus up to two rewrites when the score is below the threshold. If the grader's reply can't be parsed, the answer is kept as is.
 
 ### Graceful Fallback
 

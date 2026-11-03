@@ -80,8 +80,11 @@ agent(name: string, spec: Partial<AgentSpec> & { instructions: string }): this
 | `spec.instructions` | `string` | System prompt / instructions (required) |
 | `spec.description` | `string` | Human-readable description |
 | `spec.capabilities` | `Capability[]` | What this agent can handle |
-| `spec.tools` | `string[]` | Tool IDs the agent can invoke |
 | `spec.execute` | `Function` | Custom execution function |
+| `spec.toolPolicy` | `ToolPolicy` | `{ allow?, deny? }`: which tools this agent may call |
+| `spec.model` | `{ provider?, model? }` | This agent's model (default: the app's) |
+| `spec.temperature` / `spec.maxTokens` | `number` | Sent with this agent's model calls |
+| `spec.reflection` | `object` | Per-agent self-reflection (`{ enabled, threshold?, maxAttempts? }`) |
 
 Returns `this` for chaining.
 
@@ -93,13 +96,23 @@ app.agent('assistant', {
 app.agent('reviewer', {
   instructions: 'Review code for bugs and suggest improvements.',
   description: 'Code review specialist',
-  tools: ['search', 'file-read'],
+  model: { provider: 'anthropic', model: 'claude-sonnet-5-5' },
+  temperature: 0.2,
+  toolPolicy: { allow: ['file-read'] },
   execute: async (intent, ctx, tools) => {
-    const code = await tools.call('file-read', { path: intent.metadata?.file });
-    return { success: true, summary: `Reviewed: ${code.slice(0, 100)}...` };
+    const code = String(await tools.useTool('file-read', { path: intent.metadata?.file }));
+    const review = await tools.complete(`Review this code:\n${code}`);
+    return {
+      success: true,
+      summary: review,
+      evidence: { sources: [], confidence: 0.8 },
+      durationMs: 0,
+    };
   },
 });
 ```
+
+`file-read` is one of the built-in tools that's off by default: enable it with `builtInTools: { enabled: [...DEFAULT_BUILT_IN_TOOLS, 'file-read'] }`.
 
 ---
 
@@ -159,9 +172,16 @@ async ask(goal: string, options?: AskOptions): Promise<AskResult>
 | `goal` | `string` | The question or task |
 | `options.type` | `'query' \| 'action' \| 'observation'` | Intent type (default: `'query'`) |
 | `options.priority` | `'critical' \| 'high' \| 'medium' \| 'low'` | Priority level (default: `'medium'`) |
-| `options.owner` | `string` | Owner identifier |
+| `options.owner` | `string` | Owner, such as your app's user ID. Scopes memory, budgets and rate limits |
+| `options.threadId` | `string` | Conversation thread. Asks with the same `threadId` see the earlier turns; without one, each ask is independent |
 
 Returns `Promise<AskResult>`.
+
+```typescript
+// Multi-turn conversation: one thread per user conversation
+await app.ask('My favourite colour is teal.', { owner: 'user-42', threadId: 'chat-42' });
+const { answer } = await app.ask('What is my favourite colour?', { owner: 'user-42', threadId: 'chat-42' });
+```
 
 ```typescript
 // Simple question
@@ -375,7 +395,9 @@ console.log(`Enqueued task: ${id}`);
 
 #### `app.channel(name, adapter)`
 
-Register a channel adapter for receiving external messages (webhooks, WebSocket, email, etc.).
+Register a channel adapter for receiving external messages (webhooks, WebSocket, email, etc.). The adapter starts listening right away (`adapter.connect()`); `app.serve()` waits for it and fails if it couldn't connect, and `app.close()` disconnects it.
+
+`adapter` can be an SDK adapter (`WebhookChannelAdapter`, `WebSocketChannelAdapter`) or a platform adapter (`SlackAdapter`, `TeamsAdapter`, `SmsAdapter`, ...); messages from a platform adapter get `name` as their `connectorId`.
 
 ```typescript
 channel(name: string, adapter: SDKChannelAdapter): this
@@ -420,6 +442,22 @@ app.onMessage(async (msg) => {
   
   // Reply via the same channel
   await msg.reply(answer);
+});
+```
+
+
+#### `app.reply(message, content)`
+
+Answer an inbound message on the channel it came from, to its sender (`message.replyTo`).
+
+```typescript
+async reply(message: InboundMessage, content: string | OutboundMessage): Promise<DeliveryReceipt>
+```
+
+```typescript
+app.onMessage(async (msg) => {
+  const { answer } = await app.ask(msg.content, { threadId: `${msg.connectorId}:${msg.replyTo}` });
+  await app.reply(msg, answer);
 });
 ```
 
@@ -557,16 +595,18 @@ workflow(definition: WorkflowDefinition): this
 
 Returns `this` for chaining.
 
+The `workflow(name, steps)` helper builds the definition. Steps run in order; each names its type and a `config` (`toolId` for tool steps, `agentId` and `input.goal` for agent steps).
+
 ```typescript
-app.workflow({
-  id: 'onboarding',
-  name: 'User Onboarding',
-  steps: [
-    { id: 'welcome', action: 'send-welcome-email', next: 'setup' },
-    { id: 'setup', action: 'create-workspace', next: 'notify' },
-    { id: 'notify', action: 'notify-team' },
-  ],
-});
+import { workflow } from '@kernova/sdk';
+
+const onboarding = workflow('User Onboarding', [
+  { id: 'welcome', name: 'Send welcome email', type: 'tool', config: { toolId: 'send-welcome-email' }, onFailure: 'stop' },
+  { id: 'setup', name: 'Create workspace', type: 'tool', config: { toolId: 'create-workspace' }, onFailure: 'stop' },
+  { id: 'notify', name: 'Notify the team', type: 'agent', config: { agentId: 'notifier', input: { goal: 'Tell the team a new user joined' } }, onFailure: 'continue' },
+]);
+
+app.workflow(onboarding);
 ```
 
 ---
@@ -590,12 +630,12 @@ async runWorkflow(
 Returns the `WorkflowInstance` with status and step results.
 
 ```typescript
-const instance = await app.runWorkflow('onboarding', {
+const instance = await app.runWorkflow(onboarding.id, {
   userId: 'usr_456',
   email: 'new-user@example.com',
 });
 
-console.log(instance.status); // 'completed'
+console.log(instance.workflowStatus); // 'completed'
 ```
 
 ---
@@ -677,9 +717,20 @@ A lightweight wrapper for managing a specific conversation thread.
 class ThreadHandle {
   readonly threadId: string;
 
+  ask(goal: string, options?: Omit<AskOptions, 'threadId'>): Promise<AskResult>;
   addMessage(role: 'user' | 'assistant' | 'system', content: string): Promise<void>;
   getContext(): { summary: string | null; messages: Message[] };
 }
+```
+
+#### `ask(goal, options?)`
+
+Ask within this thread: the agent sees the thread's earlier turns, and the question and answer are added to the thread. Same as `app.ask(goal, { ...options, threadId })`.
+
+```typescript
+const chat = app.thread('chat-42');
+await chat.ask('My favourite colour is teal.');
+const { answer } = await chat.ask('What is my favourite colour?'); // knows it's teal
 ```
 
 ### Properties
@@ -822,11 +873,38 @@ interface KernovaConfig {
   /** Disable all persistence — runs entirely in memory (default: false) */
   ephemeral?: boolean;
 
-  /** Enable debug logging (default: false) */
+  /** Print kernel and agent log() messages (default: false) */
   debug?: boolean;
 
-  /** Configuration for built-in tools */
+  /** Built-in tools: safe ones are on; unsafe ones must be listed in `enabled` */
   builtInTools?: BuiltInToolConfig;
+
+  /** Model routing (default: the first provider with an API key, with its default model) */
+  models?: ModelRoutingConfig;
+
+  /** Extra model providers; they replace auto-detected ones with the same ID */
+  providers?: ModelProvider[];
+
+  /** App-wide tool allow/deny lists, e.g. { deny: ['http-fetch'] } */
+  toolPolicy?: ToolPolicy;
+
+  /** Self-reflection: an extra model call grades each answer (default: off) */
+  reflection?: { enabled: boolean; threshold?: number; maxAttempts?: number };
+
+  /** HTTP gateway settings (getKernel().gateway) */
+  gateway?: GatewayConfig;
+
+  /** Per-owner rate limits (default: 100 requests per minute per owner) */
+  rateLimits?: RateLimiterConfig;
+
+  /** Keep each thread's history for asks with a threadId (default: true) */
+  threadHistory?: boolean;
+
+  /** Planner settings used by plan() */
+  planning?: Partial<AgentPlannerConfig>;
+
+  /** RAG settings for getKernel().rag */
+  rag?: Partial<RAGPipelineConfig>;
 }
 ```
 
@@ -838,21 +916,30 @@ Controls which built-in tools are available and their constraints.
 
 ```typescript
 interface BuiltInToolConfig {
-  /** Whitelist — only these tools are enabled (if set) */
+  /** Tools to enable (default: DEFAULT_BUILT_IN_TOOLS, the safe ones) */
   enabled?: string[];
 
-  /** Blacklist — these tools are disabled (overrides `enabled`) */
+  /** Tools to disable (overrides `enabled`) */
   disabled?: string[];
 
-  /** Root directory for file-read and file-write operations */
+  /** Root for file tools and the shell's working directory (default: <dataDir>/workspace) */
   sandboxDir?: string;
 
-  /** Timeout for shell-exec in milliseconds (default: 30000) */
+  /** shell-exec timeout and maximum, in ms (default: 30000) */
   shellTimeout?: number;
+
+  /** Extra environment variables for shell-exec (it doesn't see your API keys) */
+  shellEnv?: Record<string, string>;
+
+  /** http-fetch limits: private network access is blocked unless allowPrivateNetwork is true */
+  httpFetch?: { allowPrivateNetwork?: boolean; maxResponseBytes?: number; timeoutMs?: number };
+
+  /** Search backend; web-search is only offered when this is set */
+  webSearchProvider?: WebSearchProvider;
 }
 ```
 
-Available built-in tools: `http-fetch`, `file-read`, `file-write`, `shell-exec`, `date-time`, `web-search`.
+On by default (`DEFAULT_BUILT_IN_TOOLS`): `http-fetch`, `date-time`, `json-parse`, `math-eval`, `regex-match`, `image-describe`, plus `web-search` when a provider is set. Off unless listed in `enabled` (`UNSAFE_BUILT_IN_TOOLS`): `shell-exec`, `code-eval`, `file-read`, `file-write`, `database-query`. Both lists are exported by `@kernova/sdk`. See [Built-in Tools](/guides/built-in-tools).
 
 ---
 
@@ -915,7 +1002,7 @@ Everything exported from `@kernova/sdk`:
 |--------|-------------|
 | `agent(name, spec)` | Shorthand for defining agents (returns `AgentDefinition`) |
 | `tool(name, spec)` | Shorthand for defining tools (returns plugin-ready object) |
-| `workflow(def)` | Shorthand for defining workflows (returns `WorkflowDefinition`) |
+| `workflow(name, steps)` | Builds a `WorkflowDefinition` (fills in id, type, version, and timestamps) |
 
 ```typescript
 import { agent, tool, workflow } from '@kernova/sdk';

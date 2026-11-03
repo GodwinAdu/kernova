@@ -1,16 +1,7 @@
 {
     "name": "@kernova/core",
-    "version": "1.6.5",
+    "version": "2.0.0",
     "description": "Kernova Core - The AI Agent Runtime Engine",
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.ts",
-    "type": "module",
-    "license": "MIT",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/kernova/kernova",
-        "directory": "packages/core"
-    },
     "keywords": [
         "kernova",
         "ai",
@@ -20,28 +11,47 @@
         "intelligent-systems",
         "llm"
     ],
+    "homepage": "https://kernova2026.vercel.app",
+    "bugs": {
+        "url": "https://github.com/GodwinAdu/kernova/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/GodwinAdu/kernova.git",
+        "directory": "packages/core"
+    },
+    "license": "MIT",
+    "type": "module",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
     "files": [
         "dist",
         "README.md"
     ],
+    "engines": {
+        "node": ">=22.0.0"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
     "scripts": {
-        "build": "tsc",
+        "build": "node ../../scripts/clean.mjs dist && tsc",
         "dev": "tsc --watch",
-        "clean": "rimraf dist"
+        "clean": "node ../../scripts/clean.mjs dist",
+        "prepublishOnly": "npm run build"
     },
     "dependencies": {
-        "@kernova/types": "^1.0.0",
-        "better-sqlite3": "^12.11.1",
-        "cron-parser": "^4.9.0",
+        "@kernova/types": "^1.1.0",
+        "better-sqlite3": "^13.0.3",
+        "cron-parser": "^5.10.3",
         "ws": "^8.18.0",
         "yaml": "^2.7.0"
     },
     "devDependencies": {
-        "@types/better-sqlite3": "^7.6.13",
+        "@types/better-sqlite3": "^9.6.0",
         "@types/node": "^22.0.0",
         "@types/ws": "^8.5.13",
-        "fast-check": "^3.22.0",
-        "rimraf": "^6.0.0",
-        "typescript": "^5.5.0"
+        "fast-check": "^4.10.2",
+        "typescript": "^6.0.3"
     }
 }

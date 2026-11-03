@@ -1,11 +1,23 @@
 {
-  "name": "nexus",
+  "name": "kernova",
   "version": "0.1.0",
   "private": true,
   "description": "The Full-Stack AI Agent Platform",
+  "homepage": "https://github.com/GodwinAdu/kernova#readme",
+  "bugs": {
+    "url": "https://github.com/GodwinAdu/kernova/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GodwinAdu/kernova.git"
+  },
+  "license": "MIT",
   "workspaces": [
     "packages/*"
   ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "build": "turbo run build",
     "build:all": "npm run build:types && npm run build:core && npm run build:sdk && npm run build:framework && npm run build:cli",
@@ -19,17 +31,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "turbo run clean",
-    "publish:all": "npm run build:all && npm publish --workspace=packages/types && npm publish --workspace=packages/core && npm publish --workspace=packages/sdk && npm publish --workspace=packages/framework && npm publish --workspace=packages/cli"
+    "publish:all": "npm run build && npm publish --workspace=packages/types && npm publish --workspace=packages/core && npm publish --workspace=packages/sdk && npm publish --workspace=packages/framework && npm publish --workspace=packages/cli && npm publish --workspace=packages/create-kernova-app && npm publish --workspace=packages/kernova"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsx": "^4.23.0",
     "turbo": "^2.1.0",
-    "typescript": "^5.5.0",
-    "vitest": "^4.1.10"
-  },
-  "engines": {
-    "node": ">=20.0.0"
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.0"
   },
   "packageManager": "npm@10.0.0"
 }

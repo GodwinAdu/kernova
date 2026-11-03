@@ -160,11 +160,11 @@ The planner emits events through the kernel's event bus for observability:
 | `plan.cancelled` | Plan was cancelled | `goal` |
 
 ```typescript
-kernel.events.on('plan.step.completed', (event) => {
+kernel.events.subscribe('plan.step.completed', (event) => {
   console.log(`Step ${event.data.index} done`);
 });
 
-kernel.events.on('plan.replanned', (event) => {
+kernel.events.subscribe('plan.replanned', (event) => {
   console.log(`Replanned after "${event.data.failedStep}" — ${event.data.newStepCount} new steps`);
 });
 ```
@@ -381,7 +381,7 @@ No extra code needed — enable reflection in config and all agent outputs get q
 | `reflection.completed` | Reflection finished | `passed`, `finalScore`, `iterations`, `wasRevised` |
 
 ```typescript
-kernel.events.on('reflection.regenerated', (event) => {
+kernel.events.subscribe('reflection.regenerated', (event) => {
   console.log(
     `Attempt ${event.data.attempt}: score improved from ` +
     `${event.data.originalScore.toFixed(2)} → ${event.data.newScore.toFixed(2)}`

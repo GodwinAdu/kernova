@@ -7,10 +7,10 @@
  * re-registered by the application on startup.
  */
 
-import type { NexusEvent, NexusId, BackgroundLoopDef, BackgroundLoopInput, LoopState, MonitorFunction, ScheduleTarget } from '@kernova/types';
+import type { KernovaEvent, KernovaId, BackgroundLoopDef, BackgroundLoopInput, LoopState, MonitorFunction, ScheduleTarget } from '@kernova/types';
 import type { EventBus } from '../events/event-bus.js';
 import { LoopStore } from './loop-store.js';
-import { generateId, now } from '../utils.js';
+import { generateId, now, setLongTimeout, type LongTimer } from '../utils.js';
 import { ValidationError } from '../errors.js';
 
 export interface BackgroundLoopConfig {
@@ -25,19 +25,19 @@ export class BackgroundLoopModule {
   private store: LoopStore | null = null;
 
   /** Loop definitions indexed by ID */
-  private loops: Map<NexusId, BackgroundLoopDef> = new Map();
+  private loops: Map<KernovaId, BackgroundLoopDef> = new Map();
 
   /** Active setTimeout handles */
-  private timers: Map<NexusId, NodeJS.Timeout> = new Map();
+  private timers: Map<KernovaId, LongTimer> = new Map();
 
   /** Monitor functions (not persisted) */
-  private monitors: Map<NexusId, MonitorFunction> = new Map();
+  private monitors: Map<KernovaId, MonitorFunction> = new Map();
 
   /** Previous monitor return value for context threading */
-  private contexts: Map<NexusId, unknown> = new Map();
+  private contexts: Map<KernovaId, unknown> = new Map();
 
   /** Schedule targets for intent submission */
-  private targets: Map<NexusId, ScheduleTarget> = new Map();
+  private targets: Map<KernovaId, ScheduleTarget> = new Map();
 
   constructor(eventBus: EventBus, config: BackgroundLoopConfig) {
     this.eventBus = eventBus;
@@ -66,8 +66,8 @@ export class BackgroundLoopModule {
    * Stop all active timers and close the store.
    */
   async stop(): Promise<void> {
-    for (const [id, timer] of this.timers) {
-      clearTimeout(timer);
+    for (const timer of this.timers.values()) {
+      timer.cancel();
     }
     this.timers.clear();
 
@@ -131,7 +131,7 @@ export class BackgroundLoopModule {
   /**
    * Pause an active loop. Clears the timer, updates state to 'paused'.
    */
-  pause(loopId: NexusId): void {
+  pause(loopId: KernovaId): void {
     const loop = this.loops.get(loopId);
     if (!loop) {
       throw new ValidationError('loopId', `Background loop '${loopId}' not found`);
@@ -140,7 +140,7 @@ export class BackgroundLoopModule {
     // Clear active timer
     const timer = this.timers.get(loopId);
     if (timer) {
-      clearTimeout(timer);
+      timer.cancel();
       this.timers.delete(loopId);
     }
 
@@ -158,7 +158,7 @@ export class BackgroundLoopModule {
   /**
    * Resume a paused loop. Resets context to null, starts polling.
    */
-  resume(loopId: NexusId): void {
+  resume(loopId: KernovaId): void {
     const loop = this.loops.get(loopId);
     if (!loop) {
       throw new ValidationError('loopId', `Background loop '${loopId}' not found`);
@@ -184,7 +184,7 @@ export class BackgroundLoopModule {
   /**
    * Remove a loop entirely. Clears timer, removes from store and all maps.
    */
-  remove(loopId: NexusId): void {
+  remove(loopId: KernovaId): void {
     const loop = this.loops.get(loopId);
     if (!loop) {
       throw new ValidationError('loopId', `Background loop '${loopId}' not found`);
@@ -193,7 +193,7 @@ export class BackgroundLoopModule {
     // Clear timer
     const timer = this.timers.get(loopId);
     if (timer) {
-      clearTimeout(timer);
+      timer.cancel();
       this.timers.delete(loopId);
     }
 
@@ -224,18 +224,18 @@ export class BackgroundLoopModule {
   /**
    * Start the setTimeout polling chain for a given loop.
    */
-  private startPolling(loopId: NexusId): void {
+  private startPolling(loopId: KernovaId): void {
     const loop = this.loops.get(loopId);
     if (!loop) return;
 
-    const timer = setTimeout(() => this.tick(loopId), loop.intervalMs);
+    const timer = setLongTimeout(() => this.tick(loopId), loop.intervalMs);
     this.timers.set(loopId, timer);
   }
 
   /**
    * Execute one polling tick: invoke monitor, handle result, schedule next.
    */
-  private async tick(loopId: NexusId): Promise<void> {
+  private async tick(loopId: KernovaId): Promise<void> {
     const loop = this.loops.get(loopId);
     if (!loop || loop.state !== 'active') return;
 
@@ -275,7 +275,7 @@ export class BackgroundLoopModule {
   /**
    * Handle an actionable monitor result: submit intent, emit events.
    */
-  private async handleActionableResult(loopId: NexusId, loop: BackgroundLoopDef, result: unknown): Promise<void> {
+  private async handleActionableResult(loopId: KernovaId, loop: BackgroundLoopDef, result: unknown): Promise<void> {
     const target = this.targets.get(loopId);
 
     // Emit loop.action.triggered
@@ -305,8 +305,8 @@ export class BackgroundLoopModule {
   /**
    * Emit a typed event on the EventBus.
    */
-  private emitEvent(eventType: string, subjectId: NexusId, data: Record<string, unknown>): void {
-    const event: NexusEvent = {
+  private emitEvent(eventType: string, subjectId: KernovaId, data: Record<string, unknown>): void {
+    const event: KernovaEvent = {
       id: generateId('evt'),
       eventType,
       category: 'system',

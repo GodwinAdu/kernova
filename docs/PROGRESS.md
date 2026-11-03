@@ -1,4 +1,4 @@
-# Nexus — Progress Tracker
+# Kernova — Progress Tracker
 
 > Single source of truth for what's been built, what's in progress, and what's next.
 > Updated after every significant milestone.
@@ -20,17 +20,17 @@
 - [x] Git ignore patterns
 - [x] README with project overview
 
-### @nexus/types (Universal Object Model)
-- [x] `base.ts` — NexusObject, Temporal, Evidence, core types
+### @kernova/types (Universal Object Model)
+- [x] `base.ts` — KernovaObject, Temporal, Evidence, core types
 - [x] `intent.ts` — Intent object with full lifecycle
 - [x] `agent.ts` — Agent definitions and instances
-- [x] `event.ts` — Event system (NexusEvent, subscriptions, timelines)
+- [x] `event.ts` — Event system (KernovaEvent, subscriptions, timelines)
 - [x] `memory.ts` — Five-layer memory architecture
 - [x] `workflow.ts` — Workflow definitions and execution
 - [x] `identity.ts` — Identity, roles, organizations, policies
 
-### @nexus/core (Runtime Kernel)
-- [x] `kernel.ts` — NexusKernel with intent submission pipeline
+### @kernova/core (Runtime Kernel)
+- [x] `kernel.ts` — KernovaKernel with intent submission pipeline
 - [x] `event-bus.ts` — In-memory event bus with pattern matching
 - [x] `memory-engine.ts` — In-memory implementation of 5-layer memory
 - [x] `agent-registry.ts` — Agent registration, selection, execution
@@ -38,27 +38,27 @@
 - [x] `define-agent.ts` — Developer-facing agent definition API
 - [x] `utils.ts` — ID generation, timestamps, retry logic
 
-### @nexus/cli (Developer Tools)
-- [x] `nexus --help` — Help output with banner
-- [x] `nexus init <name>` — Project scaffolding
-- [x] `nexus dev` — Development runtime startup
-- [x] `nexus agent create <name>` — Agent boilerplate generation
-- [x] `nexus agent list` — List registered agents
-- [x] `nexus status` — Project status display
+### @kernova/cli (Developer Tools)
+- [x] `kernova --help` — Help output with banner
+- [x] `kernova init <name>` — Project scaffolding
+- [x] `kernova dev` — Development runtime startup
+- [x] `kernova agent create <name>` — Agent boilerplate generation
+- [x] `kernova agent list` — List registered agents
+- [x] `kernova status` — Project status display
 
 ### Documentation
 - [x] `README.md` — Project overview
 - [x] `AGENT.md` — AI agent instructions for consistent development
-- [x] `docs/VISION.md` — Why Nexus exists
+- [x] `docs/VISION.md` — Why Kernova exists
 - [x] `docs/PROGRESS.md` — This file
 - [x] `docs/ARCHITECTURE.md` — Technical architecture
-- [x] `docs/CONTRIBUTING.md` — How to contribute
+- [x] `CONTRIBUTING.md` — How to contribute
 - [x] `docs/decisions/001-005` — First 5 Architecture Decision Records
 - [x] `docs/specs/model-provider-system.md` — Model system specification
-- [x] `.kiro/steering/nexus-project.md` — Kiro steering instructions
+- [x] `.kiro/steering/kernova-project.md` — Kiro steering instructions
 
 ### Model System (LLM Integration)
-- [x] `@nexus/types/model.ts` — Universal Model Protocol types (multimodal-ready)
+- [x] `@kernova/types/model.ts` — Universal Model Protocol types (multimodal-ready)
 - [x] `ModelProvider` interface — Abstract contract for any provider
 - [x] **Adapter Registry** — Config-driven provider creation (zero code for new providers)
 - [x] **Provider Catalog** — 20+ pre-configured providers
@@ -75,7 +75,7 @@
   - [x] LM Studio, vLLM, llama.cpp (local/self-hosted)
   - [x] Any future OpenAI-compatible API (zero code needed)
 - [x] `createProvider()` — One-line provider creation from preset names
-- [x] `createProviderFromConfig()` — Create from config object (for nexus.config.json)
+- [x] `createProviderFromConfig()` — Create from config object (for kernova.config.json)
 - [x] `detectProvidersFromCatalog()` — Auto-detect from environment variables
 - [x] `ModelRouter` — Provider selection, fallback chains, token tracking
 - [x] Kernel auto-detection — Scans env vars, registers available providers
@@ -83,7 +83,7 @@
 - [x] Default LLM executor — Agents without custom `execute` use LLM automatically
 - [x] Multimodal types — Vision, audio, file content parts (ready for future use)
 - [x] Capability declarations — Providers declare what they support
-- [x] Working examples — `hello-nexus.ts`, `custom-agent.ts`, `multi-provider.ts`
+- [x] Working examples — `hello-kernova.ts`, `custom-agent.ts`, `multi-provider.ts`
 
 ### Event Persistence (SQLite)
 - [x] `EventStore` class — SQLite-backed durable event storage
@@ -109,7 +109,7 @@
 - [x] Tag-based filtering — Find memories by category tags
 - [x] Owner-scoped queries — Memory isolation per user/agent
 - [x] `MemoryEngine` updated — Dual-mode (in-memory + persistent)
-- [x] Kernel integration — Shared `nexus.db` with event store
+- [x] Kernel integration — Shared `kernova.db` with event store
 - [x] Verified: Memories survive process restarts ✓
 - [x] Verified: Full-text search finds relevant memories ✓
 - [x] Verified: Memory decay reduces relevance ✓
@@ -120,13 +120,13 @@
 - [x] `FileWatcher` — Native `fs.watch` with debounce (100ms)
 - [x] `AgentLoader` — Dynamic import with cache-bust for fresh loads
 - [x] Error isolation — Bad agent code doesn't crash the runtime
-- [x] `nexus dev` updated — Uses DevServer, shows persistent status
+- [x] `kernova dev` updated — Uses DevServer, shows persistent status
 - [x] Auto-loads agents from `src/agents/` on startup
 - [x] Reports loaded agents with timing
-- [x] Verified: Agent loaded from disk on `nexus dev` startup ✓
+- [x] Verified: Agent loaded from disk on `kernova dev` startup ✓
 - [x] Verified: File changes trigger reload ✓
 
-### Nexus Studio (Web Dashboard)
+### Kernova Studio (Web Dashboard)
 - [x] `StudioServer` — Embedded HTTP server (native Node.js, zero deps)
 - [x] REST API endpoints:
   - [x] `GET /api/status` — Runtime status, providers, usage
@@ -143,7 +143,7 @@
   - [x] Intent submission form with results display
   - [x] System status panel
   - [x] Dark theme, monospace design
-- [x] Auto-starts with `nexus dev` on port 4200
+- [x] Auto-starts with `kernova dev` on port 4200
 - [x] Verified: API returns correct data ✓
 - [x] Verified: Dashboard serves at localhost:4200 ✓
 
@@ -199,8 +199,8 @@
 - [x] Schema migration — Adds `embedding` column to existing databases
 - [x] Graceful degradation — Falls back to FTS5 when no embedding provider
 
-### @nexus/sdk (High-Level Developer API)
-- [x] `Nexus.create()` — One-line runtime initialization
+### @kernova/sdk (High-Level Developer API)
+- [x] `Kernova.create()` — One-line runtime initialization
 - [x] `app.agent(name, { instructions })` — Minimal agent definition
 - [x] `app.tool(name, { execute })` — Minimal tool registration
 - [x] `app.ask(goal)` — Submit intents, get answers
@@ -261,7 +261,7 @@
 - [x] Kernel integration — `kernel.budget` accessor
 - [x] 13 tests: global budget, identity budget, rate limiting, usage tracking ✓
 
-### Nexus Protocol Specification
+### Kernova Protocol Specification
 - [x] `NP-000` — Overview: goals, conformance levels, wire format
 - [x] `NP-001` — Intent Protocol: object schema, lifecycle, operations, events
 - [x] `NP-002` — Agent Protocol: definition, registration, delegation, states
@@ -283,11 +283,11 @@
 - [x] `npm run build:all` — Ordered build script
 - [x] `npm run publish:all` — Publish all packages in dependency order
 - [x] Package files restricted to `dist/` + `README.md` (no source in npm)
-- [x] Individual README.md for each package (@nexus/types, core, sdk, cli)
+- [x] Individual README.md for each package (@kernova/types, core, sdk, cli)
 
 ### Gap Closures (v0.1 Completion)
 - [x] Studio auth enforcement — API routes check Bearer token (API key or session)
-- [x] `nexus deploy` command — Generates Dockerfile, production entry, .dockerignore
+- [x] `kernova deploy` command — Generates Dockerfile, production entry, .dockerignore
 - [x] `tools.remember()` wired to kernel memory engine (not a stub)
 - [x] `tools.recall()` wired to kernel memory engine (not a stub)
 - [x] Budget enforced in `kernel.submit()` — checks before processing
@@ -314,7 +314,7 @@
 - [x] Connect LLM provider (OpenAI/Anthropic) to agent executor
 - [x] Persist events to local SQLite database
 - [x] Persist memory to local SQLite + full-text search
-- [x] Hot reload agents in `nexus dev` mode
+- [x] Hot reload agents in `kernova dev` mode
 - [ ] Proper error handling and recovery in kernel
 - [ ] Add first integration test (init → dev → submit intent → get result)
 
@@ -383,7 +383,7 @@ None remaining. All previous limitations have been resolved:
 
 | Milestone | Target | Status |
 |-----------|--------|--------|
-| First successful `nexus init` | July 2026 | ✓ Done |
+| First successful `kernova init` | July 2026 | ✓ Done |
 | First intent processed by LLM | July 2026 | ✓ Done |
 | First persistent memory retrieval | July 2026 | ✓ Done |
 | First multi-step workflow | July 2026 | ✓ Done |

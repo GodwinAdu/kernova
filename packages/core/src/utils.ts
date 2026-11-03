@@ -4,12 +4,12 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { NexusId, Timestamp } from '@kernova/types';
+import type { KernovaId, Timestamp } from '@kernova/types';
 
 /**
  * Generate a unique Kernova ID with optional prefix
  */
-export function generateId(prefix?: string): NexusId {
+export function generateId(prefix?: string): KernovaId {
   const uuid = randomUUID();
   return prefix ? `${prefix}_${uuid}` : uuid;
 }
@@ -42,6 +42,64 @@ export function clone<T>(obj: T): T {
  */
 export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** The longest delay setTimeout and setInterval accept (about 24.8 days); Node fires longer ones at once */
+export const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
+/** A timer from setLongTimeout() or setLongInterval() */
+export interface LongTimer {
+  /** Stops the timer; it won't fire again */
+  cancel(): void;
+}
+
+/**
+ * setTimeout for delays of any length. A plain setTimeout fires delays over about 24.8 days
+ * immediately; this waits in steps instead.
+ */
+export function setLongTimeout(fn: () => void, delayMs: number): LongTimer {
+  const due = Date.now() + Math.max(0, delayMs);
+  let handle: ReturnType<typeof setTimeout> | undefined;
+  let cancelled = false;
+  const arm = () => {
+    const remaining = Math.max(0, due - Date.now());
+    handle = setTimeout(() => {
+      if (cancelled) return;
+      if (due - Date.now() > 0) arm();
+      else fn();
+    }, Math.min(remaining, MAX_TIMER_DELAY_MS));
+  };
+  arm();
+  return {
+    cancel() {
+      cancelled = true;
+      if (handle) clearTimeout(handle);
+    },
+  };
+}
+
+/** setInterval for intervals of any length (see setLongTimeout) */
+export function setLongInterval(fn: () => void, intervalMs: number): LongTimer {
+  if (intervalMs <= MAX_TIMER_DELAY_MS) {
+    const handle = setInterval(fn, Math.max(1, intervalMs));
+    return { cancel: () => clearInterval(handle) };
+  }
+  let current: LongTimer;
+  let cancelled = false;
+  const schedule = () => {
+    current = setLongTimeout(() => {
+      if (cancelled) return;
+      schedule();
+      fn();
+    }, intervalMs);
+  };
+  schedule();
+  return {
+    cancel() {
+      cancelled = true;
+      current.cancel();
+    },
+  };
 }
 
 /**

@@ -20,7 +20,7 @@
 /** Unique identifier for any Kernova object */
 export type KernovaId = string;
 
-/** @deprecated Use KernovaId instead. Will be removed in v1.0. */
+/** @deprecated Use KernovaId instead. Will be removed in the next major version. */
 export type NexusId = KernovaId;
 
 /** ISO 8601 timestamp */
@@ -76,7 +76,7 @@ export interface KernovaObject {
   metadata: Record<string, unknown>;
 }
 
-/** @deprecated Use KernovaObject instead. Will be removed in v1.0. */
+/** @deprecated Use KernovaObject instead. Will be removed in the next major version. */
 export type NexusObject = KernovaObject;
 
 /**

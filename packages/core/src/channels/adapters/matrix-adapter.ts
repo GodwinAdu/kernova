@@ -8,6 +8,7 @@
 import type { ChannelType, ConnectionState, OutboundMessage, DeliveryReceipt, MatrixConfig } from '@kernova/types';
 import type { ChannelAdapter, MessageHandler, StateChangeHandler } from '../channel-adapter.js';
 import { now } from '../../utils.js';
+import { ReplyTargets } from '../inbound.js';
 
 const SYNC_TIMEOUT = 30_000;
 
@@ -19,8 +20,7 @@ export class MatrixAdapter implements ChannelAdapter {
   private syncToken?: string;
   private syncing = false;
   private txnCounter = 0;
-  private lastRoomId?: string;
-  private lastSender?: string;
+  private readonly targets = new ReplyTargets();
 
   constructor(private config: MatrixConfig) {}
 
@@ -59,11 +59,13 @@ export class MatrixAdapter implements ChannelAdapter {
     this.setState('disconnected');
   }
 
-  async send(message: OutboundMessage): Promise<DeliveryReceipt> {
-    const roomId = this.lastRoomId ?? this.config.roomIds?.[0];
-    if (!roomId) {
-      return { success: false, timestamp: now(), error: 'No target room available' };
+  /** Send to `recipient` (a room ID, e.g. an inbound message's replyTo), else the first configured room */
+  async send(message: OutboundMessage, recipient?: string): Promise<DeliveryReceipt> {
+    const resolved = this.targets.resolve(recipient, this.config.roomIds?.[0]);
+    if ('error' in resolved) {
+      return { success: false, timestamp: now(), error: resolved.error };
     }
+    const roomId = resolved.target;
 
     const txnId = `kernova_${Date.now()}_${this.txnCounter++}`;
     const path = `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`;
@@ -135,8 +137,7 @@ export class MatrixAdapter implements ChannelAdapter {
                 event.sender !== this.config.userId &&
                 event.content?.body
               ) {
-                this.lastRoomId = roomId;
-                this.lastSender = event.sender;
+                this.targets.remember(roomId);
                 this.messageHandler?.({
                   sender: event.sender,
                   content: event.content.body,
@@ -144,6 +145,7 @@ export class MatrixAdapter implements ChannelAdapter {
                     ? new Date(event.origin_server_ts).toISOString()
                     : now(),
                   raw: event,
+                  replyTo: roomId,
                 });
               }
             }

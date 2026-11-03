@@ -11,14 +11,20 @@ import type {
   ScheduledJob,
   ScheduledJobInput,
   ScheduleTarget,
-  NexusId,
-  NexusEvent,
+  KernovaId,
+  KernovaEvent,
 } from '@kernova/types';
 import type { EventBus } from '../events/event-bus.js';
 import { SchedulerStore } from './scheduler-store.js';
 import { isValidCron, getNextCronDate } from './cron-utils.js';
-import { generateId, now } from '../utils.js';
+import { generateId, now, setLongTimeout, type LongTimer } from '../utils.js';
 import { ValidationError } from '../errors.js';
+
+/**
+ * Most missed ticks reported per job on startup. A frequent job that was offline
+ * for a long time could otherwise emit hundreds of thousands of events.
+ */
+const MAX_MISSED_EXECUTION_EVENTS = 100;
 
 export interface SchedulerConfig {
   dataDir: string;
@@ -31,9 +37,9 @@ export class Scheduler {
   private readonly config: SchedulerConfig;
   private readonly maxExecutionTimeout: number;
   private store: SchedulerStore | null = null;
-  private jobs: Map<NexusId, ScheduledJob> = new Map();
-  private timers: Map<NexusId, ReturnType<typeof setTimeout>> = new Map();
-  private runningJobs: Set<NexusId> = new Set();
+  private jobs: Map<KernovaId, ScheduledJob> = new Map();
+  private timers: Map<KernovaId, LongTimer> = new Map();
+  private runningJobs: Set<KernovaId> = new Set();
   private running = false;
 
   constructor(eventBus: EventBus, config: SchedulerConfig) {
@@ -74,7 +80,7 @@ export class Scheduler {
 
     // Clear all timers
     for (const timer of this.timers.values()) {
-      clearTimeout(timer);
+      timer.cancel();
     }
     this.timers.clear();
 
@@ -169,11 +175,11 @@ export class Scheduler {
   /**
    * Remove a scheduled job by ID.
    */
-  remove(jobId: NexusId): void {
+  remove(jobId: KernovaId): void {
     // Cancel pending timer
     const timer = this.timers.get(jobId);
     if (timer) {
-      clearTimeout(timer);
+      timer.cancel();
       this.timers.delete(jobId);
     }
 
@@ -197,7 +203,7 @@ export class Scheduler {
   /**
    * Get a specific job by ID.
    */
-  get(jobId: NexusId): ScheduledJob | undefined {
+  get(jobId: KernovaId): ScheduledJob | undefined {
     return this.jobs.get(jobId);
   }
 
@@ -208,7 +214,7 @@ export class Scheduler {
     // Clear existing timer for this job
     const existingTimer = this.timers.get(job.id);
     if (existingTimer) {
-      clearTimeout(existingTimer);
+      existingTimer.cancel();
     }
 
     let nextDate: Date;
@@ -226,7 +232,8 @@ export class Scheduler {
 
     const delay = Math.max(0, nextDate.getTime() - Date.now());
 
-    const timer = setTimeout(() => {
+    // A plain setTimeout runs jobs due in more than ~24.8 days (a yearly cron) immediately
+    const timer = setLongTimeout(() => {
       this.timers.delete(job.id);
       this.executeJob(job);
     }, delay);
@@ -347,6 +354,8 @@ export class Scheduler {
    * Detect missed executions on startup.
    * Compares lastExecutionAt against cron expression to find missed ticks.
    * Skips one-shot jobs as they don't reschedule.
+   * Reports at most MAX_MISSED_EXECUTION_EVENTS ticks; the last one is marked
+   * `truncated: true` when more were missed.
    */
   private detectMissedExecutions(job: ScheduledJob): void {
     if (!job.lastExecutionAt) return;
@@ -358,29 +367,33 @@ export class Scheduler {
 
     // Get the next expected execution after the last one
     let nextExpected = getNextCronDate(job.cronExpression, lastExecution);
+    let reported = 0;
 
-    // Emit missed event for each missed occurrence
-    while (nextExpected < currentTime) {
+    // Emit missed event for each missed occurrence, up to the cap
+    while (nextExpected < currentTime && reported < MAX_MISSED_EXECUTION_EVENTS) {
+      const missedAt = nextExpected;
+      nextExpected = getNextCronDate(job.cronExpression, nextExpected);
+      reported++;
+
+      const truncated = reported === MAX_MISSED_EXECUTION_EVENTS && nextExpected < currentTime;
       this.emitEvent('scheduler.job.missed', job.id, {
         jobName: job.name,
-        missedAt: nextExpected.toISOString(),
+        missedAt: missedAt.toISOString(),
         lastExecutionAt: job.lastExecutionAt,
+        ...(truncated ? { truncated: true } : {}),
       });
-
-      // Get next occurrence after this one
-      nextExpected = getNextCronDate(job.cronExpression, nextExpected);
     }
   }
 
   /**
-   * Emit a NexusEvent through the EventBus.
+   * Emit a KernovaEvent through the EventBus.
    */
   private emitEvent(
     eventType: string,
-    jobId: NexusId,
+    jobId: KernovaId,
     data: Record<string, unknown>,
   ): void {
-    const event: NexusEvent = {
+    const event: KernovaEvent = {
       id: generateId('evt'),
       eventType,
       category: 'system',

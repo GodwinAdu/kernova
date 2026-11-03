@@ -101,7 +101,7 @@ const todayEvents = kernel.events.query({
 
 ## Real-Time Streaming (Studio)
 
-The Studio dashboard at http://localhost:4200 streams events live via Server-Sent Events:
+The development dashboard that `kernova dev` starts at http://localhost:4200 (core projects; `DevServer`) streams events live via Server-Sent Events:
 
 ```
 GET /api/events/stream

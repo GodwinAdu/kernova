@@ -9,7 +9,7 @@
  */
 
 import { createHash, randomBytes } from 'node:crypto';
-import type { NexusId } from '@kernova/types';
+import type { KernovaId } from '@kernova/types';
 import { generateId, now } from '../utils.js';
 
 /** Prefix for all Kernova API keys */
@@ -17,7 +17,7 @@ const KEY_PREFIX = 'nxs_';
 
 export interface ApiKey {
   /** Key ID (for reference without exposing the key) */
-  id: NexusId;
+  id: KernovaId;
 
   /** Human-readable label */
   name: string;
@@ -29,10 +29,10 @@ export interface ApiKey {
   prefix: string;
 
   /** Who created this key */
-  ownerId: NexusId;
+  ownerId: KernovaId;
 
   /** Organization scope (if any) */
-  organizationId?: NexusId;
+  organizationId?: KernovaId;
 
   /** Permissions granted to this key */
   permissions: string[];
@@ -55,10 +55,10 @@ export interface CreateKeyOptions {
   name: string;
 
   /** Who owns this key */
-  ownerId: NexusId;
+  ownerId: KernovaId;
 
   /** Organization scope */
-  organizationId?: NexusId;
+  organizationId?: KernovaId;
 
   /** Permissions (subset of owner's permissions) */
   permissions: string[];
@@ -142,7 +142,7 @@ export class ApiKeyManager {
   /**
    * Revoke an API key
    */
-  revoke(keyId: NexusId): boolean {
+  revoke(keyId: KernovaId): boolean {
     for (const key of this.keys.values()) {
       if (key.id === keyId) {
         key.active = false;
@@ -155,7 +155,7 @@ export class ApiKeyManager {
   /**
    * List all keys for an owner (without hashes)
    */
-  listByOwner(ownerId: NexusId): ApiKey[] {
+  listByOwner(ownerId: KernovaId): ApiKey[] {
     return Array.from(this.keys.values())
       .filter(k => k.ownerId === ownerId);
   }

@@ -21,6 +21,9 @@ import {
   type KernovaPlugin,
   type AgentSpec,
   type DaemonConfig,
+  type KernelConfig,
+  type ChannelAdapter,
+  generateId,
 } from '@kernova/core';
 import type { TriggerActionDef } from '@kernova/types';
 import type {
@@ -32,6 +35,8 @@ import type {
   Priority,
   SDKChannelAdapter,
   InboundMessage,
+  OutboundMessage,
+  DeliveryReceipt,
 } from '@kernova/types';
 
 export interface KernovaConfig {
@@ -48,22 +53,41 @@ export interface KernovaConfig {
   debug?: boolean;
 
   /**
-   * Configuration for built-in tools (http-fetch, file-read, file-write, shell-exec, date-time, web-search).
-   *
-   * - `enabled`: whitelist — if set, only these tools are available.
-   * - `disabled`: blacklist — these tools are disabled (takes priority over `enabled`).
-   * - `sandboxDir`: root directory for file operations.
-   * - `shellTimeout`: timeout for shell-exec in ms (default: 30000).
+   * Configuration for built-in tools. Tools that run code or touch files or a database
+   * (shell-exec, code-eval, file-read, file-write, database-query) are off unless listed in `enabled`.
+   * Set `webSearchProvider` to offer web-search.
    */
-  builtInTools?: {
-    enabled?: string[];
-    disabled?: string[];
-    sandboxDir?: string;
-    shellTimeout?: number;
-  };
+  builtInTools?: KernelConfig['builtInTools'];
+
+  /** Model routing: default provider and model, plus per-purpose overrides (default: auto-detected) */
+  models?: KernelConfig['models'];
+
+  /** Extra model providers, in addition to those detected from environment variables */
+  providers?: KernelConfig['providers'];
+
+  /** Kernel-wide tool allow/deny lists, e.g. `{ deny: ['http-fetch'] }` */
+  toolPolicy?: KernelConfig['toolPolicy'];
+
+  /** Self-reflection: an extra model call grades each answer (default: off) */
+  reflection?: KernelConfig['reflection'];
+
+  /** HTTP gateway settings (see getKernel().gateway) */
+  gateway?: KernelConfig['gateway'];
+
+  /** Per-owner rate limits (default: 100 requests per minute per owner) */
+  rateLimits?: KernelConfig['rateLimits'];
+
+  /** Keep each thread's history for asks with a threadId (default: true) */
+  threadHistory?: KernelConfig['threadHistory'];
+
+  /** Planner settings (maxSteps, strategy, ...) used by plan() */
+  planning?: KernelConfig['planning'];
+
+  /** RAG settings (chunkSize, topK, ...) for getKernel().rag */
+  rag?: KernelConfig['rag'];
 }
 
-/** @deprecated Use KernovaConfig instead. Will be removed in v1.0. */
+/** @deprecated Use KernovaConfig instead. Will be removed in the next major version. */
 export type NexusConfig = KernovaConfig;
 
 export interface EnqueueOptions {
@@ -81,8 +105,14 @@ export interface AskOptions {
   /** Priority */
   priority?: Intent['priority'];
 
-  /** Owner */
+  /** Owner: your user ID, for example. Scopes memory recall and budgets. */
   owner?: string;
+
+  /**
+   * Conversation thread. Asks with the same threadId see the earlier turns of that thread;
+   * without one, each ask is independent. Use one thread per user conversation.
+   */
+  threadId?: string;
 }
 
 export interface AskResult {
@@ -103,6 +133,7 @@ export class Kernova {
   private kernel: KernovaKernel;
   private started = false;
   private channelAdapters: Map<string, SDKChannelAdapter> = new Map();
+  private channelConnections: Promise<void>[] = [];
   private globalMessageHandlers: Array<(msg: InboundMessage) => Promise<void>> = [];
   private scheduleHandlers: Map<string, () => Promise<void>> = new Map();
 
@@ -125,6 +156,15 @@ export class Kernova {
       ephemeral: config.ephemeral,
       debug: config.debug,
       builtInTools: config.builtInTools,
+      models: config.models,
+      providers: config.providers,
+      toolPolicy: config.toolPolicy,
+      reflection: config.reflection,
+      gateway: config.gateway,
+      rateLimits: config.rateLimits,
+      threadHistory: config.threadHistory,
+      planning: config.planning,
+      rag: config.rag,
     });
 
     await kernel.start();
@@ -154,6 +194,14 @@ export class Kernova {
       tools: spec.tools || [],
       instructions: spec.instructions,
       execute: spec.execute,
+      reflection: spec.reflection,
+      toolPolicy: spec.toolPolicy,
+      model: spec.model,
+      temperature: spec.temperature,
+      maxTokens: spec.maxTokens,
+      reasoning: spec.reasoning,
+      responseFormat: spec.responseFormat,
+      promptCache: spec.promptCache,
     });
 
     this.kernel.agentRegistry.register(defined.definition, defined.executor);
@@ -203,6 +251,7 @@ export class Kernova {
       intentType: options.type || 'query',
       priority: options.priority || 'medium',
       owner: options.owner,
+      ...(options.threadId && { metadata: { threadId: options.threadId } }),
     });
 
     return {
@@ -283,6 +332,8 @@ export class Kernova {
    *   await app.serve({ shutdownTimeoutMs: 10000, heartbeatIntervalMs: 30000 });
    */
   async serve(options: DaemonConfig = {}): Promise<void> {
+    // Channels added with channel() must be listening before the daemon runs
+    await Promise.all(this.channelConnections);
     const daemon = new DaemonRunner(this.kernel, options);
     return daemon.start();
   }
@@ -426,8 +477,12 @@ export class Kernova {
    * Usage:
    *   app.channel('webhooks', new WebhookChannelAdapter({ port: 3100 }));
    *   app.channel('ws', new WebSocketChannelAdapter({ port: 3200 }));
+   *   app.channel('slack', new SlackAdapter({ type: 'slack', botToken, signingSecret }));
+   *
+   * Platform adapters (Slack, Teams, SMS, ...) get `name` as their messages' connectorId.
    */
-  channel(name: string, adapter: SDKChannelAdapter): this {
+  channel(name: string, channelAdapter: SDKChannelAdapter | ChannelAdapter): this {
+    const adapter = isSdkAdapter(channelAdapter) ? channelAdapter : toSdkAdapter(name, channelAdapter);
     this.channelAdapters.set(name, adapter);
 
     // Wire the adapter's messages to global handlers
@@ -436,6 +491,11 @@ export class Kernova {
         await handler(msg);
       }
     });
+
+    // Start listening now; serve() waits for it and reports a failure
+    const connecting = adapter.connect();
+    connecting.catch(() => {});
+    this.channelConnections.push(connecting);
 
     return this;
   }
@@ -451,6 +511,21 @@ export class Kernova {
   onMessage(handler: (msg: InboundMessage) => Promise<void>): this {
     this.globalMessageHandlers.push(handler);
     return this;
+  }
+
+  /**
+   * Answer an inbound message on the channel it came from, to its sender (msg.replyTo).
+   *
+   * Usage:
+   *   app.onMessage(async (msg) => {
+   *     const { answer } = await app.ask(msg.content, { threadId: `${msg.connectorId}:${msg.replyTo}` });
+   *     await app.reply(msg, answer);
+   *   });
+   */
+  async reply(msg: InboundMessage, content: string | OutboundMessage): Promise<DeliveryReceipt> {
+    const adapter = [...this.channelAdapters.values()].find(a => a.id === msg.connectorId);
+    if (!adapter) throw new Error(`No channel adapter "${msg.connectorId}" is registered`);
+    return adapter.send(typeof content === 'string' ? { content } : content, msg.replyTo);
   }
 
   /**
@@ -489,7 +564,7 @@ export class Kernova {
    *   const ctx = thread.getContext();
    */
   thread(threadId: string): ThreadHandle {
-    return new ThreadHandle(threadId, this.kernel.conversation);
+    return new ThreadHandle(threadId, this.kernel.conversation, this);
   }
 
   /**
@@ -509,6 +584,7 @@ export class Kernova {
         await adapter.disconnect().catch(() => {});
       }
       this.channelAdapters.clear();
+      this.channelConnections = [];
 
       await this.kernel.stop();
       this.started = false;
@@ -516,9 +592,9 @@ export class Kernova {
   }
 }
 
-/** @deprecated Use Kernova instead. Will be removed in v1.0. */
+/** @deprecated Use Kernova instead. Will be removed in the next major version. */
 export const Nexus = Kernova;
-/** @deprecated Use Kernova instead. Will be removed in v1.0. */
+/** @deprecated Use Kernova instead. Will be removed in the next major version. */
 export type Nexus = Kernova;
 
 /**
@@ -526,6 +602,7 @@ export type Nexus = Kernova;
  * for interacting with a specific named conversation thread.
  * 
  * Provides:
+ * - ask(goal): ask an agent, with this thread's earlier turns as context
  * - addMessage(role, content): add a message to the thread
  * - getContext(): get the active context (summary + recent messages)
  */
@@ -534,9 +611,18 @@ export class ThreadHandle {
     public readonly threadId: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private readonly conversationManager: any,
+    private readonly app?: Kernova,
   ) {
     // Ensure the thread exists
     this.conversationManager.create(this.threadId);
+  }
+
+  /**
+   * Ask within this thread: the agent sees the earlier turns, and the exchange is added to the thread.
+   */
+  async ask(goal: string, options: Omit<AskOptions, 'threadId'> = {}): Promise<AskResult> {
+    if (!this.app) throw new Error('This ThreadHandle was created without an app; use app.thread(id).');
+    return this.app.ask(goal, { ...options, threadId: this.threadId });
   }
 
   /**
@@ -554,4 +640,31 @@ export class ThreadHandle {
   getContext(): { summary: string | null; messages: Array<{ role: string; content: string }> } {
     return this.conversationManager.getThreadContext(this.threadId);
   }
+}
+
+function isSdkAdapter(adapter: SDKChannelAdapter | ChannelAdapter): adapter is SDKChannelAdapter {
+  return 'id' in adapter && 'type' in adapter;
+}
+
+/** Present a platform adapter (Slack, Teams, SMS, ...) as an SDK channel adapter named `name` */
+function toSdkAdapter(name: string, adapter: ChannelAdapter): SDKChannelAdapter {
+  return {
+    id: name,
+    type: adapter.channelType,
+    connect: () => adapter.connect(),
+    disconnect: () => adapter.disconnect(),
+    send: (message, recipient) => adapter.send(message, recipient),
+    onMessage: (handler) => adapter.onMessage((raw) => {
+      void handler({
+        id: generateId('imsg'),
+        sender: raw.sender,
+        channel: adapter.channelType,
+        content: raw.content,
+        timestamp: raw.timestamp,
+        connectorId: name,
+        raw: raw.raw,
+        ...(raw.replyTo && { replyTo: raw.replyTo }),
+      });
+    }),
+  };
 }

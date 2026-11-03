@@ -5,14 +5,14 @@
  *
  * Commands:
  *   kernova triggers list [--data-dir <path>]
- *   kernova triggers enable <id> [--data-dir <path>]
- *   kernova triggers disable <id> [--data-dir <path>]
+ *   kernova triggers enable <id|name> [--data-dir <path>]
+ *   kernova triggers disable <id|name> [--data-dir <path>]
  */
 
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import Database from 'better-sqlite3';
-import { info, warn } from '../ui.js';
+import { info, warn, defaultDataDir } from '../ui.js';
 
 /** Shape of a trigger_rules row in the database */
 interface TriggerRuleRow {
@@ -30,7 +30,7 @@ interface TriggerRuleRow {
  */
 function parseArgs(args: string[]): { dataDir: string; rest: string[] } {
   const rest: string[] = [];
-  let dataDir = resolve(process.cwd(), 'kernova-data');
+  let dataDir = defaultDataDir();
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--data-dir' && i + 1 < args.length) {
@@ -217,13 +217,16 @@ async function handleTriggersSetEnabled(dataDir: string, id: string | undefined,
       process.exit(1);
     }
 
-    // Fetch the rule to verify it exists
-    const rule = db.prepare(
-      `SELECT id, name FROM trigger_rules WHERE id = ?`
-    ).get(id) as { id: string; name: string } | undefined;
+    // Accept the full ID, the rule name, or an unambiguous ID prefix (list output shortens IDs)
+    const matches = db.prepare(
+      `SELECT id, name FROM trigger_rules WHERE id = ? OR name = ? OR id LIKE ? || '%'`
+    ).all(id, id, id) as Array<{ id: string; name: string }>;
+    const rule = matches.find(r => r.id === id || r.name === id) ?? (matches.length === 1 ? matches[0] : undefined);
 
     if (!rule) {
-      warn(`Trigger rule "${id}" not found.`);
+      warn(matches.length > 1
+        ? `"${id}" matches ${matches.length} trigger rules. Use more of the ID.`
+        : `Trigger rule "${id}" not found.`);
       process.exit(1);
     }
 
@@ -231,10 +234,10 @@ async function handleTriggersSetEnabled(dataDir: string, id: string | undefined,
     const now = new Date().toISOString();
     db.prepare(
       `UPDATE trigger_rules SET enabled = ?, updated_at = ? WHERE id = ?`
-    ).run(enabled ? 1 : 0, now, id);
+    ).run(enabled ? 1 : 0, now, rule.id);
 
     const state = enabled ? 'enabled' : 'disabled';
-    info(`Trigger rule "${rule.name}" (${id}) ${state}.`);
+    info(`Trigger rule "${rule.name}" (${rule.id}) ${state}.`);
   } finally {
     db.close();
   }
@@ -246,11 +249,11 @@ function printTriggersHelp(): void {
 
   Commands:
     list              List all registered trigger rules
-    enable <id>       Enable a trigger rule by ID
-    disable <id>      Disable a trigger rule by ID
+    enable <id|name>  Enable a trigger rule (ID, ID prefix, or name)
+    disable <id|name> Disable a trigger rule (ID, ID prefix, or name)
 
   Options:
-    --data-dir <path> Path to the kernova data directory (default: ./kernova-data)
+    --data-dir <path> Path to the kernova data directory (default: $KERNOVA_DATA_DIR or ./kernova-data)
     -h, --help        Show this help message
 
   Examples:

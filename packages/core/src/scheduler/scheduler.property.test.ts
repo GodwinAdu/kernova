@@ -105,7 +105,7 @@ describe('Property 1: Scheduler Cron Parsing Produces Valid Next Execution Times
     fc.assert(
       fc.property(
         validCronArb,
-        fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') }),
+        fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31'), noInvalidDate: true }),
         (cronExpr, referenceDate) => {
           const next = getNextCronDate(cronExpr, referenceDate);
 
@@ -137,7 +137,7 @@ describe('Property 3: Scheduler Job Persistence Round-Trip', () => {
       fc.asyncProperty(
         fc.array(
           fc.record({
-            suffix: fc.hexaString({ minLength: 4, maxLength: 8 }),
+            suffix: fc.string({ unit: fc.constantFrom(...'0123456789abcdef'), minLength: 4, maxLength: 8 }),
             cronExpr: validCronArb,
             goal: fc.string({ minLength: 1, maxLength: 100 }),
           }),
@@ -207,7 +207,7 @@ describe('Property 3: Scheduler Job Persistence Round-Trip', () => {
       fc.asyncProperty(
         fc.array(
           fc.record({
-            suffix: fc.hexaString({ minLength: 4, maxLength: 8 }),
+            suffix: fc.string({ unit: fc.constantFrom(...'0123456789abcdef'), minLength: 4, maxLength: 8 }),
             delayMs: fc.integer({ min: 1000, max: 60_000 }),
             goal: fc.string({ minLength: 1, maxLength: 100 }),
           }),

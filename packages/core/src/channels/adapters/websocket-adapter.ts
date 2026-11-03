@@ -8,10 +8,11 @@
  * Uses Node.js built-in WebSocket support (no external dependencies).
  */
 
-import { createServer, type Server as HttpServer } from 'node:http';
+import { createServer, type IncomingMessage, type Server as HttpServer } from 'node:http';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import type { OutboundMessage, DeliveryReceipt, InboundMessage, SDKChannelAdapter } from '@kernova/types';
 import { generateId, now } from '../../utils.js';
+import { MAX_INBOUND_BODY_BYTES, header, safeEqual } from '../inbound.js';
 
 export interface WebSocketAdapterConfig {
   /** Port to listen on (default: 3200) */
@@ -25,6 +26,22 @@ export interface WebSocketAdapterConfig {
 
   /** Optional adapter ID override */
   id?: string;
+
+  /**
+   * Token clients must present: `Authorization: Bearer <token>`, or `?token=<token>` in the
+   * URL (browsers can't set headers on WebSocket connections)
+   */
+  token?: string;
+
+  /**
+   * Browser origins allowed to connect, e.g. ['https://app.example.com']. Browsers don't apply
+   * CORS to WebSockets, so connections that send an Origin header are refused unless the origin
+   * is listed here or the client presents the token.
+   */
+  allowedOrigins?: string[];
+
+  /** Interface to listen on (default: all interfaces when `token` is set, otherwise 127.0.0.1) */
+  host?: string;
 }
 
 interface ClientInfo {
@@ -63,6 +80,12 @@ export class WebSocketChannelAdapter implements SDKChannelAdapter {
       this.wss = new WebSocketServer({
         server: this.httpServer,
         path: this.path,
+        maxPayload: MAX_INBOUND_BODY_BYTES,
+        verifyClient: (info: { origin: string; req: IncomingMessage }, done: (ok: boolean, code?: number, reason?: string) => void) => {
+          const refusal = this.refuse(info.req, info.origin);
+          if (refusal) done(false, refusal.code, refusal.reason);
+          else done(true);
+        },
       });
 
       this.wss.on('connection', (ws: WebSocket) => {
@@ -75,7 +98,8 @@ export class WebSocketChannelAdapter implements SDKChannelAdapter {
         }
       });
 
-      this.httpServer.listen(this.port, () => {
+      const host = this.config.host ?? (this.config.token ? undefined : '127.0.0.1');
+      this.httpServer.listen(this.port, host, () => {
         this.connected = true;
         this.startKeepalive();
         resolve();
@@ -113,7 +137,11 @@ export class WebSocketChannelAdapter implements SDKChannelAdapter {
     this.connected = false;
   }
 
-  async send(message: OutboundMessage): Promise<DeliveryReceipt> {
+  /** Send to one client (`recipient` = an inbound message's replyTo), or to every client without one */
+  async send(message: OutboundMessage, recipient?: string): Promise<DeliveryReceipt> {
+    if (recipient && !this.clients.has(recipient)) {
+      return { success: false, timestamp: now(), error: `Client ${recipient} is not connected` };
+    }
     if (!this.connected || this.clients.size === 0) {
       return {
         success: false,
@@ -130,7 +158,8 @@ export class WebSocketChannelAdapter implements SDKChannelAdapter {
     });
 
     let sentCount = 0;
-    for (const client of this.clients.values()) {
+    const targets = recipient ? [this.clients.get(recipient)!] : this.clients.values();
+    for (const client of targets) {
       if (client.ws.readyState === WebSocket.OPEN) {
         client.ws.send(payload);
         sentCount++;
@@ -197,6 +226,7 @@ export class WebSocketChannelAdapter implements SDKChannelAdapter {
         timestamp: payload.timestamp || now(),
         connectorId: this.id,
         raw: payload,
+        replyTo: clientId,
       };
 
       for (const handler of this.messageHandlers) {
@@ -207,6 +237,23 @@ export class WebSocketChannelAdapter implements SDKChannelAdapter {
     } catch {
       // Invalid message format — silently ignore
     }
+  }
+
+  /** Why a connection is refused (token or origin checks), or undefined to accept it */
+  private refuse(req: IncomingMessage, origin: string | undefined): { code: number; reason: string } | undefined {
+    const { token, allowedOrigins } = this.config;
+    let tokenOk = false;
+    if (token) {
+      const bearer = header(req, 'authorization');
+      const fromQuery = new URL(req.url ?? '/', 'http://localhost').searchParams.get('token');
+      tokenOk = (bearer?.startsWith('Bearer ') && safeEqual(bearer.slice(7), token)) || (fromQuery !== null && safeEqual(fromQuery, token));
+      if (!tokenOk) return { code: 401, reason: 'Unauthorized' };
+    }
+    // Browser connections: the origin must be listed, or (without a list) the client must have the token
+    if (origin && (allowedOrigins ? !allowedOrigins.includes(origin) : !tokenOk)) {
+      return { code: 403, reason: 'Origin not allowed' };
+    }
+    return undefined;
   }
 
   private startKeepalive(): void {

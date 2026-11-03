@@ -11,10 +11,9 @@
  */
 
 import Database from 'better-sqlite3';
-import { mkdirSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-import type { BackgroundLoopDef, LoopState, NexusId } from '@kernova/types';
+import type { BackgroundLoopDef, LoopState, KernovaId } from '@kernova/types';
 import { now } from '../utils.js';
+import { resolveStorePath } from '../storage/store-path.js';
 
 export interface LoopStoreConfig {
   dataDir: string;
@@ -38,15 +37,8 @@ export class LoopStore {
   private updateStateStmt: Database.Statement;
 
   constructor(config: LoopStoreConfig) {
-    const dbPath = join(config.dataDir, 'kernova.db');
-
-    // Ensure directory exists
-    if (!existsSync(config.dataDir)) {
-      mkdirSync(config.dataDir, { recursive: true });
-    }
-
-    // Open database
-    this.db = new Database(dbPath);
+    // Open database (in memory when dataDir is ':memory:')
+    this.db = new Database(resolveStorePath(config.dataDir));
 
     // Configure for performance
     this.db.pragma('journal_mode = WAL');
@@ -102,7 +94,7 @@ export class LoopStore {
    * Remove a background loop by ID.
    * Returns true if a row was deleted, false if not found.
    */
-  remove(loopId: NexusId): boolean {
+  remove(loopId: KernovaId): boolean {
     const result = this.removeStmt.run(loopId);
     return result.changes > 0;
   }
@@ -110,7 +102,7 @@ export class LoopStore {
   /**
    * Update the state of a background loop
    */
-  updateState(loopId: NexusId, state: LoopState): void {
+  updateState(loopId: KernovaId, state: LoopState): void {
     this.updateStateStmt.run({
       id: loopId,
       state,

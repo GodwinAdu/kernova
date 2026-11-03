@@ -14,54 +14,72 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import type { NexusId, NexusEvent } from '@kernova/types';
+import { timingSafeEqual } from 'node:crypto';
+import type { KernovaId, KernovaEvent } from '@kernova/types';
 import type { EventBus } from '../events/event-bus.js';
 import type { KernovaKernel } from '../kernel.js';
 import { generateId, now } from '../utils.js';
 
 export interface GatewayAuthConfig {
-  /** Bearer tokens that grant access */
+  /** Bearer tokens that grant access (default: KERNOVA_API_KEY from the environment, if set) */
   tokens?: string[];
-  /** Allow unauthenticated access (dev mode) */
+  /**
+   * Allow unauthenticated access. For local development only: anyone who can reach
+   * the port can run agents. Browser requests are still refused unless their origin
+   * is allowed by `cors`.
+   */
   allowAnonymous?: boolean;
 }
 
 export interface GatewayConfig {
   port?: number;                 // default: 3000
-  host?: string;                 // default: '0.0.0.0'
+  host?: string;                 // default: '127.0.0.1'
   auth?: GatewayAuthConfig;
-  /** Enable CORS headers */
-  cors?: boolean;                // default: true
+  /** CORS: false sends no CORS headers, true allows any origin, or list the allowed origins */
+  cors?: boolean | string[];     // default: false
   /** Request body size limit in bytes */
   maxBodyBytes?: number;         // default: 1MB
 }
 
 const DEFAULT_CONFIG: Required<GatewayConfig> = {
   port: 3000,
-  host: '0.0.0.0',
-  auth: { allowAnonymous: true },
-  cors: true,
+  host: '127.0.0.1',
+  auth: {},
+  cors: false,
   maxBodyBytes: 1_048_576,
 };
 
 export class AgentGateway {
   private readonly kernel: KernovaKernel;
   private readonly eventBus: EventBus;
-  private readonly config: Required<GatewayConfig>;
+  private config: Required<GatewayConfig>;
   private server: ReturnType<typeof createServer> | null = null;
   private running = false;
 
   constructor(kernel: KernovaKernel, eventBus: EventBus, config?: GatewayConfig) {
     this.kernel = kernel;
     this.eventBus = eventBus;
-    this.config = { ...DEFAULT_CONFIG, ...config } as Required<GatewayConfig>;
+    this.config = { ...DEFAULT_CONFIG, ...config, auth: { ...config?.auth } } as Required<GatewayConfig>;
   }
 
   /**
    * Start the HTTP gateway server.
+   * Requires `auth.tokens` (or KERNOVA_API_KEY), unless `auth.allowAnonymous` is set.
+   *
+   * @param config - Overrides for the configuration given to the constructor
    */
-  async start(): Promise<void> {
+  async start(config?: GatewayConfig): Promise<void> {
     if (this.running) return;
+
+    if (config) {
+      this.config = { ...this.config, ...config, auth: { ...this.config.auth, ...config.auth } };
+    }
+    if (!this.config.auth.allowAnonymous && this.tokens().length === 0) {
+      throw new Error(
+        'AgentGateway has no authentication configured. Pass auth.tokens or set KERNOVA_API_KEY. ' +
+        'For local development only, set auth.allowAnonymous: true.',
+      );
+    }
 
     this.server = createServer((req, res) => this.handleRequest(req, res));
 
@@ -98,26 +116,41 @@ export class AgentGateway {
   // ─── Request Handling ──────────────────────────────────────
 
   private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    // CORS
-    if (this.config.cors) {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-      if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
-    }
-
-    // Auth check
-    if (!this.authenticate(req)) {
-      this.sendJson(res, 401, { error: 'Unauthorized' });
-      return;
-    }
-
     const url = req.url ?? '/';
     const method = req.method ?? 'GET';
+    const [pathname, queryString] = url.split('?');
+    const origin = req.headers.origin;
+
+    // CORS
+    if (this.config.cors) {
+      if (origin && this.originAllowed(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', this.config.cors === true ? '*' : origin);
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      }
+      if (method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+    }
+
+    // Webhook routes with a secret are authenticated by their signature instead of a token
+    const signedWebhook = method === 'POST' && pathname.startsWith('/hooks/')
+      && this.kernel.webhooks.isSignedRoute(method, pathname);
+
+    if (!signedWebhook) {
+      // Without a token, a web page the developer visits could call the gateway from their
+      // browser (including through DNS rebinding). Browsers always send Origin, so refuse
+      // browser requests from origins that CORS doesn't allow.
+      if (this.config.auth.allowAnonymous && origin && !this.originAllowed(origin)) {
+        this.sendJson(res, 403, { error: 'Origin not allowed' });
+        return;
+      }
+      if (!this.authenticate(req)) {
+        this.sendJson(res, 401, { error: 'Unauthorized' });
+        return;
+      }
+    }
 
     try {
-      // Parse URL path and query string
-      const [pathname, queryString] = url.split('?');
       const query = new URLSearchParams(queryString || '');
 
       if (pathname === '/health' && method === 'GET') {
@@ -163,7 +196,7 @@ export class AgentGateway {
       } else if (pathname?.startsWith('/v1/deployments/') && pathname.endsWith('/restart') && method === 'POST') {
         this.handleRestartDeployment(res);
       } else if (pathname?.startsWith('/hooks/') && method === 'POST') {
-        await this.handleWebhook(req, res, url);
+        await this.handleWebhook(req, res, pathname);
       } else {
         this.sendJson(res, 404, { error: 'Not found' });
       }
@@ -247,8 +280,18 @@ export class AgentGateway {
     });
   }
 
-  private async handleWebhook(req: IncomingMessage, res: ServerResponse, url: string): Promise<void> {
-    const body = await this.readBody(req);
+  private async handleWebhook(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
+    const rawBody = await this.readRawBody(req);
+    if (rawBody === null) {
+      this.sendJson(res, 413, { error: 'Request body too large' });
+      return;
+    }
+    let body: unknown = rawBody;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      // Not JSON (e.g. form-encoded); pass the text through
+    }
     const headers: Record<string, string> = {};
     for (const [key, value] of Object.entries(req.headers)) {
       if (typeof value === 'string') headers[key] = value;
@@ -256,9 +299,10 @@ export class AgentGateway {
 
     const result = await this.kernel.webhooks.handle({
       method: 'POST',
-      path: url,
+      path,
       headers,
       body,
+      rawBody,
     });
 
     if (result.matched) {
@@ -638,17 +682,40 @@ export class AgentGateway {
 
   // ─── Helpers ───────────────────────────────────────────────
 
+  private tokens(): string[] {
+    if (this.config.auth.tokens) return this.config.auth.tokens.filter(Boolean);
+    return process.env.KERNOVA_API_KEY ? [process.env.KERNOVA_API_KEY] : [];
+  }
+
+  private originAllowed(origin: string): boolean {
+    const { cors } = this.config;
+    return cors === true || (Array.isArray(cors) && cors.includes(origin));
+  }
+
   private authenticate(req: IncomingMessage): boolean {
     if (this.config.auth.allowAnonymous) return true;
 
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) return false;
 
-    const token = authHeader.slice(7);
-    return this.config.auth.tokens?.includes(token) ?? false;
+    const token = Buffer.from(authHeader.slice(7));
+    return this.tokens().some((t) => {
+      const expected = Buffer.from(t);
+      return expected.length === token.length && timingSafeEqual(expected, token);
+    });
   }
 
   private async readBody(req: IncomingMessage): Promise<Record<string, unknown> | null> {
+    const raw = await this.readRawBody(req);
+    if (raw === null) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  private async readRawBody(req: IncomingMessage): Promise<string | null> {
     return new Promise((resolve) => {
       const chunks: Buffer[] = [];
       let size = 0;
@@ -663,12 +730,7 @@ export class AgentGateway {
       });
 
       req.on('end', () => {
-        try {
-          const raw = Buffer.concat(chunks).toString('utf-8');
-          resolve(JSON.parse(raw));
-        } catch {
-          resolve(null);
-        }
+        resolve(size > this.config.maxBodyBytes ? null : Buffer.concat(chunks).toString('utf-8'));
       });
 
       req.on('error', () => resolve(null));

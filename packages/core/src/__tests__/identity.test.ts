@@ -13,10 +13,12 @@ describe('IdentityManager', () => {
   beforeEach(async () => {
     eventBus = new EventBus({ persistent: false });
     await eventBus.start();
-    manager = new IdentityManager(eventBus);
+    // In memory: without this, every run added rows to ./kernova-data/kernova.db in the repo
+    manager = new IdentityManager(eventBus, { ephemeral: true });
   });
 
   afterEach(async () => {
+    manager.close();
     await eventBus.stop();
   });
 

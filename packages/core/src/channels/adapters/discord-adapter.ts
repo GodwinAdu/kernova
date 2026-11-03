@@ -1,7 +1,7 @@
 /**
  * Discord Channel Adapter
  *
- * Connects Nexus to Discord via the Gateway WebSocket (for receiving)
+ * Connects Kernova to Discord via the Gateway WebSocket (for receiving)
  * and REST API (for sending). Handles heartbeat, identify, resume,
  * and automatic reconnection on unexpected disconnects.
  */
@@ -10,6 +10,7 @@ import WebSocket from 'ws';
 import type { ChannelType, ConnectionState, OutboundMessage, DeliveryReceipt, DiscordConfig } from '@kernova/types';
 import type { ChannelAdapter, MessageHandler, StateChangeHandler } from '../channel-adapter.js';
 import { now } from '../../utils.js';
+import { ReplyTargets } from '../inbound.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 const GATEWAY_PARAMS = '?v=10&encoding=json';
@@ -42,7 +43,7 @@ export class DiscordAdapter implements ChannelAdapter {
   private lastSequence: number | null = null;
   private sessionId: string | null = null;
   private resumeGatewayUrl: string | null = null;
-  private lastChannelId: string | null = null;
+  private readonly targets = new ReplyTargets();
   private shouldReconnect = false;
 
   constructor(private config: DiscordConfig) {}
@@ -69,11 +70,13 @@ export class DiscordAdapter implements ChannelAdapter {
     this.setState('disconnected');
   }
 
-  async send(message: OutboundMessage): Promise<DeliveryReceipt> {
-    const channelId = this.lastChannelId;
-    if (!channelId) {
-      return { success: false, timestamp: now(), error: 'No channel ID available for routing' };
+  /** Send to `recipient` (a channel ID, e.g. an inbound message's replyTo) */
+  async send(message: OutboundMessage, recipient?: string): Promise<DeliveryReceipt> {
+    const resolved = this.targets.resolve(recipient);
+    if ('error' in resolved) {
+      return { success: false, timestamp: now(), error: resolved.error };
     }
+    const channelId = resolved.target;
 
     const body: Record<string, unknown> = { content: message.content };
 
@@ -209,13 +212,14 @@ export class DiscordAdapter implements ChannelAdapter {
       // Skip bot messages to avoid loops
       if (data.author?.bot) return;
 
-      this.lastChannelId = data.channel_id;
+      if (data.channel_id) this.targets.remember(data.channel_id);
 
       this.messageHandler?.({
         sender: data.author?.username ?? 'unknown',
         content: data.content ?? '',
         timestamp: data.timestamp ?? new Date().toISOString(),
         raw: data,
+        ...(data.channel_id && { replyTo: data.channel_id }),
       });
     }
   }

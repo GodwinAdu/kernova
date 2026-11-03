@@ -8,7 +8,7 @@ July 8, 2026
 
 ## Context
 
-Nexus needs authentication and authorization to protect resources. Without it, any client can access any memory, execute any tool, and submit intents without accountability.
+Kernova needs authentication and authorization to protect resources. Without it, any client can access any memory, execute any tool, and submit intents without accountability.
 
 ## Decision
 

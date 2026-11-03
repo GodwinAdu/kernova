@@ -8,7 +8,7 @@ July 8, 2026
 
 ## Context
 
-Nexus is Event Native — every state change emits an event. For this to be useful beyond real-time subscribers, events must survive process restarts. We need a persistence layer that is:
+Kernova is Event Native — every state change emits an event. For this to be useful beyond real-time subscribers, events must survive process restarts. We need a persistence layer that is:
 - Zero-config (works on first run)
 - Fast (>10k events/second)
 - Reliable (no data loss)
@@ -39,9 +39,9 @@ EventBus.publish(event)
 ### Configuration
 
 ```typescript
-new NexusKernel({
+new KernovaKernel({
   environment: 'development',
-  dataDir: './nexus-data',  // Where nexus.db lives
+  dataDir: './kernova-data',  // Where kernova.db lives
   ephemeral: false,         // Set true to disable persistence
 });
 ```

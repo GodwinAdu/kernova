@@ -6,6 +6,11 @@
  *
  * Supports enable/disable configuration per tool and sandbox enforcement
  * for file-system and shell operations.
+ *
+ * Tools that can run code or touch the file system or a database are off by default
+ * (see UNSAFE_BUILT_IN_TOOLS). Enable them explicitly, and only for agents whose
+ * input you trust: a prompt injection in any page or message the agent reads can
+ * make the model call them.
  */
 
 import type { ToolDefinition } from '../plugins/plugin-registry.js';
@@ -22,12 +27,42 @@ import { createRegexMatchTool } from './regex-match.js';
 import { createImageDescribeTool } from './image-describe.js';
 import { createDatabaseQueryTool } from './database-query.js';
 import { createCodeEvalTool } from './code-eval.js';
+import type { HttpFetchOptions } from './http-fetch.js';
+import type { ShellExecOptions } from './shell-exec.js';
+import type { WebSearchProvider } from './web-search.js';
 
 export { SandboxViolationError } from './sandbox-error.js';
 export { createFileReadTool, validateSandboxPath } from './file-read.js';
+export { isPrivateAddress } from './http-fetch.js';
+export type { HttpFetchOptions } from './http-fetch.js';
+export type { ShellExecOptions } from './shell-exec.js';
+
+/** Tools that run code or touch the file system or a database. Off unless listed in `enabled`. */
+export const UNSAFE_BUILT_IN_TOOLS: readonly string[] = [
+  'file-read',
+  'file-write',
+  'shell-exec',
+  'code-eval',
+  'database-query',
+];
+
+/** Tools available when no `enabled` list is given. */
+export const DEFAULT_BUILT_IN_TOOLS: readonly string[] = [
+  'http-fetch',
+  'date-time',
+  'web-search',
+  'json-parse',
+  'math-eval',
+  'regex-match',
+  'image-describe',
+];
 
 export interface BuiltInToolConfig {
-  /** Whitelist of enabled tool IDs. If set, only these tools are available. */
+  /**
+   * Whitelist of enabled tool IDs. If set, only these tools are available.
+   * If not set, DEFAULT_BUILT_IN_TOOLS are available. To add an unsafe tool to the
+   * defaults: `enabled: [...DEFAULT_BUILT_IN_TOOLS, 'shell-exec']`.
+   */
   enabled?: string[];
 
   /** Blacklist of disabled tool IDs. Disabled overrides enabled. */
@@ -36,16 +71,25 @@ export interface BuiltInToolConfig {
   /** Root directory for file operations (sandbox boundary). */
   sandboxDir?: string;
 
-  /** Timeout for shell-exec in milliseconds (default: 30000). */
+  /** Timeout for shell-exec in milliseconds; also the maximum the model can request (default: 30000). */
   shellTimeout?: number;
+
+  /** Extra environment variables for shell-exec commands. The host environment is not passed through. */
+  shellEnv?: ShellExecOptions['env'];
+
+  /** http-fetch settings: private-network access, response size cap, timeout. */
+  httpFetch?: HttpFetchOptions;
+
+  /** Search backend for the web-search tool. Without one, web-search is not offered to agents. */
+  webSearchProvider?: WebSearchProvider;
 
   /** ModelRouter instance for vision-capable tools (image-describe). */
   modelRouter?: ModelRouter;
 
-  /** Path to SQLite database file for database-query tool. */
+  /** Path to the SQLite database for the database-query tool. Required for that tool; opened read-only. */
   databasePath?: string;
 
-  /** Default timeout for code-eval in milliseconds (default: 5000). */
+  /** Timeout for code-eval in milliseconds; also the maximum the model can request (default: 5000). */
   codeEvalTimeout?: number;
 }
 
@@ -60,17 +104,21 @@ export class BuiltInToolRegistry {
     const shellTimeout = config.shellTimeout ?? 30000;
 
     this.allTools = [
-      createHttpFetchTool(),
+      createHttpFetchTool(config.httpFetch),
       createFileReadTool(sandboxDir),
       createFileWriteTool(sandboxDir),
-      createShellExecTool(sandboxDir, shellTimeout),
+      createShellExecTool(sandboxDir, shellTimeout, { env: config.shellEnv }),
       createDateTimeTool(),
-      createWebSearchTool(),
       createJsonParseTool(),
       createMathEvalTool(),
       createRegexMatchTool(),
       createCodeEvalTool(config.codeEvalTimeout),
     ];
+
+    // Add web-search only when there is a provider to search with
+    if (config.webSearchProvider) {
+      this.allTools.push(createWebSearchTool(config.webSearchProvider));
+    }
 
     // Add image-describe tool if ModelRouter is available
     if (config.modelRouter) {
@@ -96,7 +144,7 @@ export class BuiltInToolRegistry {
    * Logic:
    * - If `disabled` list includes the tool, it is disabled (takes priority).
    * - If `enabled` list is defined, only tools in that list are enabled.
-   * - Otherwise, all tools are enabled by default.
+   * - Otherwise, every tool except UNSAFE_BUILT_IN_TOOLS is enabled.
    */
   isEnabled(toolId: string): boolean {
     if (this.config.disabled?.includes(toolId)) {
@@ -105,6 +153,6 @@ export class BuiltInToolRegistry {
     if (this.config.enabled && this.config.enabled.length > 0) {
       return this.config.enabled.includes(toolId);
     }
-    return true;
+    return !UNSAFE_BUILT_IN_TOOLS.includes(toolId);
   }
 }

@@ -287,9 +287,9 @@ kernel.securityAuditor.addCheck({
 ## Complete Production Setup
 
 ```typescript
-import { NexusKernel, defineAgent } from '@kernova/core';
+import { KernovaKernel, defineAgent } from '@kernova/core';
 
-const kernel = new NexusKernel({ environment: 'production', dataDir: '/data/kernova' });
+const kernel = new KernovaKernel({ environment: 'production', dataDir: '/data/kernova' });
 await kernel.start();
 
 // 1. Register agents
@@ -301,7 +301,7 @@ kernel.authProfiles.add('openai', 'Primary', process.env.OPENAI_KEY_1!, 10);
 kernel.authProfiles.add('openai', 'Backup', process.env.OPENAI_KEY_2!, 5);
 
 // 3. Start gateway with auth
-await kernel.gateway.start(); // Configured via env vars or config file
+await kernel.gateway.start(); // Token from KERNOVA_API_KEY or KernelConfig.gateway.auth.tokens
 
 // 4. Health monitoring
 kernel.health.addCheck({ id: 'db', name: 'DB', check: checkDatabase });

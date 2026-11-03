@@ -424,12 +424,12 @@ Background loops emit events through the kernel's event system.
 ### Listening to events
 
 ```typescript
-kernel.on('loop.error', ({ loopId, name, error }) => {
-  logger.warn(`Loop "${name}" (${loopId}) encountered an error: ${error.message}`);
+kernel.events.subscribe('loop.error', ({ data }) => {
+  logger.warn(`Loop "${data.name}" (${data.loopId}) encountered an error: ${data.error}`);
 });
 
-kernel.on('loop.action.triggered', ({ loopId, name, result }) => {
-  logger.info(`Loop "${name}" triggered action with result:`, result);
+kernel.events.subscribe('loop.action.triggered', ({ data }) => {
+  logger.info(`Loop "${data.name}" triggered action with result:`, data.result);
 });
 ```
 

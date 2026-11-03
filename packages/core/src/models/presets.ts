@@ -15,6 +15,7 @@ import {
   createProviderFromConfig,
   PROVIDER_CATALOG,
   detectProvidersFromCatalog,
+  resolveProviderAlias,
 } from './adapter-registry.js';
 
 /**
@@ -36,7 +37,8 @@ export function createProvider(
   let config: ProviderConfig;
 
   if (typeof presetOrConfig === 'string') {
-    const catalogEntry = PROVIDER_CATALOG[presetOrConfig];
+    const id = resolveProviderAlias(presetOrConfig);
+    const catalogEntry = PROVIDER_CATALOG[id];
     if (!catalogEntry) {
       throw new Error(
         `Unknown provider: "${presetOrConfig}". ` +
@@ -44,7 +46,13 @@ export function createProvider(
         `Or pass a full ProviderConfig object for custom providers.`
       );
     }
-    config = { ...catalogEntry, id: presetOrConfig, ...overrides };
+    config = {
+      ...catalogEntry,
+      id,
+      ...overrides,
+      // Adapter options add to the catalog's (e.g. a region on top of the reasoning format)
+      ...((catalogEntry.options || overrides.options) && { options: { ...catalogEntry.options, ...overrides.options } }),
+    };
   } else {
     config = { ...presetOrConfig, ...overrides };
   }
@@ -63,7 +71,7 @@ export function detectAvailableProviders(): ModelProvider[] {
  * Get the environment variable name for a provider
  */
 export function getEnvKeyForProvider(preset: string): string | undefined {
-  const entry = PROVIDER_CATALOG[preset];
+  const entry = PROVIDER_CATALOG[resolveProviderAlias(preset)];
   return entry?.apiKeyEnv;
 }
 

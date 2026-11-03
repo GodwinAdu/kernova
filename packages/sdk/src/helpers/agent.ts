@@ -21,5 +21,13 @@ export function agent(name: string, spec: Partial<AgentSpec> & { instructions: s
     tools: spec.tools || [],
     instructions: spec.instructions,
     execute: spec.execute,
+    reflection: spec.reflection,
+    toolPolicy: spec.toolPolicy,
+    model: spec.model,
+    temperature: spec.temperature,
+    maxTokens: spec.maxTokens,
+    reasoning: spec.reasoning,
+    responseFormat: spec.responseFormat,
+    promptCache: spec.promptCache,
   });
 }

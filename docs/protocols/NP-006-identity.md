@@ -5,7 +5,7 @@
 
 ## Abstract
 
-Defines authentication, authorization, and identity management for the Nexus Protocol.
+Defines authentication, authorization, and identity management for the Kernova Protocol.
 
 ## Identity Object
 
@@ -83,8 +83,8 @@ POST /auth/check
 ```json
 {
   "id": "org_uuid",
-  "name": "Nexus Labs",
-  "slug": "nexus-labs",
+  "name": "Kernova Labs",
+  "slug": "kernova-labs",
   "ownerId": "user_uuid",
   "members": ["user_uuid", "user_uuid"]
 }

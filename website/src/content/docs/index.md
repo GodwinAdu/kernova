@@ -64,7 +64,7 @@ That's a working AI application with memory, tool use, and persistence. **5 minu
 | Implement function calling manually | `app.tool()` — agents use tools automatically |
 | Build auth, rate limiting, budgets | Built-in: API keys, roles, token limits |
 | No observability into AI decisions | Every action emits events, viewable in Studio |
-| Locked to one model provider | 20+ providers, switch with zero code changes |
+| Locked to one model provider | 26 providers, including Azure OpenAI, AWS Bedrock, and Vertex AI, switch with zero code changes |
 | Months of infrastructure work | `npm install @kernova/sdk` — done in minutes |
 
 ## Get Started

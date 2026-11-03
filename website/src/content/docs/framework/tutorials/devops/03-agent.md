@@ -96,7 +96,7 @@ export default defineAgent({
   // Prevent the agent from consuming too many resources
   budget: {
     maxTokens: 500000,         // Max 500K tokens per month
-    maxRequestsPerMinute: 5,   // Max 5 LLM calls per minute
+    maxRequestsPerMinute: 5,   // Max 5 requests (user or trigger) per minute
   },
 
   // ═══ PERMISSIONS ═══
@@ -110,7 +110,7 @@ export default defineAgent({
   ],
 
   // ═══ CHANNELS ═══
-  // Where the agent listens for external messages
+  // Declarative: records where alerts come from (connect the channel yourself)
   channels: ['alert-webhook'],
 
   temperature: 0.3,  // We want precise, not creative
@@ -154,7 +154,9 @@ budget: { maxTokens: 500000, maxRequestsPerMinute: 5 }
 
 Without budget limits, a bug in your triggers could make the agent call OpenAI thousands of times (expensive!). Budget controls prevent this:
 - If the agent tries to exceed 500K tokens/month → request rejected
-- If it makes more than 5 requests/minute → rate limited
+- If it makes more than 5 requests/minute → rate limited (HTTP 429)
+
+Usage is counted per calendar month (UTC) and saved in `kernova-data/agent-budgets.json`, so the limits hold across restarts.
 
 ### Permissions Explained
 

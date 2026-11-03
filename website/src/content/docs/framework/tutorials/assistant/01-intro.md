@@ -33,7 +33,7 @@ By the end of this tutorial (about 20 minutes), you'll understand:
 
 ## Prerequisites
 
-- **Node.js 20+** installed ([download](https://nodejs.org))
+- **Node.js 22+** installed ([download](https://nodejs.org))
 - **An OpenAI API key** ([get one](https://platform.openai.com/api-keys))
 - Basic familiarity with TypeScript/JavaScript
 - A terminal (PowerShell, Terminal, or cmd)

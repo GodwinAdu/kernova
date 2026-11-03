@@ -2,11 +2,11 @@
 inclusion: auto
 ---
 
-# Nexus Project Steering
+# Kernova Project Steering
 
-## What is Nexus?
+## What is Kernova?
 
-Nexus is the Intelligent Systems Runtime — a platform for building, operating, and governing intelligent software. It abstracts AI infrastructure the same way Node.js abstracts OS-level I/O.
+Kernova is the Intelligent Systems Runtime — a platform for building, operating, and governing intelligent software. It abstracts AI infrastructure the same way Node.js abstracts OS-level I/O.
 
 ## Architecture Principles
 
@@ -33,7 +33,7 @@ Every feature belongs to exactly one pillar:
 
 - Every file has a module-level JSDoc comment explaining its purpose
 - Every public function/class has documentation
-- Types are defined in `@nexus/types` — the single source of truth
+- Types are defined in `@kernova/types` — the single source of truth
 - Use meaningful variable names — code should read like prose
 - No magic numbers or strings — use named constants
 - Error messages should be helpful and actionable

@@ -9,6 +9,7 @@ import { createServer, type Server, type IncomingMessage, type ServerResponse } 
 import type { ChannelType, ConnectionState, OutboundMessage, DeliveryReceipt, VoiceConfig } from '@kernova/types';
 import type { ChannelAdapter, MessageHandler, StateChangeHandler } from '../channel-adapter.js';
 import { now } from '../../utils.js';
+import { BodyTooLargeError, ReplyTargets, header, readBody, requestUrl, verifyTwilioSignature } from '../inbound.js';
 
 const DEFAULT_PORT = 3600;
 const DEFAULT_VOICE = 'alice';
@@ -19,7 +20,7 @@ export class VoiceAdapter implements ChannelAdapter {
   private messageHandler?: MessageHandler;
   private stateHandler?: StateChangeHandler;
   private server?: Server;
-  private lastCallerNumber?: string;
+  private readonly targets = new ReplyTargets();
 
   constructor(private config: VoiceConfig) {}
 
@@ -55,11 +56,13 @@ export class VoiceAdapter implements ChannelAdapter {
     this.setState('disconnected');
   }
 
-  async send(message: OutboundMessage): Promise<DeliveryReceipt> {
-    const to = this.lastCallerNumber;
-    if (!to) {
-      return { success: false, timestamp: now(), error: 'No recipient phone number available' };
+  /** Send to `recipient` (a phone number, e.g. an inbound message's replyTo) */
+  async send(message: OutboundMessage, recipient?: string): Promise<DeliveryReceipt> {
+    const resolved = this.targets.resolve(recipient);
+    if ('error' in resolved) {
+      return { success: false, timestamp: now(), error: resolved.error };
     }
+    const to = resolved.target;
 
     const voice = this.config.ttsVoice ?? DEFAULT_VOICE;
     const twiml = `<Response><Say voice="${voice}">${this.escapeXml(message.content)}</Say></Response>`;
@@ -120,19 +123,23 @@ export class VoiceAdapter implements ChannelAdapter {
   private handleRequest(req: IncomingMessage, res: ServerResponse): void {
     if (req.method !== 'POST') { res.writeHead(405).end(); return; }
 
-    const chunks: Buffer[] = [];
-    req.on('data', (chunk: Buffer) => chunks.push(chunk));
-    req.on('end', () => {
+    readBody(req).then((raw) => {
       try {
-        const rawBody = Buffer.concat(chunks).toString('utf-8');
-        const params = new URLSearchParams(rawBody);
+        const params = new URLSearchParams(raw.toString('utf-8'));
+
+        // Only Twilio can sign with the account's auth token
+        const url = requestUrl(req, this.config.webhookUrl);
+        if (!verifyTwilioSignature(this.config.authToken, url, params, header(req, 'x-twilio-signature'))) {
+          res.writeHead(403).end();
+          return;
+        }
 
         const from = params.get('From') ?? params.get('Caller');
         const speechResult = params.get('SpeechResult');
         const callStatus = params.get('CallStatus');
 
         if (from) {
-          this.lastCallerNumber = from;
+          this.targets.remember(from);
         }
 
         // Handle speech-to-text from Twilio's <Gather> input
@@ -142,6 +149,7 @@ export class VoiceAdapter implements ChannelAdapter {
             content: speechResult,
             timestamp: now(),
             raw: Object.fromEntries(params.entries()),
+            replyTo: from,
           });
         }
 
@@ -161,6 +169,8 @@ export class VoiceAdapter implements ChannelAdapter {
       } catch {
         res.writeHead(400).end();
       }
+    }, (err) => {
+      res.writeHead(err instanceof BodyTooLargeError ? 413 : 400).end();
     });
   }
 

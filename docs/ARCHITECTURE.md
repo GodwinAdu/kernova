@@ -1,23 +1,23 @@
-# Nexus — Architecture Document
+# Kernova — Architecture Document
 
-> Technical blueprint for the Nexus Intelligent Systems Runtime.
-> This document explains HOW Nexus works at a systems level.
+> Technical blueprint for the Kernova Intelligent Systems Runtime.
+> This document explains HOW Kernova works at a systems level.
 
 ---
 
 ## System Overview
 
-Nexus is a layered runtime architecture that processes **Intents** through **Agents** using **Memory**, **Events**, and **Context** — governed by **Identity** and **Policies**.
+Kernova is a layered runtime architecture that processes **Intents** through **Agents** using **Memory**, **Events**, and **Context** — governed by **Identity** and **Policies**.
 
 ```
 ┌───────────────────────────────────────────────────────────────┐
 │                    Developer Application                        │
-│  (Uses @nexus/sdk or @nexus/core directly)                     │
+│  (Uses @kernova/sdk or @kernova/core directly)                     │
 ├───────────────────────────────────────────────────────────────┤
-│                         @nexus/sdk                              │
+│                         @kernova/sdk                              │
 │  (High-level abstractions, helpers, patterns)                  │
 ├───────────────────────────────────────────────────────────────┤
-│                      @nexus/core — Kernel                       │
+│                      @kernova/core — Kernel                       │
 │                                                                │
 │  ┌─────────────┐  ┌─────────────┐  ┌───────────────────────┐ │
 │  │   Intent    │  │    Agent    │  │      Workflow          │ │
@@ -52,11 +52,11 @@ Nexus is a layered runtime architecture that processes **Intents** through **Age
 
 ### 1. The Intent
 
-The Intent is the fundamental unit of work in Nexus. It replaces prompts and chat messages with a structured, trackable, governable object.
+The Intent is the fundamental unit of work in Kernova. It replaces prompts and chat messages with a structured, trackable, governable object.
 
 ```typescript
 Intent {
-  id: NexusId
+  id: KernovaId
   goal: string              // What the user wants
   intentType: IntentType    // query, action, workflow, creation...
   priority: Priority
@@ -87,16 +87,16 @@ AgentDefinition {
 
 ### 3. The Event System
 
-Nexus is **Event Native**. Every state change emits an event. Events are the historical record of everything that happened.
+Kernova is **Event Native**. Every state change emits an event. Events are the historical record of everything that happened.
 
 ```typescript
-NexusEvent {
+KernovaEvent {
   eventType: string           // "intent.created", "agent.executing"
   category: EventCategory
   timestamp: Timestamp
-  subjectId: NexusId          // What this is about
-  actorId: NexusId            // Who caused it
-  correlationId: NexusId      // Trace related events
+  subjectId: KernovaId          // What this is about
+  actorId: KernovaId            // Who caused it
+  correlationId: KernovaId      // Trace related events
   data: Record<string, unknown>
 }
 ```
@@ -163,14 +163,14 @@ Every action → Event Bus → Subscribers
 
 ## Universal Object Model
 
-Every object in Nexus extends `NexusObject`:
+Every object in Kernova extends `KernovaObject`:
 
 ```typescript
-NexusObject {
-  id: NexusId           // Globally unique
+KernovaObject {
+  id: KernovaId           // Globally unique
   type: string          // Object type discriminator
   version: Version      // Semantic version
-  owner: NexusId        // Who owns this
+  owner: KernovaId        // Who owns this
   status: LifecycleStatus
   createdAt: Timestamp
   updatedAt: Timestamp
@@ -178,7 +178,7 @@ NexusObject {
 }
 ```
 
-**The Nexus Laws** (every object must satisfy):
+**The Kernova Laws** (every object must satisfy):
 1. Everything has an identity
 2. Everything has permissions
 3. Everything emits events
@@ -194,25 +194,25 @@ NexusObject {
 
 ## Package Architecture
 
-### @nexus/types
+### @kernova/types
 - Zero dependencies
 - Type definitions only (no runtime code)
 - The "schema" of the entire system
 - Breaking changes require major version bump
 
-### @nexus/core
-- Depends on: @nexus/types
+### @kernova/core
+- Depends on: @kernova/types
 - The runtime kernel
 - In-process by default, distributed later
 - Modular: each subsystem (memory, events, agents) is replaceable
 
-### @nexus/cli
-- Depends on: @nexus/core, @nexus/types
+### @kernova/cli
+- Depends on: @kernova/core, @kernova/types
 - Developer tooling
 - Project scaffolding, development server, agent management
 
-### @nexus/sdk (future)
-- Depends on: @nexus/core, @nexus/types
+### @kernova/sdk (future)
+- Depends on: @kernova/core, @kernova/types
 - High-level developer API
 - Opinionated patterns and helpers
 - Framework integrations (Express, Fastify, etc.)
@@ -224,7 +224,7 @@ NexusObject {
 | Decision | Choice | Reasoning |
 |----------|--------|-----------|
 | Language | TypeScript | Ecosystem, velocity, AI SDK availability |
-| Runtime | Node.js 20+ | Stable, LTS, native ESM |
+| Runtime | Node.js 22+ | Stable, LTS, native ESM |
 | Module system | ESM | Future-proof, tree-shakeable |
 | Build | tsc + Turborepo | Simple, fast, reliable |
 | Storage (dev) | In-memory → SQLite | Zero config for development |

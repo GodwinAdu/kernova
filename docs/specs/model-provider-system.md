@@ -4,7 +4,7 @@
 
 ## Summary
 
-Connect the Nexus runtime to real LLM providers (OpenAI, Anthropic) so that agents can reason, generate, and respond using actual AI models.
+Connect the Kernova runtime to real LLM providers (OpenAI, Anthropic) so that agents can reason, generate, and respond using actual AI models.
 
 ## Problem
 
@@ -49,12 +49,12 @@ interface ModelProvider {
 ### Configuration
 
 Models are configured at two levels:
-1. **Project level** — `nexus.config.json` defines default provider/model
+1. **Project level** — `kernova.config.json` defines default provider/model
 2. **Agent level** — Each agent can override the default
 
 ## Success Criteria
 
-- [ ] `nexus dev` + submit intent → real LLM response
+- [ ] `kernova dev` + submit intent → real LLM response
 - [ ] Works with OpenAI (GPT-4o)
 - [ ] Works with Anthropic (Claude)
 - [ ] Fallback if primary provider fails

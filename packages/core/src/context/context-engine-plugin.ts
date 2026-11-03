@@ -10,12 +10,12 @@
  * Inspired by OpenClaw's context-engine/types.ts interface.
  */
 
-import type { NexusId, Timestamp } from '@kernova/types';
+import type { KernovaId, Timestamp } from '@kernova/types';
 
 // ─── Messages ────────────────────────────────────────────────
 
 export interface ContextMessage {
-  id: NexusId;
+  id: KernovaId;
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
   timestamp: Timestamp;
@@ -81,6 +81,23 @@ export interface ContextEngineInfo {
  * Required: assemble, compact
  * Optional: bootstrap, ingest, maintain, afterTurn, dispose
  */
+/** Input to ContextEnginePlugin.assemble() */
+export interface AssembleParams {
+  sessionId: string;
+  messages: ContextMessage[];
+  tokenBudget: number;
+  prompt?: string;
+  availableTools?: string[];
+}
+
+/** Input to ContextEnginePlugin.compact() */
+export interface CompactParams {
+  sessionId: string;
+  messages: ContextMessage[];
+  tokenBudget: number;
+  force?: boolean;
+}
+
 export interface ContextEnginePlugin {
   /** Engine metadata */
   readonly info: ContextEngineInfo;
@@ -107,24 +124,13 @@ export interface ContextEnginePlugin {
    * Assemble model context under a token budget.
    * Returns ordered messages ready for the model.
    */
-  assemble(params: {
-    sessionId: string;
-    messages: ContextMessage[];
-    tokenBudget: number;
-    prompt?: string;
-    availableTools?: string[];
-  }): Promise<AssembleResult>;
+  assemble(params: AssembleParams): Promise<AssembleResult>;
 
   /**
    * Compact context to reduce token usage.
    * May create summaries, prune old turns, etc.
    */
-  compact(params: {
-    sessionId: string;
-    messages: ContextMessage[];
-    tokenBudget: number;
-    force?: boolean;
-  }): Promise<CompactResult>;
+  compact(params: CompactParams): Promise<CompactResult>;
 
   /**
    * Run maintenance after a successful turn.

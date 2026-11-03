@@ -10,7 +10,7 @@
  * This is the engine used when no custom plugin is registered.
  */
 
-import type { NexusId } from '@kernova/types';
+import type { KernovaId } from '@kernova/types';
 import type { ModelRouter } from '../models/model-router.js';
 import type { MemoryEngine } from '../memory/memory-engine.js';
 import { generateId, now } from '../utils.js';

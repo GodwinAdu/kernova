@@ -5,11 +5,12 @@
  * Polls for incoming messages at a configurable interval.
  */
 
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { access, constants } from 'node:fs/promises';
 import type { ChannelType, ConnectionState, OutboundMessage, DeliveryReceipt, SignalConfig } from '@kernova/types';
 import type { ChannelAdapter, MessageHandler, StateChangeHandler } from '../channel-adapter.js';
 import { now } from '../../utils.js';
+import { ReplyTargets } from '../inbound.js';
 
 const DEFAULT_POLL_INTERVAL = 5000;
 
@@ -19,7 +20,7 @@ export class SignalAdapter implements ChannelAdapter {
   private messageHandler?: MessageHandler;
   private stateHandler?: StateChangeHandler;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
-  private lastSender?: string;
+  private readonly targets = new ReplyTargets();
 
   constructor(private config: SignalConfig) {}
 
@@ -36,7 +37,7 @@ export class SignalAdapter implements ChannelAdapter {
       await access(this.config.signalCliPath, constants.X_OK);
 
       // Verify it runs (version check)
-      await this.execSignalCli('--version');
+      await this.execSignalCli(['--version']);
 
       this.setState('connected');
 
@@ -58,17 +59,16 @@ export class SignalAdapter implements ChannelAdapter {
     this.setState('disconnected');
   }
 
-  async send(message: OutboundMessage): Promise<DeliveryReceipt> {
-    const recipient = this.lastSender;
-    if (!recipient) {
-      return { success: false, timestamp: now(), error: 'No recipient available' };
+  /** Send to `to` (a phone number, e.g. an inbound message's replyTo) */
+  async send(message: OutboundMessage, to?: string): Promise<DeliveryReceipt> {
+    const resolved = this.targets.resolve(to);
+    if ('error' in resolved) {
+      return { success: false, timestamp: now(), error: resolved.error };
     }
+    const recipient = resolved.target;
 
     try {
-      const escapedContent = message.content.replace(/"/g, '\\"');
-      await this.execSignalCli(
-        `-u ${this.config.phoneNumber} send -m "${escapedContent}" ${recipient}`
-      );
+      await this.execSignalCli(['-u', this.config.phoneNumber, 'send', '-m', message.content, recipient]);
       return { success: true, timestamp: now() };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'signal-cli send failed';
@@ -88,9 +88,7 @@ export class SignalAdapter implements ChannelAdapter {
 
   private async pollMessages(): Promise<void> {
     try {
-      const output = await this.execSignalCli(
-        `-u ${this.config.phoneNumber} receive --json`
-      );
+      const output = await this.execSignalCli(['-u', this.config.phoneNumber, 'receive', '--json']);
 
       if (!output.trim()) return;
 
@@ -103,7 +101,7 @@ export class SignalAdapter implements ChannelAdapter {
           const sender = envelope.envelope?.source;
 
           if (dataMsg?.message && sender) {
-            this.lastSender = sender;
+            this.targets.remember(sender);
             this.messageHandler?.({
               sender,
               content: dataMsg.message,
@@ -111,6 +109,7 @@ export class SignalAdapter implements ChannelAdapter {
                 ? new Date(dataMsg.timestamp).toISOString()
                 : now(),
               raw: envelope,
+              replyTo: sender,
             });
           }
         } catch {
@@ -124,9 +123,10 @@ export class SignalAdapter implements ChannelAdapter {
 
   // ─── Helpers ────────────────────────────────────────────────
 
-  private execSignalCli(args: string): Promise<string> {
+  /** Runs signal-cli directly (no shell), so message text and sender numbers can't inject commands */
+  private execSignalCli(args: string[]): Promise<string> {
     return new Promise((resolve, reject) => {
-      exec(`${this.config.signalCliPath} ${args}`, { timeout: 30_000 }, (error, stdout, stderr) => {
+      execFile(this.config.signalCliPath, args, { timeout: 30_000 }, (error, stdout, stderr) => {
         if (error) {
           reject(new Error(stderr || error.message));
         } else {

@@ -9,7 +9,7 @@
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import Database from 'better-sqlite3';
-import { info, error, success } from '../ui.js';
+import { info, error, success, defaultDataDir } from '../ui.js';
 
 interface QueueOptions {
   dataDir: string;
@@ -17,7 +17,7 @@ interface QueueOptions {
 
 function parseQueueArgs(args: string[]): { subcommand: string; rest: string[]; options: QueueOptions } {
   const options: QueueOptions = {
-    dataDir: resolve(process.cwd(), 'kernova-data'),
+    dataDir: defaultDataDir(),
   };
 
   const positional: string[] = [];
@@ -169,7 +169,7 @@ export async function handleQueue(args: string[]): Promise<void> {
       console.log('    replay <id>       Replay a dead-lettered task back to the queue');
       console.log('');
       console.log('  Options:');
-      console.log('    --data-dir, -d    Path to the data directory (default: ./kernova-data)');
+      console.log('    --data-dir, -d    Path to the data directory (default: $KERNOVA_DATA_DIR or ./kernova-data)');
       console.log('');
       console.log('  Examples:');
       console.log('    kernova queue status');

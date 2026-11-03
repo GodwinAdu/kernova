@@ -42,12 +42,9 @@ export function defineConfig(config: KernovaFrameworkConfig): KernovaFrameworkCo
     throw new Error('defineConfig: "name" is required');
   }
 
+  // No default `model`: without one, the kernel uses the first provider it finds an API key for
   return {
     version: '0.1.0',
-    model: {
-      provider: 'openai',
-      model: 'gpt-4o',
-    },
     memory: {
       provider: 'local',
     },

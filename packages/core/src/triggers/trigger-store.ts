@@ -15,11 +15,10 @@
  */
 
 import Database from 'better-sqlite3';
-import { mkdirSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-import type { TriggerRule, TriggerActionDef, NexusId, Timestamp, Priority } from '@kernova/types';
+import type { TriggerRule, TriggerActionDef, KernovaId, Timestamp, Priority } from '@kernova/types';
 import type { IntentType } from '@kernova/types';
 import { now } from '../utils.js';
+import { resolveStorePath } from '../storage/store-path.js';
 
 export interface TriggerStoreConfig {
   dataDir: string;
@@ -51,15 +50,8 @@ export class TriggerStore {
   private updateLastFiredStmt: Database.Statement;
 
   constructor(config: TriggerStoreConfig) {
-    const dbPath = join(config.dataDir, 'kernova.db');
-
-    // Ensure directory exists
-    if (!existsSync(config.dataDir)) {
-      mkdirSync(config.dataDir, { recursive: true });
-    }
-
-    // Open database
-    this.db = new Database(dbPath);
+    // Open database (in memory when dataDir is ':memory:')
+    this.db = new Database(resolveStorePath(config.dataDir));
 
     // Configure for performance
     this.db.pragma('journal_mode = WAL');
@@ -131,7 +123,7 @@ export class TriggerStore {
   /**
    * Remove a trigger rule by ID. Returns true if a row was deleted.
    */
-  remove(ruleId: NexusId): boolean {
+  remove(ruleId: KernovaId): boolean {
     const result = this.removeStmt.run(ruleId);
     return result.changes > 0;
   }
@@ -139,14 +131,14 @@ export class TriggerStore {
   /**
    * Update the enabled state of a trigger rule
    */
-  updateEnabled(ruleId: NexusId, enabled: boolean): void {
+  updateEnabled(ruleId: KernovaId, enabled: boolean): void {
     this.updateEnabledStmt.run(enabled ? 1 : 0, now(), ruleId);
   }
 
   /**
    * Update the last fired timestamp of a trigger rule
    */
-  updateLastFired(ruleId: NexusId, lastFiredAt: Timestamp): void {
+  updateLastFired(ruleId: KernovaId, lastFiredAt: Timestamp): void {
     this.updateLastFiredStmt.run(lastFiredAt, now(), ruleId);
   }
 

@@ -11,7 +11,7 @@
  */
 
 import type {
-  NexusId,
+  KernovaId,
   TestScenario,
   TestResult,
   AssertionResult,

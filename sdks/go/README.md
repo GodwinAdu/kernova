@@ -5,7 +5,7 @@ HTTP client for the Kernova Gateway API.
 ## Installation
 
 ```bash
-go get github.com/kernova/kernova-go
+go get github.com/GodwinAdu/kernova/sdks/go
 ```
 
 ## Usage
@@ -17,7 +17,7 @@ import (
     "fmt"
     "log"
 
-    kernova "github.com/kernova/kernova-go"
+    kernova "github.com/GodwinAdu/kernova/sdks/go"
 )
 
 func main() {

@@ -94,15 +94,26 @@ export default defineAgent({
 |--------|------|---------|-------------|
 | `name` | string | required | Display name |
 | `instructions` | string | required | System prompt |
-| `model` | string | project default | LLM model to use |
+| `model` | string | project default | A named model from `models` in `kernova.config.ts`, or a model ID for the default provider |
 | `tools` | string[] | `[]` | Tool names this agent can use |
 | `memory` | object | `{ type: 'conversational' }` | Memory configuration |
-| `temperature` | number | `0.7` | LLM temperature |
-| `maxTokens` | number | `4096` | Max response tokens |
+| `temperature` | number | provider default | LLM temperature |
+| `maxTokens` | number | provider default | Max response tokens |
+| `reasoning` | object | — | `{ effort?, budgetTokens?, includeThoughts? }`: how much reasoning models think (`effort`: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`). See [Reasoning](/guides/providers/#reasoning) |
+| `responseFormat` | object | text | `{ type: 'json' }`, or `{ type: 'json_schema', schema }` to answer with JSON matching a JSON Schema |
+| `promptCache` | boolean | `false` | Prompt caching for Claude and Bedrock (others cache automatically) |
 | `capabilities` | string[] | `[]` | Capability tags for routing |
 | `handler` | function | — | Custom execution handler |
-| `middleware` | string[] | `[]` | Middleware to apply |
-| `schedule` | string/array | — | Cron schedule for autonomous execution |
+| `middleware` | string[] | all middleware | Names of the [middleware](/framework/middleware) to run (`[]` = none) |
+| `skills` | string[] | — | [Skills](/framework/skills) to load: instructions, knowledge, tools, MCP servers |
+| `mcp` | string[] | — | [MCP servers](/framework/mcp-integration) whose tools this agent can use |
+| `schedule` | string/array | — | Cron schedules: `[{ cron, goal }]` (a string runs with a generic goal) |
+| `triggers` | array | — | `[{ event, goal, priority?, cooldown? }]`: run when a kernel event matches `event` (a glob like `deploy.*`), a cron expression, or an interval (`schedule.5m`) |
+| `budget` | object | — | `{ maxRequestsPerMinute?, maxTokens?, maxCostUsd? }`. Requests over the limit get `429`; tokens and estimated cost are counted per calendar month (UTC) and saved in `kernova-data/agent-budgets.json`, so they survive restarts |
+| `reflection` | object | project setting (off) | `{ enabled, threshold?, maxAttempts? }`: an extra model call grades each answer and regenerates weak ones |
+| `permissions` | string[] | — | Declarative only: recorded, not enforced |
+| `channels` | string[] | — | Declarative only: connect channels yourself (see [Channels](/guides/channels)) |
+| `remoteAgents` | string[] | — | Declarative only: `ctx.askRemote()` can call any remote agent defined in `agents/remotes/` |
 
 ## Memory Types
 

@@ -4,6 +4,13 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
+    "@kernova/studio#build": {
+      "outputs": [".next/**", "!.next/cache/**", "out/**"]
+    },
+    "@kernova/cli#build": {
+      "dependsOn": ["^build", "@kernova/studio#build"],
+      "outputs": ["dist/**", "studio/**"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

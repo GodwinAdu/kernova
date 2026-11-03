@@ -13,7 +13,7 @@
  * - Zero-dependency: uses fetch(), no provider SDKs
  */
 
-import type { NexusId, Confidence, Timestamp } from './base.js';
+import type { KernovaId, Confidence, Timestamp } from './base.js';
 
 /** 
  * Provider ID is any string — not a fixed union.
@@ -37,12 +37,15 @@ export type ModelPurpose =
 /** Role in a message */
 export type MessageRole = 'system' | 'user' | 'assistant' | 'tool';
 
-/** Content types that can be in a message */
+/**
+ * Content types that can be in a message. `url` is an http(s) URL or a `data:` URI
+ * (base64). Providers that need the bytes themselves (most audio and file inputs) need a data URI.
+ */
 export type ContentPart =
   | { type: 'text'; text: string }
   | { type: 'image'; url: string; mimeType?: string }
   | { type: 'audio'; url: string; mimeType?: string }
-  | { type: 'file'; url: string; mimeType?: string };
+  | { type: 'file'; url: string; mimeType?: string; filename?: string };
 
 /**
  * A single message in a completion request.
@@ -62,6 +65,12 @@ export interface ModelMessage {
 
   /** Tool calls requested by the assistant (for multi-turn tool-calling history) */
   toolCalls?: ToolCall[];
+
+  /**
+   * Data from an assistant turn that its provider needs back on the next request (for example
+   * Claude's signed thinking blocks during tool use). Copy it from CompletionResponse.providerData.
+   */
+  providerData?: Record<string, unknown>;
 }
 
 /**
@@ -95,6 +104,72 @@ export interface ModelCapabilities {
 
   /** Maximum output tokens */
   maxOutputTokens: number;
+
+  /** Supports reasoning / thinking controls */
+  reasoning?: boolean;
+
+  /** Supports file inputs (e.g. PDF) */
+  files?: boolean;
+
+  /** Supports prompt caching */
+  promptCaching?: boolean;
+}
+
+/**
+ * How much a reasoning model thinks before answering, from least to most. Each provider maps it
+ * to its own setting; a level a model doesn't have becomes the nearest one it does
+ */
+export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+/** Reasoning controls for models that think before answering */
+export interface ReasoningOptions {
+  /** Thinking depth: OpenAI reasoning_effort, Claude effort, Gemini thinkingLevel, Ollama think */
+  effort?: ReasoningEffort;
+
+  /**
+   * Token budget for thinking, for models that take one: Gemini thinkingBudget, Claude before 4.6
+   * (budget_tokens), OpenRouter, Qwen. Takes precedence over effort there; models that only take
+   * an effort level (Claude 4.6 and later) get the level closest to the budget
+   */
+  budgetTokens?: number;
+
+  /**
+   * Ask for the model's reasoning (thinking text or a summary) in the response: Gemini's thought
+   * summaries need this. Providers that always send their reasoning return it either way
+   */
+  includeThoughts?: boolean;
+}
+
+/** The shape of the answer */
+export type ResponseFormat =
+  | { type: 'text' }
+  /** Any JSON object */
+  | { type: 'json' }
+  /** JSON matching a JSON Schema */
+  | { type: 'json_schema'; schema: Record<string, unknown>; name?: string; strict?: boolean };
+
+/** A model a provider offers, as reported by its model list */
+export interface ModelInfo {
+  /** Model ID to use in requests */
+  id: string;
+
+  /** Provider that serves it */
+  provider: ModelProviderId;
+
+  /** Display name */
+  name?: string;
+
+  /** Context window (tokens), when the provider reports it */
+  contextWindow?: number;
+
+  /** Maximum output tokens, when the provider reports it */
+  maxOutputTokens?: number;
+
+  /** What the provider reports the model can do (a missing field means unknown) */
+  capabilities?: Partial<ModelCapabilities>;
+
+  /** When the model was created or released, when reported */
+  createdAt?: string;
 }
 
 /**
@@ -104,8 +179,11 @@ export interface CompletionRequest {
   /** Messages to send */
   messages: ModelMessage[];
 
-  /** Which model to use (provider-specific identifier) */
+  /** Which model to use (provider-specific identifier). Empty means the provider's default */
   model: string;
+
+  /** Which provider to send the request to, by ID (default: the router's routing for the purpose) */
+  provider?: string;
 
   /** Temperature (0-2, lower = more deterministic) */
   temperature?: number;
@@ -116,16 +194,28 @@ export interface CompletionRequest {
   /** Stop sequences */
   stopSequences?: string[];
 
-  /** Force JSON output (if supported) */
+  /** Force JSON output (same as responseFormat: { type: 'json' }) */
   jsonMode?: boolean;
+
+  /** Ask for JSON, optionally matching a schema. The parsed value is returned in `parsed` */
+  responseFormat?: ResponseFormat;
+
+  /** Reasoning controls for models that think before answering */
+  reasoning?: ReasoningOptions;
+
+  /**
+   * Prompt caching: mark the stable start of the prompt (system prompt, tools, earlier turns)
+   * as cacheable. Claude and Bedrock need this; OpenAI and Gemini cache automatically.
+   */
+  cache?: boolean;
 
   /** Tools available for the model to call */
   tools?: ToolSpec[];
 
   /** Request metadata for tracking */
   metadata?: {
-    intentId?: NexusId;
-    agentId?: NexusId;
+    intentId?: KernovaId;
+    agentId?: KernovaId;
     purpose?: ModelPurpose;
   };
 }
@@ -157,6 +247,9 @@ export interface ToolCall {
 
   /** Arguments (parsed JSON from the model) */
   arguments: Record<string, unknown>;
+
+  /** Provider-specific data that must be sent back with this call (e.g. Gemini thought signatures) */
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -177,6 +270,15 @@ export interface CompletionResponse {
 
   /** Tool calls requested by the model (if any) */
   toolCalls?: ToolCall[];
+
+  /** The model's reasoning (thinking text or summary), when the provider returns it */
+  reasoning?: string;
+
+  /** With a JSON responseFormat: the parsed content (undefined when it isn't valid JSON) */
+  parsed?: unknown;
+
+  /** Data to send back with this assistant turn on the next request (copy to ModelMessage.providerData) */
+  providerData?: Record<string, unknown>;
 
   /** Response metadata */
   metadata: {
@@ -204,6 +306,15 @@ export interface TokenUsage {
   /** Total tokens */
   totalTokens: number;
 
+  /** Prompt tokens read from the provider's prompt cache (included in promptTokens) */
+  cachedTokens?: number;
+
+  /** Prompt tokens written to the prompt cache (included in promptTokens) */
+  cacheWriteTokens?: number;
+
+  /** Output tokens spent on reasoning (included in completionTokens) */
+  reasoningTokens?: number;
+
   /** Estimated cost in USD (if available) */
   estimatedCostUsd?: number;
 }
@@ -220,7 +331,7 @@ export interface ProviderConfig {
   name: string;
 
   /** API format this provider uses */
-  adapter: 'openai' | 'anthropic' | 'gemini' | 'ollama' | 'custom';
+  adapter: 'openai' | 'anthropic' | 'gemini' | 'ollama' | 'azure' | 'bedrock' | 'vertex' | 'custom';
 
   /** API base URL */
   baseUrl: string;
@@ -239,6 +350,12 @@ export interface ProviderConfig {
 
   /** Custom headers to include in requests */
   headers?: Record<string, string>;
+
+  /**
+   * Adapter-specific settings. azure: { endpoint, apiVersion? }; bedrock: { region, profile? };
+   * vertex: { project, location?, keyFile? }. See each provider's config for the full list.
+   */
+  options?: Record<string, unknown>;
 
   /** Declared capabilities */
   capabilities?: Partial<ModelCapabilities>;

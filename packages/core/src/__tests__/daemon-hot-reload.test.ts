@@ -18,18 +18,18 @@ import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { DaemonRunner } from '../daemon/index.js';
 import type { KernovaKernel } from '../kernel.js';
-import type { NexusEvent } from '@kernova/types';
+import type { KernovaEvent } from '@kernova/types';
 
 /**
  * Create a minimal mock KernovaKernel for testing the DaemonRunner.
  */
 function createMockKernel() {
-  const events: NexusEvent[] = [];
+  const events: KernovaEvent[] = [];
   const registeredAgents = new Map<string, any>();
 
   const mockKernel = {
     events: {
-      publish(event: NexusEvent) {
+      publish(event: KernovaEvent) {
         events.push(event);
       },
       subscribe: vi.fn(),
@@ -58,6 +58,7 @@ function createMockKernel() {
       registeredAgents: registeredAgents.size,
       environment: 'test',
     }),
+    start: vi.fn().mockResolvedValue(undefined),
     stop: vi.fn().mockResolvedValue(undefined),
   };
 

@@ -53,13 +53,21 @@ const kernel = new KernovaKernel(config: KernelConfig);
 |--------|------|---------|-------------|
 | `instanceId` | `string` | auto-generated | Unique identifier for this kernel instance |
 | `environment` | `'development' \| 'staging' \| 'production'` | — | **Required.** Runtime environment |
-| `debug` | `boolean` | `false` | Enable verbose console logging |
-| `models` | `ModelRoutingConfig` | auto-detected | Model routing: default provider + purpose overrides |
-| `providers` | `ModelProvider[]` | `[]` | Additional model providers (merged with auto-detected) |
+| `debug` | `boolean` | `false` | Print kernel and agent `log()` messages to the console |
+| `models` | `ModelRoutingConfig` | auto-detected | Model routing: default provider + purpose overrides. Auto-detection uses the first available provider and its own default model |
+| `providers` | `ModelProvider[]` | `[]` | Additional model providers. They replace auto-detected providers with the same ID |
 | `dataDir` | `string` | `'./kernova-data'` | Directory for SQLite persistence |
-| `ephemeral` | `boolean` | `false` | Disable all persistence (in-memory only) |
-| `builtInTools` | `BuiltInToolConfig` | all enabled | Configure built-in tool availability |
-| `reflection` | `object` | `{ enabled: true }` | Global self-reflection settings |
+| `ephemeral` | `boolean` | `false` | Keep everything in memory; nothing is written to disk |
+| `builtInTools` | `BuiltInToolConfig` | safe tools only | Built-in tools. `shell-exec`, `code-eval`, `file-read`, `file-write`, `database-query` are off unless listed in `enabled` |
+| `toolPolicy` | `ToolPolicy` | — | Kernel-wide `allow`/`deny` lists of tool IDs (globs supported) |
+| `gateway` | `GatewayConfig` | — | Settings for `kernel.gateway` |
+| `rateLimits` | `RateLimiterConfig` | 100 requests/min per owner | Per-owner rate limits. The internal `system` owner is only limited by an explicit rule |
+| `eventRetentionDays` | `number` | `30` | Delete persisted events older than this, at start and daily. `0` keeps them forever |
+| `reflection` | `object` | `{ enabled: false }` | Global self-reflection settings. Each reflection adds at least one model call per answer |
+| `threadHistory` | `boolean` | `true` | Give agents the earlier turns of an intent's `metadata.threadId` and record each exchange. Turn off when your app keeps its own history |
+| `planning` | `Partial<AgentPlannerConfig>` | — | `kernel.planner` settings: `maxSteps`, `strategy`, `adaptiveReplanning`, `maxReplanAttempts` |
+| `rag` | `Partial<RAGPipelineConfig>` | — | `kernel.rag` settings: `chunkSize`, `chunkOverlap`, `topK`, `scoreThreshold`, `chunkStrategy` |
+| `identity` | `{ sessionTtlSeconds? }` | 24 hours | `kernel.identity` settings |
 
 ```typescript
 interface KernelConfig {
@@ -71,11 +79,20 @@ interface KernelConfig {
   dataDir?: string;
   ephemeral?: boolean;
   builtInTools?: BuiltInToolConfig;
+  toolPolicy?: ToolPolicy;          // { allow?: string[]; deny?: string[] }
+  gateway?: GatewayConfig;
+  rateLimits?: RateLimiterConfig;
+  eventRetentionDays?: number;      // default: 30 (0 = keep forever)
+  shutdownTimeoutMs?: number;       // default: 10000
   reflection?: {
-    enabled: boolean;
+    enabled: boolean;     // default: false
     threshold?: number;   // default: 0.7
     maxAttempts?: number; // default: 2
   };
+  threadHistory?: boolean;          // default: true
+  planning?: Partial<AgentPlannerConfig>;
+  rag?: Partial<RAGPipelineConfig>;
+  identity?: { sessionTtlSeconds?: number };
 }
 ```
 
@@ -84,7 +101,7 @@ interface KernelConfig {
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `start()` | `() => Promise<void>` | Initialize all modules, open DB connections, begin event processing |
-| `stop()` | `() => Promise<void>` | Graceful shutdown — drains active intents, closes connections |
+| `stop()` | `() => Promise<void>` | Graceful shutdown — refuses new intents, waits up to `shutdownTimeoutMs` for active ones, closes connections |
 | `submit()` | `(intent) => Promise<Intent>` | Submit an intent for agent execution (primary entry point) |
 | `getStatus()` | `() => KernelStatus` | Returns running state, active intents, providers, usage |
 
@@ -98,14 +115,18 @@ const result = await kernel.submit({
   goal: 'Draft an email to the team about the release',
   intentType: 'action',      // 'query' | 'action' | 'observation'
   priority: 'high',          // 'critical' | 'high' | 'medium' | 'low'
-  owner: 'user-123',         // identity for permissions & budget
-  metadata: { tag: 'comms' },
+  owner: 'user-123',         // scopes memory, budget and rate limits
+  metadata: { tag: 'comms', threadId: 'conversation-42' }, // threadId: include earlier turns
 });
 
 if (result.result?.success) {
   console.log(result.result.summary);
 }
 ```
+
+- **`owner`** can be any string, such as your app's user ID. It scopes memory recall, budgets and rate limits. Owners registered with `kernel.identity` must also have the `intent:submit` permission. Without an owner, the intent runs as `system`.
+- **`metadata.threadId`** groups intents into a conversation: the agent sees earlier successful turns of the same thread (older turns are summarized). Without it, each intent is independent.
+- Retrieved documents from `kernel.rag` are added to the agent's context automatically.
 
 ### Accessor Properties
 
@@ -153,12 +174,12 @@ import type { EventBusConfig, EventQuery, EventStoreStats } from '@kernova/core'
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `publish(event)` | `(event: NexusEvent) => void` | Emit an event to all matching subscribers + persist |
+| `publish(event)` | `(event: KernovaEvent) => void` | Emit an event to all matching subscribers + persist |
 | `subscribe(patterns, handler)` | `(patterns: string[], handler) => string` | Subscribe to events; returns subscription ID |
 | `unsubscribe(id)` | `(id: string) => void` | Remove a subscription |
-| `query(params)` | `(params: EventQuery) => NexusEvent[]` | Rich filtering (type, category, actor, time range) |
-| `getTimeline(subjectId)` | `(subjectId: string, limit?: number) => NexusEvent[]` | All events for a specific entity |
-| `getCorrelated(correlationId)` | `(correlationId: string, limit?: number) => NexusEvent[]` | Trace a full request flow |
+| `query(params)` | `(params: EventQuery) => KernovaEvent[]` | Rich filtering (type, category, actor, time range) |
+| `getTimeline(subjectId)` | `(subjectId: string, limit?: number) => KernovaEvent[]` | All events for a specific entity |
+| `getCorrelated(correlationId)` | `(correlationId: string, limit?: number) => KernovaEvent[]` | Trace a full request flow |
 | `count(params?)` | `(params?) => number` | Count matching events |
 | `applyRetention(days)` | `(retentionDays: number) => number` | Delete events older than N days |
 | `flush()` | `() => void` | Force pending writes to disk |
@@ -288,12 +309,13 @@ const expired = kernel.memoryEngine.decay({ maxAge: 3600 });
 
 ## ModelRouter
 
-Routes completion requests to the right model provider based on configurable rules. Supports purpose-based overrides, fallback chains, streaming, embeddings, and 20+ auto-detected providers.
+Routes completion requests to the right model provider based on configurable rules. Supports purpose-based overrides, a fallback provider, streaming, embeddings, model listing, and 26 cataloged providers (see [Model Providers](/guides/providers/)).
 
 ### Key Exports
 
 ```typescript
 import { ModelRouter, createProvider, detectAvailableProviders } from '@kernova/core';
+import { AzureOpenAIProvider, BedrockProvider, VertexAIProvider } from '@kernova/core';
 import type { ModelRouterConfig, ModelProvider } from '@kernova/core';
 ```
 
@@ -304,8 +326,11 @@ import type { ModelRouterConfig, ModelProvider } from '@kernova/core';
 | `complete(request, purpose?)` | `(req, purpose?) => Promise<CompletionResponse>` | Single completion |
 | `stream(request, purpose?)` | `(req, purpose?) => AsyncGenerator<StreamChunk>` | Streaming tokens |
 | `embed(text)` | `(text: string) => Promise<number[]>` | Generate embedding vector |
-| `getAvailableProviders()` | `() => ProviderInfo[]` | List detected providers |
-| `getUsageStats()` | `() => UsageStats` | Token counts & costs |
+| `embedMany(texts)` | `(texts: string[]) => Promise<number[][]>` | Embed several texts, batched where the provider allows |
+| `listModels(provider?)` | `(provider?: string) => Promise<ModelInfo[]>` | Models a provider offers (all available providers without one) |
+| `getAvailableProviders()` | `() => string[]` | IDs of the available providers |
+| `getUsageStats()` | `() => { usage: TokenUsage; requestCount: number }` | Token counts (including cached and reasoning tokens) and costs |
+| `measureUsage(fn)` | `(fn) => Promise<{ result, usage }>` | Tokens used by the model calls `fn` makes |
 
 
 ### Routing Configuration
@@ -314,32 +339,34 @@ import type { ModelRouterConfig, ModelProvider } from '@kernova/core';
 const kernel = new KernovaKernel({
   environment: 'production',
   models: {
-    default: { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
-    purposes: {
-      coding: { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
-      summarization: { provider: 'openai', model: 'gpt-4o-mini' },
-      embedding: { provider: 'openai', model: 'text-embedding-3-small' },
+    default: { provider: 'anthropic', model: 'claude-sonnet-5-5' },
+    // Per-purpose models: reasoning, generation, classification, extraction, conversation, vision, code, ...
+    overrides: {
+      code: { provider: 'anthropic', model: 'claude-sonnet-5-5' },
+      classification: { provider: 'openai', model: 'gpt-4o-mini' },
     },
-    fallback: ['openai', 'anthropic', 'gemini'],
+    // Tried once when the default provider fails
+    fallback: { provider: 'openai', model: 'gpt-4o' },
   },
 });
 ```
 
 ### Providers
 
-Auto-detected from environment variables (API keys):
+Auto-detected from environment variables. The full list, with each provider's variable and default model, is in [Model Providers](/guides/providers/).
 
-| Provider | Env Variable | Models |
-|----------|-------------|--------|
-| OpenAI | `OPENAI_API_KEY` | gpt-4o, gpt-4o-mini, o1, o3-mini |
-| Anthropic | `ANTHROPIC_API_KEY` | claude-sonnet-4-20250514, claude-3.5-haiku |
-| Google Gemini | `GOOGLE_API_KEY` | gemini-2.0-flash, gemini-1.5-pro |
-| Ollama | (local, no key) | llama3, mistral, codellama, etc. |
-| DeepSeek | `DEEPSEEK_API_KEY` | deepseek-chat, deepseek-coder |
-| Groq | `GROQ_API_KEY` | llama-3.1-70b, mixtral-8x7b |
-| Together | `TOGETHER_API_KEY` | Various open models |
-| OpenRouter | `OPENROUTER_API_KEY` | Aggregator — access 100+ models |
-| Any OpenAI-compatible | Custom | Via `OpenAICompatibleProvider` |
+| Class | API | Used for |
+|-------|-----|----------|
+| `OpenAIProvider` | OpenAI | `openai` |
+| `AzureOpenAIProvider` | Azure OpenAI v1 API (API key or Microsoft Entra ID) | `azure` |
+| `AnthropicProvider` | Anthropic Messages API | `anthropic` |
+| `GeminiProvider` | Gemini API | `gemini` |
+| `VertexAIProvider` | Vertex AI (service account, gcloud ADC, metadata server, or express-mode key) | `vertex` |
+| `BedrockProvider` | Bedrock Converse API (Bedrock API key or SigV4-signed AWS credentials) | `bedrock` |
+| `OllamaProvider` | Ollama | `ollama` |
+| `OpenAICompatibleProvider` | Any `/chat/completions` API | DeepSeek, Groq, Mistral, xAI, Qwen, Moonshot, Z.ai, Together, OpenRouter, Hugging Face, NVIDIA, Fireworks, and your own |
+
+`GoogleAuth`, `AwsCredentialChain`, and `signAwsRequest()` are exported for your own Google Cloud and AWS calls.
 
 ### Creating Providers Manually
 
@@ -358,7 +385,24 @@ const custom = new OpenAICompatibleProvider({
   apiKey: process.env.MY_API_KEY!,
   defaultModel: 'my-model',
 });
+
+// Cloud platforms
+const bedrock = new BedrockProvider({ region: 'us-east-1' });
+const vertex = new VertexAIProvider({ project: 'my-project' });
+const azure = new AzureOpenAIProvider({ endpoint: 'https://my-resource.openai.azure.com' });
 ```
+
+### Request Options
+
+Beyond `messages`, `model`, `temperature`, `maxTokens`, `stopSequences`, and `tools`, every provider takes:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `responseFormat` | `ResponseFormat`: `{ type: 'json' }` or `{ type: 'json_schema', schema, name?, strict? }` | JSON output; the parsed value comes back in `response.parsed` |
+| `reasoning` | `{ effort?, budgetTokens?, includeThoughts? }` | Reasoning controls; the reasoning comes back in `response.reasoning` |
+| `cache` | `boolean` | Prompt caching (Claude and Bedrock need it; others cache automatically) |
+| `parts` (on a message) | `ContentPart[]` | Text, images, audio, and files (`{ type: 'file', url, filename? }`) |
+| `providerData` (on a message) | `Record<string, unknown>` | Copy of `response.providerData` for the assistant turn, sent back during tool use |
 
 ### Example
 
@@ -380,6 +424,17 @@ for await (const chunk of kernel.models.stream({
 
 // Embeddings for semantic search
 const vector = await kernel.models.embed('machine learning concepts');
+const vectors = await kernel.models.embedMany(['first', 'second']);
+
+// Structured output and reasoning
+const { parsed } = await kernel.models.complete({
+  messages: [{ role: 'user', content: 'List three primes as JSON: { "primes": number[] }' }],
+  responseFormat: { type: 'json' },
+  reasoning: { effort: 'low' },
+});
+
+// What a provider offers
+const models = await kernel.models.listModels('anthropic');
 ```
 
 ---
@@ -474,8 +529,17 @@ interface AgentSpec {
     threshold?: number;   // Override global (default 0.7)
     maxAttempts?: number; // Override global (default 2)
   };
+  toolPolicy?: ToolPolicy;     // Which tools this agent may call (on top of the kernel's)
+  model?: { provider?: string; model?: string }; // This agent's model (default: kernel routing)
+  temperature?: number;        // Sent with this agent's model calls
+  maxTokens?: number;          // Sent with this agent's model calls
+  reasoning?: ReasoningOptions;     // { effort?, budgetTokens?, includeThoughts? }
+  responseFormat?: ResponseFormat;  // JSON, optionally matching a schema
+  promptCache?: boolean;            // Prompt caching for this agent's calls
 }
 ```
+
+`model` routes every call the agent makes: give a provider ID (its default model), a model ID (sent to the default provider), or both. The provider must be registered (auto-detected from its API key, or passed in `providers`).
 
 ### Default LLM Executor Behavior
 
@@ -550,7 +614,7 @@ import type { KernovaPlugin, ToolDefinition, MiddlewareHook } from '@kernova/cor
 | `unregister(id)` | `(id: string) => void` | Remove a plugin |
 | `listTools()` | `() => ToolDefinition[]` | All available tools |
 | `executeTool(id, params)` | `(id, params) => Promise<unknown>` | Execute a tool by ID |
-| `listPlugins()` | `() => PluginInfo[]` | All registered plugins |
+| `list()` | `() => KernovaPlugin[]` | All registered plugins |
 
 ### Plugin Structure
 
@@ -622,55 +686,64 @@ import type { WorkflowEngineConfig, ApprovalHandler } from '@kernova/core';
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `register(definition)` | `(def: WorkflowDefinition) => void` | Register a workflow |
-| `execute(definitionId, input?, options?)` | `(id, input?, opts?) => Promise<WorkflowInstance>` | Run a workflow |
-| `getStatus(instanceId)` | `(id: string) => WorkflowStatus` | Check workflow progress |
-| `cancel(instanceId)` | `(id: string) => void` | Cancel a running workflow |
-| `list()` | `() => WorkflowDefinition[]` | All registered workflows |
+| `define(definition)` | `(def: WorkflowDefinition) => void` | Register a workflow |
+| `execute(definitionId, input?)` | `(id: string, input?: object) => Promise<WorkflowInstance>` | Run a workflow and wait for it to finish |
+| `getInstance(instanceId)` | `(id: string) => WorkflowInstance \| undefined` | A run's status and step results |
+| `listDefinitions()` | `() => WorkflowDefinition[]` | All registered workflows |
+| `listRunning()` | `() => WorkflowInstance[]` | Runs in progress |
+| `onApproval(handler)` | `(handler: ApprovalHandler) => void` | Decide approval steps in code |
+| `resolveApproval(workflowId, stepId, approved, reason?)` | `(...) => void` | Approve or reject a waiting step |
+| `getPendingApprovals()` | `() => Array<{ workflowId, stepId, stepName }>` | Steps waiting for approval |
 
 ### Example
 
+Each step names its type and a `config`. Agent steps send `config.input.goal` (or the step name) to the agent named in `config.agentId`; steps don't pass their output to the next step.
+
 ```typescript
-kernel.workflows.register({
+import { generateId, now } from '@kernova/core';
+
+kernel.workflows.define({
   id: 'content-pipeline',
+  type: 'workflow_definition',
+  version: '1.0.0',
+  owner: 'system',
+  status: 'active',
+  createdAt: now(),
+  updatedAt: now(),
+  metadata: {},
   name: 'Content Pipeline',
+  description: 'Research, then approve, then publish',
   steps: [
     {
       id: 'research',
+      name: 'Research the topic',
       type: 'agent',
-      agent: 'research-assistant',
-      goal: 'Research {{input.topic}}',
-    },
-    {
-      id: 'write',
-      type: 'agent',
-      agent: 'writer',
-      goal: 'Write an article based on: {{steps.research.result}}',
-      dependsOn: ['research'],
+      config: { agentId: 'research-assistant', input: { goal: 'Research AI in healthcare' } },
+      onFailure: 'stop',
     },
     {
       id: 'review',
+      name: 'Editorial review',
       type: 'approval',
-      message: 'Review the draft before publishing',
-      dependsOn: ['write'],
+      config: { approvers: ['editor'] },
+      onFailure: 'stop',
     },
     {
       id: 'publish',
-      type: 'agent',
-      agent: 'publisher',
-      goal: 'Publish the article: {{steps.write.result}}',
-      dependsOn: ['review'],
-      compensation: {
-        goal: 'Unpublish the article',
-      },
+      name: 'Publish to CMS',
+      type: 'tool',
+      config: { toolId: 'cms:publish' },
+      onFailure: 'compensate',
+      compensation: { toolId: 'cms:unpublish' },
     },
   ],
 });
 
-const instance = await kernel.workflows.execute('content-pipeline', {
-  topic: 'AI in Healthcare',
-});
+const instance = await kernel.workflows.execute('content-pipeline', { topic: 'AI in Healthcare' });
+console.log(instance.workflowStatus, instance.stepResults);
 ```
+
+With `@kernova/sdk`, the `workflow(name, steps)` helper fills in the boilerplate fields.
 
 ### When to Use
 
@@ -983,59 +1056,75 @@ kernel.loops.register({
 
 ## ConnectorRegistry
 
-Channel adapters that bridge external messaging platforms to the kernel. Each adapter normalizes incoming messages into Intents and routes outgoing responses back to the original channel.
+`kernel.channels` manages connections to messaging platforms. You register a connector with its platform config; the registry creates the adapter, connects it (reconnecting with backoff when a connection drops), and emits `channel.*` events. See the [Channels guide](/guides/channels) for each platform's config.
 
 ### Supported Channels
 
-| Channel | Adapter | Transport |
-|---------|---------|-----------|
-| Slack | `SlackChannelAdapter` | WebSocket (Socket Mode) |
-| Discord | `DiscordChannelAdapter` | WebSocket (Gateway) |
-| WhatsApp | `WhatsAppChannelAdapter` | Webhook |
-| Telegram | `TelegramChannelAdapter` | Webhook / Long-polling |
-| Email | `EmailChannelAdapter` | IMAP/SMTP |
-| Webhook | `WebhookChannelAdapter` | HTTP POST |
-| WebSocket | `WebSocketChannelAdapter` | WS |
+| Channel | `channelType` | Adapter class |
+|---------|---------------|---------------|
+| Slack | `slack` | `SlackAdapter` |
+| Discord | `discord` | `DiscordAdapter` |
+| WhatsApp | `whatsapp` | `WhatsAppAdapter` |
+| Telegram | `telegram` | `TelegramAdapter` |
+| Email | `email` | `EmailAdapter` |
+| Microsoft Teams | `teams` | `TeamsAdapter` |
+| SMS (Twilio) | `sms` | `SmsAdapter` |
+| Signal | `signal` | `SignalAdapter` |
+| Matrix | `matrix` | `MatrixAdapter` |
+| IRC | `irc` | `IrcAdapter` |
+| Voice (Twilio) | `voice` | `VoiceAdapter` |
+| Push (FCM/APNs) | `push` | `PushAdapter` |
+| RSS/Atom | `rss` | `RssAdapter` |
+
+`WebhookChannelAdapter` and `WebSocketChannelAdapter` aren't managed by the registry: use them directly (`await adapter.connect()`) or through the SDK's `app.channel()`.
 
 ### Key Exports
 
 ```typescript
-import { ConnectorRegistry, WebhookChannelAdapter, WebSocketChannelAdapter } from '@kernova/core';
-import type { ConnectorRegistryConfig } from '@kernova/core';
+import { ConnectorRegistry, SlackAdapter, WebhookChannelAdapter, WebSocketChannelAdapter } from '@kernova/core';
+import type { ConnectorRegistryConfig, ChannelAdapter } from '@kernova/core';
 ```
 
 ### Methods
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `register(adapter)` | `(adapter: ChannelAdapter) => void` | Register a channel adapter |
-| `unregister(channelId)` | `(id: string) => void` | Remove an adapter |
-| `send(channelId, message)` | `(id, msg) => Promise<void>` | Send a message to a channel |
-| `list()` | `() => ChannelInfo[]` | All registered channels |
+| `register(input)` | `({ channelType, name, config }) => ConnectorDef` | Add a connector; its config is validated |
+| `connect(connectorId)` | `(id: string) => Promise<void>` | Start the adapter |
+| `disconnect(connectorId)` | `(id: string) => Promise<void>` | Stop the adapter |
+| `send(request)` | `({ connectorId, recipient?, message }) => Promise<OutboundMessageResult>` | Send a message through a connector, to `recipient` (an inbound message's `replyTo`) |
+| `onMessage(handler)` | `(handler: (msg: InboundMessage) => Promise<void> \| void) => () => void` | Handle inbound messages from every connector; returns an unsubscribe function |
+| `reply(message, content)` | `(msg: InboundMessage, content: string \| OutboundMessage) => Promise<OutboundMessageResult>` | Answer a message on its connector, to its `replyTo` |
+| `status()` | `() => ConnectorStatus[]` | Connection state of every connector |
 
 ### Example
 
 ```typescript
-import { WebhookChannelAdapter } from '@kernova/core';
-
-// Register a webhook channel
-kernel.channels.register(new WebhookChannelAdapter({
-  id: 'my-webhook',
-  path: '/hooks/incoming',
-  secret: process.env.WEBHOOK_SECRET,
-}));
-
-// Register a WebSocket channel
-kernel.channels.register(new WebSocketChannelAdapter({
-  id: 'realtime',
-  port: 8080,
-}));
-
-// Send a message back to a channel
-await kernel.channels.send('my-webhook', {
-  content: 'Task completed successfully',
-  metadata: { threadId: 'thread-123' },
+const slack = kernel.channels.register({
+  channelType: 'slack',
+  name: 'support-slack',
+  config: {
+    type: 'slack',
+    botToken: process.env.SLACK_BOT_TOKEN!,
+    signingSecret: process.env.SLACK_SIGNING_SECRET!,
+  },
 });
+await kernel.channels.connect(slack.id);
+
+// Answer every message in the conversation it came from
+kernel.channels.onMessage(async (msg) => {
+  const intent = await kernel.submit({ goal: msg.content, owner: msg.sender, metadata: { threadId: `${msg.connectorId}:${msg.replyTo}` } });
+  await kernel.channels.reply(msg, intent.result?.summary ?? '');
+});
+
+// Or send proactively
+await kernel.channels.send({
+  connectorId: slack.id,
+  recipient: 'C024BE91L', // a Slack channel ID
+  message: { content: 'Deploy finished' },
+});
+
+console.log(kernel.channels.status()); // [{ name: 'support-slack', state: 'connected', ... }]
 ```
 
 ### When to Use
@@ -1495,13 +1584,13 @@ import type {
 
 | Method | Description |
 |--------|-------------|
-| `register(identity)` | Register a user, agent, or service identity |
-| `get(id)` | Get identity by ID |
+| `registerIdentity(options)` | Register a user, agent, or service identity (`{ type, name, email?, roles? }`; the ID is generated) |
+| `getIdentity(id)` | Get identity by ID |
 | `checkPermission(check)` | Check if an identity has a permission |
 | `createApiKey(options)` | Create an API key for an identity |
-| `validateApiKey(key)` | Validate and resolve an API key |
+| `authenticateWithKey(key)` | Resolve an API key to its identity and permissions (null if invalid) |
 | `createSession(options)` | Create a session for an identity |
-| `validateSession(token)` | Validate a session token |
+| `authenticateWithSession(token)` | Resolve a session token to its identity (null if invalid or expired) |
 
 ### Actor Types
 
@@ -1512,8 +1601,8 @@ import type {
 ### Example
 
 ```typescript
-// Register a user
-kernel.identity.register({
+// Register a user (the ID is generated)
+const alice = kernel.identity.registerIdentity({
   type: 'user',
   name: 'Alice',
   email: 'alice@company.com',
@@ -1522,7 +1611,7 @@ kernel.identity.register({
 
 // Check permissions before executing
 const check = kernel.identity.checkPermission({
-  identityId: 'user-alice',
+  identityId: alice.id,
   resource: 'intent',
   action: 'submit',
 });
@@ -1627,8 +1716,19 @@ import type { GatewayConfig, GatewayAuthConfig } from '@kernova/core';
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `start()` | `() => Promise<void>` | Start the HTTP server |
+| `start(config?)` | `(config?: GatewayConfig) => Promise<void>` | Start the HTTP server. `config` overrides the settings from the constructor or `KernelConfig.gateway`. Throws if no token is configured and `auth.allowAnonymous` isn't set |
 | `stop()` | `() => Promise<void>` | Stop the server |
+
+### Configuration
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `port` | `3000` | Port to listen on |
+| `host` | `'127.0.0.1'` | Interface to bind |
+| `auth.tokens` | `[KERNOVA_API_KEY]` if set | Bearer tokens that grant access |
+| `auth.allowAnonymous` | `false` | Skip authentication (local development only) |
+| `cors` | `false` | `false`, `true` (any origin), or a list of allowed origins |
+| `maxBodyBytes` | `1_048_576` | Request body size limit |
 
 ### Endpoints
 
@@ -1641,13 +1741,13 @@ import type { GatewayConfig, GatewayAuthConfig } from '@kernova/core';
 
 ### Authentication
 
-All endpoints (except `/health`) require a Bearer token in the `Authorization` header. Tokens are validated against the kernel's IdentityManager.
+All endpoints require a Bearer token in the `Authorization` header, checked against `auth.tokens` (or `KERNOVA_API_KEY`). Webhook routes registered with a `secret` are authenticated by their HMAC signature instead.
 
 ### Example
 
 ```typescript
-// Start the gateway on the daemon's port
-await kernel.gateway.start();
+// Start the gateway with a token
+await kernel.gateway.start({ auth: { tokens: [process.env.GATEWAY_TOKEN!] } });
 
 // From external clients:
 // curl -X POST http://localhost:3000/v1/intents \
@@ -1853,7 +1953,7 @@ kernel.health.startPolling(30000);
 
 ## SandboxManager
 
-Provides isolated execution environments with path restrictions, resource limits, and policy enforcement.
+Policy checks for agent runs: which paths, tools, network, and writes are allowed. It decides; it does not isolate processes.
 
 ### Key Exports
 
@@ -1864,25 +1964,32 @@ import type { SandboxConfig, SandboxPolicy } from '@kernova/core';
 
 ### Methods
 
+Policies are checked per context: create one for an agent's run, then ask it before acting. The built-in file and shell tools enforce their own sandbox (`builtInTools.sandboxDir`); this manager is for your own tools and checks.
+
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `validatePath(path)` | `(path: string) => boolean` | Check if a path is within the sandbox |
-| `resolvePath(path)` | `(path: string) => string` | Resolve a path within the sandbox |
-| `getPolicy()` | `() => SandboxPolicy` | Get the current sandbox policy |
+| `createContext(agentId, policy?)` | `(id: string, policy?: Partial<SandboxPolicy>) => SandboxContext` | Start a sandbox context with a policy |
+| `isPathAllowed(contextId, path)` | `(id: string, path: string) => boolean` | Whether a path is inside the workspace and not denied |
+| `isToolAllowed(contextId, tool)` | `(id: string, tool: string) => boolean` | Check the policy's allowed/denied tools |
+| `isWriteAllowed(contextId)` / `isNetworkAllowed(contextId)` | `(id: string) => boolean` | Check the policy's write and network flags |
+| `getTimeout(contextId)` | `(id: string) => number` | The policy's timeout in ms |
+| `destroy(contextId)` | `(id: string) => void` | End a context |
+
+`SandboxPolicy`: `allowedPaths`, `deniedPaths`, `allowedTools`, `deniedTools`, `timeoutMs`, `allowNetwork`, `allowWrite`.
 
 ### Example
 
 ```typescript
-// Validate before file operations
-const safePath = kernel.sandbox.resolvePath('data/output.json');
-// Returns: /absolute/path/to/kernova-data/data/output.json
+const sandbox = kernel.sandbox.createContext('report-writer', {
+  deniedTools: ['shell-exec'],
+  allowNetwork: false,
+});
 
-// Attempting path traversal throws
-try {
-  kernel.sandbox.resolvePath('../../etc/passwd');
-} catch (e) {
-  // SandboxViolationError: Path traversal detected
-}
+kernel.sandbox.isPathAllowed(sandbox.id, 'reports/q3.md');      // true
+kernel.sandbox.isPathAllowed(sandbox.id, '../../etc/passwd');   // false (emits sandbox.path.denied)
+kernel.sandbox.isToolAllowed(sandbox.id, 'shell-exec');         // false
+
+kernel.sandbox.destroy(sandbox.id);
 ```
 
 ### When to Use
@@ -2000,13 +2107,14 @@ const config: KernelConfig = {
   
   // Model routing
   models: {
-    default: { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
-    purposes: {
-      coding: { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
-      summarization: { provider: 'openai', model: 'gpt-4o-mini' },
-      embedding: { provider: 'openai', model: 'text-embedding-3-small' },
+    default: { provider: 'anthropic', model: 'claude-sonnet-5-5' },
+    // Per-purpose models: reasoning, generation, classification, extraction, conversation, vision, code, ...
+    overrides: {
+      code: { provider: 'anthropic', model: 'claude-sonnet-5-5' },
+      classification: { provider: 'openai', model: 'gpt-4o-mini' },
     },
-    fallback: ['openai', 'anthropic', 'gemini'],
+    // Tried once when the default provider fails
+    fallback: { provider: 'openai', model: 'gpt-4o' },
   },
   
   // Additional providers (merged with auto-detected)
@@ -2045,7 +2153,7 @@ interface ModelRoutingConfig {
   // Default model for all requests
   default: {
     provider: string;  // e.g. 'openai', 'anthropic', 'gemini', 'ollama'
-    model: string;     // e.g. 'gpt-4o', 'claude-sonnet-4-20250514'
+    model: string;     // e.g. 'gpt-4o', 'claude-sonnet-5-5'
   };
   
   // Purpose-specific overrides
@@ -2067,7 +2175,7 @@ Model providers are auto-detected from these environment variables:
 |----------|----------|
 | `OPENAI_API_KEY` | OpenAI |
 | `ANTHROPIC_API_KEY` | Anthropic |
-| `GOOGLE_API_KEY` | Google Gemini |
+| `GEMINI_API_KEY` | Google Gemini |
 | `DEEPSEEK_API_KEY` | DeepSeek |
 | `GROQ_API_KEY` | Groq |
 | `TOGETHER_API_KEY` | Together AI |
@@ -2079,9 +2187,9 @@ Model providers are auto-detected from these environment variables:
 | `XAI_API_KEY` | xAI (Grok) |
 | `CEREBRAS_API_KEY` | Cerebras |
 | `SAMBANOVA_API_KEY` | SambaNova |
-| `OLLAMA_BASE_URL` | Ollama (local) |
 
-No configuration needed — if the key exists, the provider is available.
+
+No configuration needed — if the key exists, the provider is available. Local servers (Ollama, LM Studio, vLLM, llama.cpp) need no key but aren't detected: add them with `providers: [createProvider('ollama', { baseUrl })]`.
 
 ---
 
@@ -2102,10 +2210,10 @@ Automatic fallback when a provider fails. Tries providers in the configured fall
 Records step-by-step execution traces for debugging. Enabled automatically when `debug: true`.
 
 ```typescript
-// Access traces for debugging
-const traces = kernel.trajectory.getTraces();
+// Access traces for debugging (most recent first)
+const traces = kernel.trajectory.listTraces();
 traces.forEach(trace => {
-  console.log(`Intent: ${trace.goal}, Steps: ${trace.events.length}`);
+  console.log(`Intent: ${trace.metadata.intentGoal}, Steps: ${trace.events.length}`);
 });
 ```
 
@@ -2174,18 +2282,15 @@ import type { MarketplaceConfig, PluginListing } from '@kernova/core';
 A full example combining multiple modules:
 
 ```typescript
-import { KernovaKernel, defineAgent, DaemonRunner } from '@kernova/core';
+import { KernovaKernel, defineAgent, DaemonRunner, now } from '@kernova/core';
 
 // 1. Create the kernel
 const kernel = new KernovaKernel({
   environment: 'production',
   dataDir: './kernova-data',
   models: {
-    default: { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
-    purposes: {
-      embedding: { provider: 'openai', model: 'text-embedding-3-small' },
-    },
-    fallback: ['openai', 'gemini'],
+    default: { provider: 'anthropic', model: 'claude-sonnet-5-5' },
+    fallback: { provider: 'openai', model: 'gpt-4o' },
   },
   builtInTools: {
     disabled: ['shell-exec'],
@@ -2233,13 +2338,17 @@ await kernel.rag.ingest(
   { category: 'guidelines' }
 );
 
-// 5. Set up a content workflow
-kernel.workflows.register({
-  id: 'blog-post',
+// 5. Set up a content workflow (steps run in order; each agent step gets its own goal)
+kernel.workflows.define({
+  id: 'blog-post', type: 'workflow_definition', version: '1.0.0', owner: 'system', status: 'active',
+  createdAt: now(), updatedAt: now(), metadata: {},
   name: 'Blog Post Pipeline',
+  description: 'Research trending topics, then draft a post',
   steps: [
-    { id: 'research', type: 'agent', agent: 'researcher', goal: 'Research: {{input.topic}}' },
-    { id: 'write', type: 'agent', agent: 'writer', goal: 'Write blog post about: {{steps.research.result}}', dependsOn: ['research'] },
+    { id: 'research', name: 'Research', type: 'agent', onFailure: 'stop',
+      config: { agentId: 'researcher', input: { goal: 'Research trending AI topics this week' } } },
+    { id: 'write', name: 'Write', type: 'agent', onFailure: 'stop',
+      config: { agentId: 'writer', input: { goal: 'Draft a blog post on the top trending AI topic' } } },
   ],
 });
 
