@@ -68,6 +68,7 @@ These are automatically available in your agents:
 | `NODE_ENV` | `development` or `production` | Current environment |
 | `KERNOVA_URL` | `http://localhost:4555` or cloud URL | Agent backend URL |
 | `KERNOVA_PORT` | `4555` | Port the agent server listens on |
+| `KERNOVA_HOST` | `127.0.0.1` with a frontend, else `0.0.0.0` | Address the agent server listens on. With a Next.js app, the app forwards requests to the agent server on localhost, so by default only this machine can reach it |
 
 ## Loading Order
 

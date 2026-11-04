@@ -123,3 +123,5 @@ export type {
 export { createWebSocketServer } from './server/websocket.js';
 export type { WebSocketServerConfig, WSClient } from './server/websocket.js';
 export { cronMatches, getNextCronTime, getCronIntervalMs } from './server/cron.js';
+export { currentRequest } from './server/request-context.js';
+export type { RequestContext } from './server/request-context.js';

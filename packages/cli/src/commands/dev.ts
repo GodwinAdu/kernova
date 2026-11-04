@@ -92,7 +92,7 @@ async function runFullStackDev(
   // 1. Start agent backend (port 4555)
   if (!appOnly) {
     info('Starting agent backend...');
-    const agentProcess = spawn('npx', ['tsx', '--watch', '--ignore', 'kernova-data/**', '--ignore', '.next/**', '--ignore', 'node_modules/**', resolveAgentEntry(projectRoot)], {
+    const agentProcess = spawn('npx', tsxWatchArgs(resolveAgentEntry(projectRoot)), {
       cwd: projectRoot,
       stdio: 'pipe',
       shell: true,
@@ -117,9 +117,15 @@ async function runFullStackDev(
 
     processes.push(agentProcess);
 
-    // Wait a moment for agent server to boot
-    await sleep(1000);
-    success(`Agent backend running on port ${agentPort} (internal)`);
+    // Report the backend as running only once it answers, and say so when it doesn't start
+    const state = await waitForAgentServer(agentProcess, agentPort);
+    if (state === 'ready') {
+      success(`Agent backend running on port ${agentPort} (internal)`);
+    } else if (state === 'exited') {
+      error('Agent backend failed to start; see the [agents] output above.');
+    } else {
+      warn(`Agent backend is still starting on port ${agentPort}; requests will fail until it's up.`);
+    }
   }
 
   // 2. Start Next.js frontend (port 3000) — this is what the user sees
@@ -157,7 +163,7 @@ async function runFullStackDev(
   console.log(`    App:     http://localhost:${port}`);
   console.log(`    Chat:    http://localhost:${port}/chat`);
   console.log(`    Agents:  http://localhost:${port}/api/agents/*`);
-  console.log(`    Health:  http://localhost:${port}/v1/health`);
+  if (!appOnly) console.log(`    Health:  http://127.0.0.1:${agentPort}/health  (backend, this machine only)`);
   console.log('');
   info('All requests go through one URL. No CORS needed.');
   info('Press Ctrl+C to stop.');
@@ -189,7 +195,7 @@ async function runAgentsDev(projectRoot: string, port: number): Promise<void> {
 
   const entryFile = resolveAgentEntry(projectRoot);
 
-  const agentProcess = spawn('npx', ['tsx', '--watch', '--ignore', 'kernova-data/**', '--ignore', '.next/**', '--ignore', 'node_modules/**', entryFile], {
+  const agentProcess = spawn('npx', tsxWatchArgs(entryFile), {
     cwd: projectRoot,
     stdio: 'inherit',
     shell: true,
@@ -295,7 +301,11 @@ for (const envFile of envFiles) {
       const eqIndex = trimmed.indexOf('=');
       if (eqIndex === -1) continue;
       const key = trimmed.slice(0, eqIndex).trim();
-      const value = trimmed.slice(eqIndex + 1).trim();
+      let value = trimmed.slice(eqIndex + 1).trim();
+      // Accept quoted values: KEY="value" or KEY='value'
+      if (value.length >= 2 && (value[0] === '"' || value[0] === "'") && value.endsWith(value[0])) {
+        value = value.slice(1, -1);
+      }
       if (!process.env[key]) {
         process.env[key] = value;
       }
@@ -304,10 +314,14 @@ for (const envFile of envFiles) {
 }
 
 const port = parseInt(process.env.KERNOVA_PORT || '4555');
+// Only this machine can reach the dev backend unless KERNOVA_HOST says otherwise
+// (the Next.js app proxies to it on localhost)
+const host = process.env.KERNOVA_HOST || '127.0.0.1';
 
 createServer({
   projectRoot,
   port,
+  host,
 }).then(() => {
   // Server started
 }).catch((err) => {
@@ -331,6 +345,37 @@ function getAgentPort(args: string[]): number | null {
   const idx = args.indexOf('--agent-port');
   if (idx !== -1 && args[idx + 1]) return parseInt(args[idx + 1]);
   return null;
+}
+
+/**
+ * tsx in watch mode, skipping folders the server writes to (kernova-data) or that change on
+ * their own (.next, node_modules); watching them restarts the server in a loop.
+ * `tsx --watch` would hand the flags to Node, which rejects them.
+ */
+function tsxWatchArgs(entry: string): string[] {
+  return ['tsx', 'watch', '--exclude', 'kernova-data/**', '--exclude', '.next/**', '--exclude', 'node_modules/**', entry];
+}
+
+/** Waits until the agent server answers /health, its process exits, or the timeout passes */
+async function waitForAgentServer(
+  child: ChildProcess,
+  port: number,
+  timeoutMs = 60_000,
+): Promise<'ready' | 'exited' | 'timeout'> {
+  let exited = child.exitCode !== null;
+  child.once('exit', () => { exited = true; });
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (exited) return 'exited';
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(1000) });
+      if (response.ok) return 'ready';
+    } catch {
+      // Not listening yet
+    }
+    await sleep(500);
+  }
+  return exited ? 'exited' : 'timeout';
 }
 
 function sleep(ms: number): Promise<void> {

@@ -38,6 +38,11 @@ export interface TriggerDefinition {
   filter?: Record<string, unknown>;
   /** Whether this trigger is enabled */
   enabled?: boolean;
+  /**
+   * Checked each time the trigger would fire; return false to skip that run (for example when
+   * a setting turns the feature off, or during quiet hours). Skipped runs cost nothing.
+   */
+  when?: () => boolean | Promise<boolean>;
 }
 
 /**

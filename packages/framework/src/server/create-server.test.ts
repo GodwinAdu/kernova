@@ -27,6 +27,16 @@ function startFakeOllama(): Promise<{ server: Server; url: string; requests: Cha
       const body = raw ? JSON.parse(raw) : {};
       if (req.url === '/api/chat') {
         requests.push(body);
+        // Call the test tool when it's offered and hasn't been called yet in this conversation
+        const whoami = (body.tools ?? []).find((t: any) => String(t.function?.name).includes('whoami'));
+        if (whoami && !body.messages.some((m: any) => m.role === 'tool')) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            message: { role: 'assistant', content: '', tool_calls: [{ function: { name: whoami.function.name, arguments: {} } }] },
+            done: true, prompt_eval_count: 10, eval_count: 5,
+          }));
+          return;
+        }
         const content = `reply from ${body.model}`;
         if (body.stream) {
           res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
@@ -89,7 +99,26 @@ function writeProject(root: string, ollamaUrl: string): void {
     },
   };`);
   file('skills/coding/index.js', `export default { name: 'coding', description: 'Coding', instructions: 'SKILL: always write tests.' };`);
+  // A tool that records the context it was called in, an agent that uses it, and triggers
+  file('tools/whoami.js', `export default {
+    name: 'whoami',
+    description: 'Report who is asking',
+    parameters: {},
+    execute: async (params, ctx) => {
+      globalThis.__toolCalls.push({ threadId: ctx.threadId, user: ctx.user, trigger: ctx.trigger, autonomous: ctx.autonomous, agent: ctx.agent });
+      return 'recorded';
+    },
+  };`);
+  file('agents/tooly.agent.js', `export default { name: 'Tooly', instructions: 'Use whoami.', tools: ['whoami'], middleware: [] };`);
+  file('agents/triggers/ping.js', `export default {
+    name: 'ping', event: 'test.ping', agent: 'tooly', goal: 'Ping goal', cooldown: 1,
+    when: () => globalThis.__allowPing === true,
+  };`);
+  file('agents/triggers/off.js', `export default { name: 'off', event: 'test.ping', agent: 'tooly', goal: 'Off goal', enabled: false };`);
 }
+
+type ToolCallRecord = { threadId?: string; user?: { id: string }; trigger?: string; autonomous?: boolean; agent?: string };
+const toolCalls = (): ToolCallRecord[] => (globalThis as any).__toolCalls;
 
 describe('framework server', () => {
   let root: string;
@@ -102,6 +131,8 @@ describe('framework server', () => {
   const text = (request: ChatRequest) => request.messages.map(m => m.content).join('\n');
 
   beforeAll(async () => {
+    (globalThis as any).__toolCalls = [];
+    (globalThis as any).__allowPing = false;
     vi.spyOn(console, 'log').mockImplementation(() => {});
     root = mkdtempSync(join(tmpdir(), 'kernova-fw-'));
     ollama = await startFakeOllama();
@@ -177,4 +208,34 @@ describe('framework server', () => {
     expect(await res.text()).toContain('reply from default-model');
     expect(ollama.requests.at(-1)).toMatchObject({ model: 'default-model', stream: true });
   });
+
+  it('tells tools which thread, user, and agent a request is for', async () => {
+    const before = toolCalls().length;
+    const res = await post('/agents/tooly', { input: 'who is asking?', threadId: 'thread-42', user: { id: 'user-7' } });
+    expect(res.status).toBe(200);
+    expect(toolCalls().slice(before)).toEqual([
+      { threadId: 'thread-42', user: { id: 'user-7' }, trigger: undefined, autonomous: false, agent: 'tooly' },
+    ]);
+  });
+
+  it("marks trigger runs as autonomous, honours a trigger's when(), and skips disabled triggers", async () => {
+    const ping = () => app.kernel.events.publish({
+      id: `evt_${Date.now()}`, eventType: 'test.ping', category: 'system', severity: 'info', timestamp: new Date().toISOString(),
+      subjectId: 'test', subjectType: 'test', actorId: 'test', correlationId: 'test', data: {},
+      metadata: { schemaVersion: '1.0.0', source: 'test', environment: 'test' },
+    } as any);
+
+    const before = toolCalls().length;
+    ping();
+    await new Promise(resolve => setTimeout(resolve, 300));
+    expect(toolCalls().length).toBe(before); // when() said no
+
+    (globalThis as any).__allowPing = true;
+    ping();
+    await vi.waitFor(() => expect(toolCalls().length).toBeGreaterThan(before), { timeout: 10_000 });
+    const runs = toolCalls().slice(before);
+    expect(runs[0]).toEqual({ threadId: 'trigger_ping', user: undefined, trigger: 'ping', autonomous: true, agent: 'tooly' });
+    expect(runs.some(r => r.trigger === 'off')).toBe(false);
+  });
+
 });

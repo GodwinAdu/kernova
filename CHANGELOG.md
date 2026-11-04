@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] — 2026-11-04
+
+Releases: `@kernova/framework` 2.0.1, `@kernova/cli` 1.2.1.
+
+### Security
+
+- **The agent server listened on every network interface** in `kernova dev`, and in `kernova start` behind a Next.js app, without authentication, so anyone on the same network could call your agents and their tools. It now listens on `127.0.0.1` in those setups (the app forwards to it on localhost); set `KERNOVA_HOST` to change that. An agents-only `kernova start` still listens on all interfaces
+
+### Fixed
+
+- **`kernova dev` didn't start the agent server** on current versions of tsx (`node: bad option: --ignore`), and still printed "Agent backend running". It now uses `tsx watch --exclude …`, reports "running" only once the server answers `/health`, and says so when it fails to start. `tsx` is now a dependency of `@kernova/cli`, so the first `kernova dev` no longer downloads it
+- Tools never received `ctx.threadId` or `ctx.user`, although the tool context documented them
+- A trigger's `enabled: false` had no effect
+- `kernova dev` printed a health URL that answered 404, and didn't accept quoted values in `.env.local`
+
+### Added
+
+- Tools get `ctx.autonomous` (`true` for trigger and schedule runs), `ctx.trigger`, and `ctx.agent`, so a tool can ask more of actions nobody asked for; `currentRequest()` returns the same from any code a request runs
+- `when` on triggers: checked each time a trigger would fire; returning `false` skips the run before any model call
+- `KERNOVA_HOST` sets the address the agent server listens on
+
 ## [2.0.0] — 2026-11-03
 
 Releases: `@kernova/core` 2.0.0, `@kernova/sdk` 2.0.0, `@kernova/framework` 2.0.0, `@kernova/types` 1.1.0, `@kernova/cli` 1.2.0, `create-kernova-app` 1.3.0, `kernova` 1.0.0 (first release).

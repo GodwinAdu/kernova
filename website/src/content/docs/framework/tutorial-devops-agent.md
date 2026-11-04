@@ -217,6 +217,18 @@ export default defineTrigger({
 });
 ```
 
+Triggers in `triggers/` (or `agents/triggers/`) also take `enabled: false` to switch one off, and `when`, a function checked each time the trigger would fire. Return `false` to skip that run, for example when a setting turns the feature off or outside working hours; skipped runs cost nothing:
+
+```typescript
+export default defineTrigger({
+  name: 'nightly-report',
+  event: '0 2 * * *',
+  agent: 'devops',
+  goal: 'Write the nightly infrastructure report.',
+  when: async () => (await loadSettings()).reportsEnabled,
+});
+```
+
 ## Step 5: Define a Channel (Webhook)
 
 ```typescript

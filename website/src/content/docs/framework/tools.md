@@ -100,10 +100,36 @@ execute: async (params, ctx) => {
   // User info (if available)
   const userId = ctx.user?.id;
   
-  // Thread ID
+  // Thread ID (`trigger_<name>` for trigger runs)
   const thread = ctx.threadId;
+
+  // Whether a person asked for this, or a trigger is running on its own
+  if (ctx.autonomous) {
+    ctx.log(`Running for trigger ${ctx.trigger}`);
+  }
 }
 ```
+
+`ctx.autonomous` is `true` for trigger and schedule runs, and `false` for requests to an agent. Use it to ask more of actions nobody asked for, for example letting an agent send email when a user asks but not on its own:
+
+```typescript
+execute: async ({ to, body }, ctx) => {
+  if (ctx.autonomous && !settings.autoSendEmail) {
+    return { blocked: true, error: 'Sending email on my own is turned off.' };
+  }
+  // ...
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `env` | Environment variables |
+| `log(message)` | Log a message |
+| `user` | `{ id }` of the user the request is for, when known |
+| `threadId` | Conversation thread (`trigger_<name>` for trigger runs) |
+| `autonomous` | `true` for trigger and schedule runs, `false` for requests |
+| `trigger` | Name of the trigger that started the run |
+| `agent` | Route of the agent that called the tool |
 
 ## Tool Options
 

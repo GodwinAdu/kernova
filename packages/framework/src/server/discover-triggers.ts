@@ -17,6 +17,8 @@ export interface DiscoveredTrigger {
   goal: string;
   priority?: string;
   cooldown?: number;
+  enabled?: boolean;
+  when?: () => boolean | Promise<boolean>;
   filePath: string;
 }
 
@@ -50,6 +52,8 @@ export async function discoverTriggers(projectRoot: string): Promise<DiscoveredT
             goal: def.goal,
             priority: def.priority,
             cooldown: def.cooldown,
+            enabled: def.enabled,
+            ...(typeof def.when === 'function' && { when: def.when }),
             filePath,
           });
         }

@@ -18,8 +18,17 @@ export type ToolParameters = Record<string, ToolParameter>;
 export interface ToolContext {
   /** Current user info */
   user?: { id: string; [key: string]: unknown };
-  /** Thread ID of the conversation */
+  /** Thread ID of the conversation (`trigger_<name>` for trigger runs) */
   threadId?: string;
+  /** The trigger that started this run, when a trigger did */
+  trigger?: string;
+  /**
+   * True when no person asked for this run (a trigger or schedule). Use it to require
+   * stronger permissions for actions taken on the agent's own initiative
+   */
+  autonomous?: boolean;
+  /** Route of the agent that called the tool */
+  agent?: string;
   /** Environment variables (from project secrets) */
   env: Record<string, string | undefined>;
   /** Log helper */

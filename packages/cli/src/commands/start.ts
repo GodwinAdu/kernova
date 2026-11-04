@@ -129,7 +129,8 @@ export async function handleStart(args: string[]): Promise<void> {
     });
 
     // Write the startup script via a generated entry point
-    const entryScript = generateProductionEntry(projectRoot, options.agentPort);
+    // Behind the Next.js app the backend is internal (the app proxies to it on localhost)
+    const entryScript = generateProductionEntry(projectRoot, options.agentPort, hasApp);
     agentProcess.stdin?.write(entryScript);
     agentProcess.stdin?.end();
 
@@ -190,16 +191,19 @@ export async function handleStart(args: string[]): Promise<void> {
   await new Promise(() => {});
 }
 
-function generateProductionEntry(projectRoot: string, port: number): string {
+function generateProductionEntry(projectRoot: string, port: number, internal: boolean): string {
   return `
 import { createServer } from '@kernova/framework/server';
 
 const port = parseInt(process.env.KERNOVA_PORT || '${port}');
+// KERNOVA_HOST overrides; an internal backend only listens on localhost
+const host = process.env.KERNOVA_HOST || '${internal ? '127.0.0.1' : '0.0.0.0'}';
 
 try {
   await createServer({
     projectRoot: '${projectRoot.replace(/\\/g, '/')}',
     port,
+    host,
   });
 } catch (err) {
   console.error('[kernova] Failed to start agent backend:', err.message);

@@ -20,6 +20,7 @@ import { parseInstructions, selectInstructions } from './dynamic-instructions.js
 import { createWebSocketServer } from './websocket.js';
 import { cronMatches, getNextCronTime } from './cron.js';
 import { discoverMiddleware, type DiscoveredMiddleware } from './middleware-pipeline.js';
+import { submitInContext, toolRequestFields } from './request-context.js';
 import { MCPManager } from '../mcp/mcp-manager.js';
 import {
   AgentBudgets,
@@ -70,7 +71,7 @@ interface RouteHandler {
 export async function createServer(options: ServerOptions = {}) {
   const projectRoot = options.projectRoot || process.cwd();
   const port = options.port || parseInt(process.env.KERNOVA_PORT || '4555');
-  const host = options.host || '0.0.0.0';
+  const host = options.host || process.env.KERNOVA_HOST || '0.0.0.0';
   const apiKey = options.apiKey || process.env.KERNOVA_API_KEY;
 
   // Load config
@@ -242,6 +243,7 @@ export async function createServer(options: ServerOptions = {}) {
             description: tool.description,
             parameters: tool.parameters,
             execute: (params: Record<string, unknown>) => tool.execute(params, {
+              ...toolRequestFields(),
               env: process.env as Record<string, string | undefined>,
               log: (msg: string) => console.log(`  [tool:${tool.id}] ${msg}`),
             }),
@@ -347,6 +349,7 @@ export async function createServer(options: ServerOptions = {}) {
           },
           execute: async (params: Record<string, unknown>) => {
             const result = await tool.definition.execute(params as any, {
+              ...toolRequestFields(),
               env: process.env as Record<string, string | undefined>,
               log: (msg: string) => console.log(`  [tool:${tool.name}] ${msg}`),
             });
@@ -622,7 +625,7 @@ export async function createServer(options: ServerOptions = {}) {
             const { usage } = await kernel.models.measureUsage(() =>
               runWithMiddleware(middlewareFor(defaultAgent.definition, allMiddleware), ctx, async (input) => {
                 agentBudgets.begin(defaultAgent.route);
-                const result = await kernel.submit({
+                const result = await submitInContext(kernel, {
                   goal: input,
                   intentType: 'action',
                   priority: 'medium',
@@ -928,7 +931,7 @@ function buildRoutes(
         const fullInput = `${input}${memoryContext}${conversationContext}`;
 
         // Submit intent to the kernel (routed to specific agent)
-        const result = await kernel.submit({
+        const result = await submitInContext(kernel, {
           goal: fullInput,
           intentType: 'action',
           priority: 'medium',
@@ -1209,7 +1212,7 @@ function buildRoutes(
           // If the response has tool calls → handle them (non-streaming part)
           if (firstResponse.toolCalls && firstResponse.toolCalls.length > 0) {
             // Execute tools and get final response via kernel
-            const result = await kernel.submit({
+            const result = await submitInContext(kernel, {
               goal: fullInput,
               intentType: 'action',
               priority: 'medium',
@@ -1345,7 +1348,7 @@ function buildRoutes(
           const goal = input
             + (system ? `\n\nINSTRUCTIONS FROM THE CALLER:\n${system}` : '')
             + (history ? `\n\nCONVERSATION HISTORY (use this for context):\n${history}` : '');
-          const result = await kernel.submit({
+          const result = await submitInContext(kernel, {
             goal,
             intentType: 'action',
             priority: 'medium',
@@ -1412,7 +1415,7 @@ function buildRoutes(
         metadata.agentRoute = agentName;
       }
 
-      const result = await kernel.submit({
+      const result = await submitInContext(kernel, {
         goal,
         intentType: 'action',
         priority: (priority as any) || 'medium',
@@ -1702,7 +1705,7 @@ function buildRoutes(
           return { content: `[Agent "${agentName}" not found]` };
         }
 
-        const result = await kernel.submit({
+        const result = await submitInContext(kernel, {
           goal: input,
           intentType: 'action',
           priority: 'medium',
@@ -2046,7 +2049,10 @@ User: ${userMessage}`;
  * against the kernel's event bus. Each firing submits the goal to the trigger's agent.
  */
 function startTriggerScheduler(
-  triggers: Array<{ name: string; event: string; agent: string; goal: string; priority?: string; cooldown?: number }>,
+  triggers: Array<{
+    name: string; event: string; agent: string; goal: string; priority?: string; cooldown?: number;
+    enabled?: boolean; when?: () => boolean | Promise<boolean>;
+  }>,
   kernel: KernovaKernel,
   agentRouteMap: Map<string, string>,
   agentBudgets: AgentBudgets,
@@ -2061,6 +2067,17 @@ function startTriggerScheduler(
     if (running.has(trigger.name)) return;
     const last = lastFired.get(trigger.name) || 0;
     if (Date.now() - last < (trigger.cooldown || defaultCooldown)) return;
+
+    // when() decides at each firing whether the run is wanted (settings, quiet hours, ...);
+    // a skipped firing doesn't start the cooldown
+    if (trigger.when) {
+      try {
+        if (!(await trigger.when())) return;
+      } catch (err) {
+        console.error(`  [${label}] ✗ ${trigger.name}: when() failed, skipping:`, (err as Error).message);
+        return;
+      }
+    }
     lastFired.set(trigger.name, Date.now());
 
     const defId = agentRouteMap.get(trigger.agent);
@@ -2073,7 +2090,7 @@ function startTriggerScheduler(
     running.add(trigger.name);
     try {
       agentBudgets.begin(trigger.agent);
-      const { usage } = await kernel.models.measureUsage(() => kernel.submit({
+      const { usage } = await kernel.models.measureUsage(() => submitInContext(kernel, {
         goal: trigger.goal,
         intentType: 'action',
         priority: (trigger.priority as 'critical' | 'high' | 'medium' | 'low') || 'medium',
@@ -2098,6 +2115,11 @@ function startTriggerScheduler(
   };
 
   for (const trigger of triggers) {
+    if (trigger.enabled === false) {
+      console.log(`  ⏸ Trigger: "${trigger.name}" is disabled`);
+      continue;
+    }
+
     // Cron expression (contains spaces = 5 fields, or starts with @ or cron:)
     if (trigger.event.includes(' ') || trigger.event.startsWith('@') || trigger.event.startsWith('cron:')) {
       const cronExpr = trigger.event.startsWith('cron:') ? trigger.event.slice(5).trim() : trigger.event;
