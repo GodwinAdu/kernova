@@ -19,6 +19,7 @@ This guide covers everything from your first clone to a merged pull request.
 - [Pull request process](#pull-request-process)
 - [Common contributions](#common-contributions)
 - [Releasing (maintainers)](#releasing-maintainers)
+- [License of contributions](#license-of-contributions)
 - [Getting help](#getting-help)
 
 ---
@@ -32,7 +33,9 @@ This project follows our [Code of Conduct](CODE_OF_CONDUCT.md). By participating
 - **Report a bug.** [Open a bug report](https://github.com/GodwinAdu/kernova/issues/new?template=bug_report.yml) with steps to reproduce.
 - **Suggest a feature.** [Open a feature request](https://github.com/GodwinAdu/kernova/issues/new?template=feature_request.yml) describing the problem it solves.
 - **Improve the docs.** Fix a typo, clarify a guide, or add an example.
-- **Write code.** Pick up an issue labeled [`good first issue`](https://github.com/GodwinAdu/kernova/labels/good%20first%20issue) or [`help wanted`](https://github.com/GodwinAdu/kernova/labels/help%20wanted).
+- **Write code.** Pick up an issue labeled [`good first issue`](https://github.com/GodwinAdu/kernova/labels/good%20first%20issue) or [`help wanted`](https://github.com/GodwinAdu/kernova/labels/help%20wanted). [`ROADMAP.md`](ROADMAP.md) shows where help is most useful.
+
+How the project is run, and how contributors become maintainers, is in [`GOVERNANCE.md`](GOVERNANCE.md).
 
 Found a security vulnerability? **Don't open a public issue.** Follow [SECURITY.md](SECURITY.md).
 
@@ -46,7 +49,7 @@ Found a security vulnerability? **Don't open a public issue.** Follow [SECURITY.
 
 For a new feature:
 
-1. Check [`docs/PROGRESS.md`](docs/PROGRESS.md) to see whether it's already planned or in progress.
+1. Check [`ROADMAP.md`](ROADMAP.md) and the [open issues](https://github.com/GodwinAdu/kernova/issues) to see whether it's already planned or in progress.
 2. Write a spec in `docs/specs/<feature-name>.md` describing what it does and why.
 3. If it's an architectural decision, add an ADR in [`docs/decisions/`](docs/decisions).
 4. Then implement it.
@@ -295,29 +298,58 @@ Every new object type must:
 
 ## Releasing (maintainers)
 
-1. Move `## [Unreleased]` entries in `CHANGELOG.md` to a new version heading.
-2. Bump the version in each changed package's `package.json`, following [Semantic Versioning](https://semver.org/).
-3. Build and publish in dependency order:
+Releases are published by the [Release workflow](.github/workflows/release.yml) when a version tag is pushed. It builds and tests everything, publishes each package whose version isn't on npm yet (in dependency order), and creates the GitHub release from `CHANGELOG.md`. Publishing uses [npm trusted publishing](https://docs.npmjs.com/trusted-publishers), so there's no npm token to manage and every package gets a provenance attestation.
+
+1. On a branch, move the `## [Unreleased]` entries in `CHANGELOG.md` to a new heading, `## [<version>] — <date>`, and list the package versions it releases.
+2. Bump the version in each changed package's `package.json`, following [Semantic Versioning](https://semver.org/). Packages you don't bump aren't published.
+3. Check what will be published: `node scripts/publish.mjs --dry-run`
+4. Merge the pull request, then tag the merge commit and push the tag:
 
    ```bash
-   npm run build
-   npm publish --workspace=packages/types
-   npm publish --workspace=packages/core
-   npm publish --workspace=packages/sdk
-   npm publish --workspace=packages/framework
-   npm publish --workspace=packages/cli
-   npm publish --workspace=packages/create-kernova-app
-   npm publish --workspace=packages/kernova
+   git switch main && git pull
+   git tag v<version>
+   git push origin v<version>
    ```
 
-   Only publish the packages whose version changed. Each package's `prepublishOnly` script rebuilds it first, so a stale `dist/` is never published.
+5. Approve the run in **Actions → Release** if the `npm` environment requires it, and check that the packages and the GitHub release appear.
 
-4. Tag the release (`git tag v<version>`) and create a GitHub release with the changelog notes.
+The tag must match a `## [<version>]` heading in `CHANGELOG.md`, or the workflow stops before publishing. If a publish fails partway, fix the cause and re-run the workflow: packages already on npm are skipped.
+
+<details>
+<summary>One-time setup for trusted publishing</summary>
+
+For each published package (`@kernova/types`, `@kernova/core`, `@kernova/sdk`, `@kernova/framework`, `@kernova/cli`, `create-kernova-app`, `kernova`), on npmjs.com open the package's **Settings → Trusted publishing**, choose **GitHub Actions**, and enter:
+
+- Organization or user: `GodwinAdu`
+- Repository: `kernova`
+- Workflow filename: `release.yml`
+- Environment: `npm`
+
+Once the first release from the workflow works, set each package's publishing access to require two-factor authentication and disallow tokens, and delete any old automation tokens.
+
+</details>
+
+<details>
+<summary>Publishing by hand (if the workflow is unavailable)</summary>
+
+```bash
+npm run build
+node scripts/publish.mjs
+```
+
+This publishes the same packages in the same order from your machine (it needs `npm login` with two-factor authentication). Then tag the release and create the GitHub release with `node scripts/release-notes.mjs <version>` as the notes.
+
+</details>
+
+## License of contributions
+
+Kernova is licensed under the [MIT License](LICENSE). By submitting a pull request, you agree that your contribution is licensed under the same terms. There's no separate contributor agreement to sign.
 
 ## Getting help
 
 - Using Kernova: [documentation](https://kernova2026.vercel.app)
 - Questions about using Kernova or contributing: [open an issue](https://github.com/GodwinAdu/kernova/issues/new/choose)
 - Design background: [`docs/VISION.md`](docs/VISION.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Where the project is heading: [`ROADMAP.md`](ROADMAP.md); how it's run: [`GOVERNANCE.md`](GOVERNANCE.md)
 
 Thank you for helping make Kernova better.
