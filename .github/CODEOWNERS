@@ -1,0 +1,6 @@
+# Reviewers requested automatically for pull requests. With branch protection's "Require review
+# from Code Owners", a change needs an owner's approval before it can merge.
+# Add maintainers here as they join (see GOVERNANCE.md), for example per package:
+#   /packages/core/  @GodwinAdu <another maintainer's GitHub handle>
+
+*  @GodwinAdu

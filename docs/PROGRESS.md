@@ -1,7 +1,7 @@
 # Kernova — Progress Tracker
 
-> Single source of truth for what's been built, what's in progress, and what's next.
-> Updated after every significant milestone.
+> **Historical record, no longer updated.** This tracked Kernova's early development (v0.1 to v0.2).
+> For current plans see [`ROADMAP.md`](../ROADMAP.md); for what changed in each release, [`CHANGELOG.md`](../CHANGELOG.md).
 
 ---
 

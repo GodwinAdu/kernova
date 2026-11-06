@@ -182,7 +182,7 @@ npm run build
 npm test
 ```
 
-Read the [contributing guide](CONTRIBUTING.md) for the branch workflow, coding standards, and PR process. Look for issues labeled [`good first issue`](https://github.com/GodwinAdu/kernova/labels/good%20first%20issue) to get started.
+Read the [contributing guide](CONTRIBUTING.md) for the branch workflow, coding standards, and PR process. Look for issues labeled [`good first issue`](https://github.com/GodwinAdu/kernova/labels/good%20first%20issue) to get started. [`ROADMAP.md`](ROADMAP.md) shows where the project is heading, and [`GOVERNANCE.md`](GOVERNANCE.md) how it's run.
 
 Please follow our [Code of Conduct](CODE_OF_CONDUCT.md). Report security issues privately as described in [SECURITY.md](SECURITY.md), not in public issues.
 

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Project
+
+- Releases are published from GitHub Actions ([`release.yml`](.github/workflows/release.yml)) with npm trusted publishing, so every package has a provenance attestation and no npm token is stored anywhere. `scripts/publish.mjs` publishes the packages whose version isn't on npm yet, in dependency order; `scripts/release-notes.mjs` turns a `CHANGELOG.md` section into the GitHub release notes
+- Added [`GOVERNANCE.md`](GOVERNANCE.md), [`ROADMAP.md`](ROADMAP.md), and [`.github/CODEOWNERS`](.github/CODEOWNERS). Contributions are licensed under MIT, like the project
+- `kernova-data/kernova.db` (test data) and the docs site's `.astro/` cache are no longer tracked; both were already in `.gitignore`
+
 ## [2.0.1] — 2026-11-04
 
 Releases: `@kernova/framework` 2.0.1, `@kernova/cli` 1.2.1.
