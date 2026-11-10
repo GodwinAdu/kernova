@@ -42,7 +42,7 @@ jobs:
       contents: write # create the GitHub release
       id-token: write # npm trusted publishing and provenance
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v5
         with:
